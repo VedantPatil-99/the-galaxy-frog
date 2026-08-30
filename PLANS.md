@@ -29,15 +29,23 @@ Work packets: P0.2 Python quality tooling and P0.3 frontend design system.
 
 ### Step 3 — Contracts and local infrastructure
 
-Status: **planned**
+Status: **in progress**
 
 Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 
-- [ ] Add local PostgreSQL with the pgvector image and a persistent development volume.
+- [x] Add local PostgreSQL with the pgvector image and a persistent development volume.
 - [ ] Implement `/health/live` and dependency-aware `/health/ready`.
 - [ ] Define the stable structured error envelope and correlation IDs.
 - [ ] Export FastAPI OpenAPI and generate frontend TypeScript types.
 - [ ] Add a thin Next.js proxy, API connectivity screen, and deliberate-error UI state.
+
+#### Step 3A — Local PostgreSQL foundation
+
+- [x] Pin PostgreSQL 17 with pgvector in Docker Compose and configure a persistent local volume.
+- [x] Add async SQLAlchemy, asyncpg, Alembic, typed database configuration, and starter tests.
+- [x] Add the initial migration that enables pgvector in the `extensions` schema.
+- [x] Install and start Docker Desktop with the WSL 2 backend.
+- [x] Apply the migration and verify PostgreSQL health, pgvector, and volume persistence.
 
 ### Step 4 — CI and exit gate
 
@@ -66,3 +74,5 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
 - 2026-08-29: Execute Phase 0 as four reviewable checkpoints and stop after each checkpoint for review.
 - 2026-08-30: Standardize the project environment on Python 3.14.7; later media and ML dependencies require explicit compatibility verification.
 - 2026-08-30: Use Bun's root workspace and native parallel/sequential task runner to orchestrate frontend and backend commands without adding a JavaScript server layer.
+- 2026-08-30: Use pinned PostgreSQL 17 plus pgvector in Docker Compose for local development and
+  keep migrations portable to a later hosted Supabase deployment.

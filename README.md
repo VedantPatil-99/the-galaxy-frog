@@ -4,11 +4,12 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phase 0 — Foundation and contracts, Step 2 of 4 complete.
+Phase 0 — Foundation and contracts, Step 3 of 4 in progress.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
-established. Step 3 adds API contracts and local infrastructure after review.
+established. Step 3A established the local PostgreSQL 17 and pgvector foundation. Step 3B adds the
+API health and error contracts next.
 
 ## Architecture direction
 
@@ -16,7 +17,8 @@ established. Step 3 adds API contracts and local infrastructure after review.
 - `backend`: all server-side application, data, and AI logic in Python.
 - FastAPI owns the API contract and exports OpenAPI.
 - The web application consumes generated TypeScript types and reaches FastAPI through a thin proxy.
-- PostgreSQL is the system of record; pgvector is added during the later retrieval phase.
+- PostgreSQL is the system of record; the pgvector extension is available locally while vector
+  tables, indexes, and retrieval remain deferred to later phases.
 - Provider-specific integrations stay behind Python interfaces and configuration.
 
 See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-scope.md), and [PLANS.md](PLANS.md).
@@ -38,6 +40,16 @@ This installs the frontend from the root `bun.lock` and synchronizes the backend
 `backend/uv.lock`.
 
 ## Development
+
+After Docker Desktop is installed, prepare the local database:
+
+```bash
+cp .env.example .env
+bun run infra:up
+bun run db:migrate
+```
+
+Replace the sample database password in `.env` before starting the service.
 
 Start the Next.js and FastAPI development servers together:
 

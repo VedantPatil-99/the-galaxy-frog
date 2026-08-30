@@ -17,12 +17,15 @@ evidence and produce timestamp-grounded answers.
 - Step 2B — Frontend design foundation: completed
 - Step 2C — FastAPI and Python quality tooling: completed
 - Step 2D — Root commands and complete local verification: completed
+- Step 3A — Local PostgreSQL foundation: completed
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
 - Root Bun commands synchronize, run, and verify both language workspaces without JavaScript server logic
 - The Next.js page and FastAPI documentation were verified together through `bun run dev`
-- No database, retrieval, ingestion, OCR, ASR, or AI provider work has started
+- PostgreSQL 17 and pgvector 0.8.6 run locally through Docker Compose with a persistent named volume
+- Alembic revision `20260830_0001` enables pgvector in the `extensions` schema
+- No application schema, retrieval, ingestion, OCR, ASR, or AI provider work has started
 
 ## Verified local tools
 
@@ -30,10 +33,13 @@ evidence and produce timestamp-grounded answers.
 - Bun: `1.4.0 (34cbb9a40)`
 - Python: `3.14.7`
 - uv: `0.12.7 (61291a8ca 2026-08-27 x86_64-pc-windows-msvc)`
-- Docker: not installed; deferred to Step 3 because it is not required for the frontend/backend scaffold.
+- WSL: `2.7.12.0`, kernel `6.18.33.2-2`
+- Docker Engine: `29.7.2`
+- Docker Compose: `v5.4.0`
 - Preferred command shell: Git Bash
 
-Docker is not required for Step 2. It will be installed before Step 3.
+Docker was not required for Step 2. Step 3A uses Docker Desktop with the WSL 2 backend for local
+PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
 ## Current task
 
@@ -44,8 +50,10 @@ Phase 0 Step 2 is complete in four reviewed batches:
 3. Step 2C — Configure FastAPI and Python quality tooling: completed
 4. Step 2D — Add root commands and verify both workspaces: completed
 
-Step 3 — API contracts and local infrastructure — is next after Step 2 review. Docker must be
-installed before the Step 3 infrastructure work begins.
+Step 3 — API contracts and local infrastructure — is active. Step 3A is complete: PostgreSQL 17.11
+became healthy, Alembic applied revision `20260830_0001`, pgvector 0.8.6 was verified in the
+`extensions` schema, and both states survived container recreation through the named volume.
+Step 3B — API health and structured error contracts — is next.
 
 ## Step 2 technology requirements
 
