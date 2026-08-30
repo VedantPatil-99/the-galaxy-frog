@@ -9,7 +9,7 @@ typed adapters.
 From `backend/`:
 
 ```bash
-uv sync
+uv sync --locked
 uv run fastapi dev
 ```
 
@@ -26,3 +26,6 @@ uv run pytest
 ```
 
 The repository-level pre-commit hooks run the Ruff and Pyright checks for backend changes.
+
+From the repository root, use `bun run dev:api` to start this process or `bun run check` to run the
+complete frontend and backend quality gate.

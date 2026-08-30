@@ -4,11 +4,11 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phase 0 — Foundation and contracts, Step 2 of 4.
+Phase 0 — Foundation and contracts, Step 2 of 4 complete.
 
-Steps 2A, 2B, and 2C are complete: the Next.js presentation shell, Base UI design
-foundation, packaged Python workspace, FastAPI application boundary, and Python quality tooling are
-established. Step 2D adds root orchestration commands and completes local verification next.
+Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
+Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
+established. Step 3 adds API contracts and local infrastructure after review.
 
 ## Architecture direction
 
@@ -28,13 +28,37 @@ See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-s
 3. API contracts and local infrastructure.
 4. CI, verification, and the Phase 0 exit gate.
 
-## Git Bash quick check
+## Local setup
 
 ```bash
-git status --short
-sed -n '1,220p' PLANS.md
-find docs/adr -maxdepth 1 -type f -print
+bun run sync
 ```
 
-Frontend and backend verification commands are available now. Root commands that orchestrate both
-workspaces are deferred to Step 2D.
+This installs the frontend from the root `bun.lock` and synchronizes the backend from
+`backend/uv.lock`.
+
+## Development
+
+Start the Next.js and FastAPI development servers together:
+
+```bash
+bun run dev
+```
+
+- Web: `http://localhost:3000`
+- FastAPI docs: `http://127.0.0.1:8000/docs`
+- OpenAPI: `http://127.0.0.1:8000/openapi.json`
+
+Use `Ctrl+C` to stop both processes. Run either process independently with `bun run dev:web` or
+`bun run dev:api`.
+
+## Verification
+
+```bash
+bun run check
+bun run precommit
+```
+
+`bun run check` runs frontend and backend linting, formatting checks, strict type checks, tests,
+coverage enforcement, and the frontend production build. `bun run precommit` executes all configured
+repository hooks.
