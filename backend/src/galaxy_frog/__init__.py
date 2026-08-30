@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from galaxy-frog!")
+"""Galaxy Frog's Python application package."""

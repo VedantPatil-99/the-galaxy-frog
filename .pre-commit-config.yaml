@@ -1,0 +1,23 @@
+minimum_pre_commit_version: "4.6.2"
+
+repos:
+  - repo: local
+    hooks:
+      - id: backend-ruff-check
+        name: backend ruff check
+        entry: uv run --directory backend ruff check .
+        language: system
+        pass_filenames: false
+        files: ^backend/
+      - id: backend-ruff-format
+        name: backend ruff format check
+        entry: uv run --directory backend ruff format --check .
+        language: system
+        pass_filenames: false
+        files: ^backend/
+      - id: backend-pyright
+        name: backend pyright
+        entry: uv run --directory backend pyright
+        language: system
+        pass_filenames: false
+        files: ^backend/

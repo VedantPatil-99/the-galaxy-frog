@@ -1,16 +1,73 @@
 [project]
 name = "galaxy-frog"
 version = "0.1.0"
-description = "Add your description here"
+description = "Python application boundary for Galaxy Frog"
 authors = [
     { name = "VedantPatil-99", email = "vedantpatil9977@gmail.com" }
 ]
 requires-python = ">=3.14.7"
-dependencies = []
-
-[project.scripts]
-galaxy-frog = "galaxy_frog:main"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "pydantic>=2",
+    "pydantic-settings>=2.15.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pre-commit>=4.6.2",
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.5",
+]
+
+[tool.fastapi]
+entrypoint = "galaxy_frog.api.app:app"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ASYNC", "B", "E", "F", "I", "RUF", "SIM", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+indent-style = "space"
+line-ending = "lf"
+quote-style = "double"
+
+[tool.pyright]
+exclude = [".venv"]
+include = ["src", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+venv = ".venv"
+venvPath = "."
+
+[tool.pytest.ini_options]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "--cov=galaxy_frog",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
+]
+asyncio_mode = "strict"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["galaxy_frog"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true

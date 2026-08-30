@@ -15,6 +15,7 @@ coverage/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.coverage
 .ruff_cache/
 .mypy_cache/
 .pyright/
