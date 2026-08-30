@@ -4,9 +4,9 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phase 0 — Foundation and contracts, Step 1 of 4.
+Phase 0 — Foundation and contracts, Step 2 of 4.
 
-This checkpoint intentionally contains repository governance, scope, architectural decisions, and directory contracts only. Framework applications and executable services are introduced in Step 2.
+Steps 2A and 2B are complete: the Next.js presentation shell, Base UI design foundation, and packaged Python workspace are established. Step 2C adds FastAPI and Python quality tooling next.
 
 ## Architecture direction
 

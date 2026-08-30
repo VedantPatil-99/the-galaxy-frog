@@ -12,8 +12,12 @@ evidence and produce timestamp-grounded answers.
 
 - Phase 0 — Foundation and Contracts
 - Step 1 — Scope, repository, and invariants: completed
-- Step 2 — Frontend and backend foundations: not started
-- No Next.js application has been scaffolded
+- Step 2 — Frontend and backend foundations: in progress
+- Step 2A — Next.js and Python workspaces: completed
+- Step 2B — Frontend design foundation: completed
+- Step 2C — FastAPI and Python quality tooling: next
+- The Next.js presentation shell uses React 19, strict TypeScript,
+  Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - No FastAPI application has been scaffolded
 - No database, retrieval, ingestion, OCR, ASR, or AI provider work has started
 
@@ -32,9 +36,9 @@ Docker is not required for Step 2. It will be installed before Step 3.
 
 Implement Phase 0 Step 2 in four reviewed batches:
 
-1. Step 2A — Scaffold Next.js and Python workspaces
-2. Step 2B — Configure the frontend design foundation
-3. Step 2C — Configure FastAPI and Python quality tooling
+1. Step 2A — Scaffold Next.js and Python workspaces: completed
+2. Step 2B — Configure the frontend design foundation: completed
+3. Step 2C — Configure FastAPI and Python quality tooling: next
 4. Step 2D — Add root commands and verify both workspaces
 
 Do not begin Step 3 until Step 2 acceptance criteria pass.
@@ -58,7 +62,7 @@ Backend:
 - uv
 - FastAPI
 - Pydantic v2
-- Packaged `src/galaxy-frog` layout
+- Distribution name `galaxy-frog` with packaged `src/galaxy_frog` import layout
 - Ruff
 - Pyright
 - pytest

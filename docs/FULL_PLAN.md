@@ -30,7 +30,7 @@ Your overall technology direction is good, but a few details should be adjusted.
 - Supabase Free remains 500 MB of actual database data, 1 GB file storage, 5 GB egress, 50,000 MAU and two free active projects. [Supabase billing](https://supabase.com/docs/guides/platform/billing-on-supabase)
 - Supabase can pause a low-activity project after seven days. A keepalive must execute a real database query; merely calling a FastAPI `/health` route will not necessarily count as database activity. [Supabase project pausing](https://supabase.com/docs/guides/platform/free-project-pausing)
 - QStash Free currently permits 1,000 messages per day, 50 GB bandwidth and 1 MB messages. Only send IDs and metadata through QStash—never video bytes. [QStash pricing](https://upstash.com/pricing/qstash)
-- Use Python 3.14.7 for the main environment. Python 3.14 may work for some libraries, but media and ML packages such as Paddle, PyTorch, CTranslate2 and CUDA integrations frequently lag behind the newest Python release.
+- Use Python 3.14.7 for the main environment. Treat later media and ML packages such as Paddle, PyTorch, CTranslate2, and CUDA integrations as explicit compatibility gates before adopting them.
 - LlamaParse is not central to GalaxyFrog. Keep it for a later “supporting PDF/slides” capability rather than using document parsing credits on extracted video frames.
 
 ---
@@ -677,7 +677,7 @@ galaxy-frog/
 │   ├── uv.lock
 │   ├── alembic.ini
 │   ├── migrations/
-│   ├── src/galaxy-frog/
+│   ├── src/galaxy_frog/
 │   │   ├── entrypoints/
 │   │   │   ├── api.py
 │   │   │   └── worker.py
@@ -1292,7 +1292,7 @@ Read first:
 - docs/data-model.md
 
 Allowed files:
-- backend/src/galaxy-frog/pipelines/transcription/
+- backend/src/galaxy_frog/pipelines/transcription/
 - backend/tests/unit/transcription/
 
 Goal:
