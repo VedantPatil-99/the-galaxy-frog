@@ -3,6 +3,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/ssr/MagnifyingGl
 import { PlayCircleIcon } from "@phosphor-icons/react/dist/ssr/PlayCircle";
 import { WaveformIcon } from "@phosphor-icons/react/dist/ssr/Waveform";
 
+import { ApiConnectivity } from "@/components/api-connectivity";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const evidenceTypes = [
@@ -153,6 +154,10 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-6 pb-14 lg:px-10 lg:pb-20">
+        <ApiConnectivity />
       </section>
 
       <section className="mx-auto grid w-full max-w-7xl gap-px overflow-hidden border-y bg-border sm:grid-cols-3 lg:rounded-2xl lg:border">
