@@ -29,7 +29,7 @@ Work packets: P0.2 Python quality tooling and P0.3 frontend design system.
 
 ### Step 3 — Contracts and local infrastructure
 
-Status: **in progress**
+Status: **complete**
 
 Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 
@@ -37,7 +37,7 @@ Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 - [x] Implement `/health/live` and dependency-aware `/health/ready`.
 - [x] Define the stable structured error envelope and correlation IDs.
 - [x] Export FastAPI OpenAPI and generate frontend TypeScript types.
-- [ ] Add a thin Next.js proxy, API connectivity screen, and deliberate-error UI state.
+- [x] Add a thin Next.js proxy, API connectivity screen, and deliberate-error UI state.
 
 #### Step 3A — Local PostgreSQL foundation
 
@@ -59,6 +59,13 @@ Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 - [x] Export a canonical, deterministic OpenAPI document without requiring a running API or database.
 - [x] Generate frontend TypeScript declarations from FastAPI OpenAPI with `openapi-typescript`.
 - [x] Add root generation and stale-artifact checks to the standard verification workflow.
+
+#### Step 3D — Browser-to-API connectivity
+
+- [x] Add a same-origin Next.js Route Handler that proxies only to the server-configured FastAPI base URL.
+- [x] Consume generated OpenAPI types in a guarded browser client for liveness, readiness, and errors.
+- [x] Add an interactive connectivity panel and render a deliberate backend `NOT_FOUND` envelope.
+- [x] Verify proxy success, safe upstream failure, path rejection, and rendered UI behavior.
 
 ### Step 4 — CI and exit gate
 
@@ -91,3 +98,5 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
   keep migrations portable to a later hosted Supabase deployment.
 - 2026-08-31: Commit deterministic FastAPI OpenAPI and generated TypeScript declarations; verify
   both artifacts are current through the root quality workflow.
+- 2026-08-31: Keep `FASTAPI_BASE_URL` server-only and route browser API traffic through a no-store,
+  fixed-upstream Next.js proxy that preserves FastAPI status and correlation metadata.

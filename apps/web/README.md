@@ -19,6 +19,17 @@ bun run dev
 
 Open `http://localhost:3000`.
 
+## FastAPI proxy
+
+Browser requests use the same-origin `/api/proxy/[...path]` Route Handler. The handler reads the
+server-only `FASTAPI_BASE_URL`, forwards an allowlisted set of headers, preserves upstream status and
+correlation metadata, disables caching, and converts connection failures into a safe generated error
+shape. It never accepts an upstream host from the browser.
+
+The home-page connectivity panel checks `/health/live` and `/health/ready`. Its deliberate error
+preview requests a recognizable nonexistent FastAPI path and renders the backend's real correlated
+`NOT_FOUND` envelope; no failure-only backend endpoint is added.
+
 ## Generated API types
 
 `lib/api/generated/schema.d.ts` is generated from `backend/openapi.json`; do not edit it directly.

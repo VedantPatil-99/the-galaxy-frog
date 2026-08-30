@@ -37,6 +37,17 @@ stable `backend/openapi.json` without loading local environment configuration or
 PostgreSQL. `openapi-typescript` derives `apps/web/lib/api/generated/schema.d.ts` from that document.
 Both files are committed, and `bun run contracts:check` fails when either artifact is stale.
 
+## Browser-to-API boundary
+
+The browser calls FastAPI only through the same-origin Next.js catch-all proxy. Its upstream origin
+comes exclusively from the server-only `FASTAPI_BASE_URL`; caller-controlled hosts and path traversal
+are rejected. The proxy streams request and response bodies, forwards only required headers,
+preserves status and correlation metadata, uses a bounded timeout, and disables response caching.
+
+Interactive browser code consumes generated OpenAPI types and performs small runtime shape checks at
+the untrusted JSON boundary. Next.js owns presentation and transport adaptation only; it does not
+reimplement Python application behavior.
+
 ## Failure model
 
 Every API failure will expose a stable error code, human-safe message, correlation ID, retry guidance, and optional structured details. Provider fallback decisions will be visible in telemetry and response metadata; a silent quality downgrade is not acceptable.

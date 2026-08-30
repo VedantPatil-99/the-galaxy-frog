@@ -20,6 +20,7 @@ evidence and produce timestamp-grounded answers.
 - Step 3A — Local PostgreSQL foundation: completed
 - Step 3B — API health and structured error contracts: completed
 - Step 3C — Deterministic OpenAPI and generated frontend types: completed
+- Step 3D — Thin proxy and browser connectivity UI: completed
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -31,6 +32,8 @@ evidence and produce timestamp-grounded answers.
 - All API failures use one correlated, human-safe error envelope
 - FastAPI OpenAPI and frontend TypeScript declarations are deterministic, committed artifacts with
   local stale-file checks
+- The browser reaches FastAPI only through the server-configured Next.js proxy and renders both
+  healthy dependency state and correlated backend errors
 - No application schema, retrieval, ingestion, OCR, ASR, or AI provider work has started
 
 ## Verified local tools
@@ -56,15 +59,17 @@ Phase 0 Step 2 is complete in four reviewed batches:
 3. Step 2C — Configure FastAPI and Python quality tooling: completed
 4. Step 2D — Add root commands and verify both workspaces: completed
 
-Step 3 — API contracts and local infrastructure — is active. Step 3A is complete: PostgreSQL 17.11
+Step 3 — API contracts and local infrastructure — is complete. Step 3A established PostgreSQL 17.11,
 became healthy, Alembic applied revision `20260830_0001`, pgvector 0.8.6 was verified in the
 `extensions` schema, and both states survived container recreation through the named volume.
 Step 3B is complete: live verification proved liveness stays `200` while PostgreSQL is stopped,
 readiness changes from `200` to a correlated `503`, and readiness recovers after PostgreSQL becomes
 healthy. Step 3C is complete: FastAPI exports a deterministic schema without a running service or
 database, `openapi-typescript` 7.13.0 derives the frontend declarations, and `bun run check` rejects
-stale artifacts. Step 3D — the thin Next.js proxy, connectivity screen, and deliberate-error UI — is
-next.
+stale artifacts. Step 3D is complete: live browser verification rendered successful liveness and
+readiness through the Next.js proxy, then rendered the backend's deliberate correlated `NOT_FOUND`
+envelope. Step 3 is complete; Step 4 — CI, troubleshooting documentation, and the final Phase 0 exit
+gate — is next.
 
 ## Step 2 technology requirements
 

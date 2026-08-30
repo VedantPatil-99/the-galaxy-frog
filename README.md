@@ -4,12 +4,13 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phase 0 — Foundation and contracts, Step 3 of 4 in progress.
+Phase 0 — Foundation and contracts, Step 3 of 4 complete.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
-established. Steps 3A–3C established local PostgreSQL/pgvector, the operational API contracts, and
-deterministic OpenAPI-derived frontend types. The thin proxy and API connectivity UI are next.
+established. Steps 3A–3D established local PostgreSQL/pgvector, operational API contracts,
+deterministic OpenAPI-derived frontend types, and verified browser-to-FastAPI connectivity through
+the thin Next.js proxy. CI and the final Phase 0 exit gate are next.
 
 ## Architecture direction
 
@@ -62,9 +63,11 @@ bun run dev
 - OpenAPI: `http://127.0.0.1:8000/openapi.json`
 - Liveness: `http://127.0.0.1:8000/health/live`
 - Readiness: `http://127.0.0.1:8000/health/ready`
+- Browser proxy: `http://localhost:3000/api/proxy/health/live`
 
 Use `Ctrl+C` to stop both processes. Run either process independently with `bun run dev:web` or
-`bun run dev:api`.
+`bun run dev:api`. `FASTAPI_BASE_URL` is read only by the Next.js server; it is never exposed as a
+`NEXT_PUBLIC_` browser variable.
 
 ## API contracts
 
