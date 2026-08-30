@@ -1,0 +1,37 @@
+{
+  "name": "galaxy-frog",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "sync": "bun run --sequential sync:web sync:backend",
+    "sync:web": "bun install --frozen-lockfile",
+    "sync:backend": "uv sync --directory backend --locked",
+    "dev": "bun run --parallel dev:web dev:api",
+    "dev:web": "bun run --cwd apps/web dev",
+    "dev:api": "PYTHONUTF8=1 uv run --directory backend fastapi dev",
+    "lint": "bun run --parallel lint:web lint:backend",
+    "lint:web": "bun run --cwd apps/web lint",
+    "lint:backend": "uv run --directory backend ruff check .",
+    "format:check": "uv run --directory backend ruff format --check .",
+    "typecheck": "bun run --parallel typecheck:web typecheck:backend",
+    "typecheck:web": "bun run --cwd apps/web typecheck",
+    "typecheck:backend": "uv run --directory backend pyright",
+    "test": "bun run --parallel test:web test:backend",
+    "test:web": "bun run --cwd apps/web test",
+    "test:backend": "uv run --directory backend pytest",
+    "build": "bun run --cwd apps/web build",
+    "check": "bun run --sequential lint format:check typecheck test build",
+    "precommit": "uv run --directory backend pre-commit run --all-files"
+  },
+  "ignoreScripts": [
+    "sharp",
+    "unrs-resolver"
+  ],
+  "trustedDependencies": [
+    "sharp",
+    "unrs-resolver"
+  ]
+}
