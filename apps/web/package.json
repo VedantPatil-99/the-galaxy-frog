@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "api:generate": "openapi-typescript ../../backend/openapi.json --output lib/api/generated/schema.d.ts --alphabetize",
+    "api:check": "bun run api:generate --check"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -31,6 +33,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
+    "openapi-typescript": "7.13.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
