@@ -34,8 +34,8 @@ Status: **in progress**
 Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 
 - [x] Add local PostgreSQL with the pgvector image and a persistent development volume.
-- [ ] Implement `/health/live` and dependency-aware `/health/ready`.
-- [ ] Define the stable structured error envelope and correlation IDs.
+- [x] Implement `/health/live` and dependency-aware `/health/ready`.
+- [x] Define the stable structured error envelope and correlation IDs.
 - [ ] Export FastAPI OpenAPI and generate frontend TypeScript types.
 - [ ] Add a thin Next.js proxy, API connectivity screen, and deliberate-error UI state.
 
@@ -46,6 +46,13 @@ Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 - [x] Add the initial migration that enables pgvector in the `extensions` schema.
 - [x] Install and start Docker Desktop with the WSL 2 backend.
 - [x] Apply the migration and verify PostgreSQL health, pgvector, and volume persistence.
+
+#### Step 3B — API operational contracts
+
+- [x] Implement dependency-independent liveness and PostgreSQL-aware readiness.
+- [x] Add validated correlation IDs to request state, response headers, and error bodies.
+- [x] Normalize deliberate, validation, HTTP, and unexpected failures into the stable error envelope.
+- [x] Verify healthy, unavailable, invalid-input, not-found, and unexpected-error behavior.
 
 ### Step 4 — CI and exit gate
 

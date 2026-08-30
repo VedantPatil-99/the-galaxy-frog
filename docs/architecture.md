@@ -34,6 +34,13 @@ flowchart TD
 
 Every API failure will expose a stable error code, human-safe message, correlation ID, retry guidance, and optional structured details. Provider fallback decisions will be visible in telemetry and response metadata; a silent quality downgrade is not acceptable.
 
+FastAPI validates caller-provided correlation IDs, generates a UUID when one is absent or unsafe,
+and returns the identifier in both `X-Correlation-ID` and structured error bodies. Validation,
+framework HTTP, deliberate application, and unexpected failures all use the same envelope.
+
+`/health/live` proves only that the API process can respond. `/health/ready` executes a PostgreSQL
+query through an application-lifespan engine; database failure must never make liveness fail.
+
 ## Phase 0 deployment view
 
 During Phase 0, the only runnable application processes will be the Next.js development server, FastAPI development server, and local PostgreSQL container. Background workers and AI providers arrive in later phases.

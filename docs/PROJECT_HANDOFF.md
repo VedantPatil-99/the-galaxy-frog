@@ -18,6 +18,7 @@ evidence and produce timestamp-grounded answers.
 - Step 2C — FastAPI and Python quality tooling: completed
 - Step 2D — Root commands and complete local verification: completed
 - Step 3A — Local PostgreSQL foundation: completed
+- Step 3B — API health and structured error contracts: completed
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -25,6 +26,8 @@ evidence and produce timestamp-grounded answers.
 - The Next.js page and FastAPI documentation were verified together through `bun run dev`
 - PostgreSQL 17 and pgvector 0.8.6 run locally through Docker Compose with a persistent named volume
 - Alembic revision `20260830_0001` enables pgvector in the `extensions` schema
+- FastAPI exposes dependency-independent `/health/live` and PostgreSQL-aware `/health/ready`
+- All API failures use one correlated, human-safe error envelope
 - No application schema, retrieval, ingestion, OCR, ASR, or AI provider work has started
 
 ## Verified local tools
@@ -53,7 +56,9 @@ Phase 0 Step 2 is complete in four reviewed batches:
 Step 3 — API contracts and local infrastructure — is active. Step 3A is complete: PostgreSQL 17.11
 became healthy, Alembic applied revision `20260830_0001`, pgvector 0.8.6 was verified in the
 `extensions` schema, and both states survived container recreation through the named volume.
-Step 3B — API health and structured error contracts — is next.
+Step 3B is complete: live verification proved liveness stays `200` while PostgreSQL is stopped,
+readiness changes from `200` to a correlated `503`, and readiness recovers after PostgreSQL becomes
+healthy. Step 3C — deterministic OpenAPI export and generated frontend types — is next.
 
 ## Step 2 technology requirements
 

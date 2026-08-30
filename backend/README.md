@@ -16,6 +16,17 @@ uv run fastapi dev
 The development API runs at `http://127.0.0.1:8000`, with interactive documentation at
 `http://127.0.0.1:8000/docs`.
 
+Operational endpoints:
+
+- `GET /health/live` reports process liveness without consulting PostgreSQL.
+- `GET /health/ready` executes a real PostgreSQL query and returns `503` when the dependency is
+  missing or unavailable.
+
+Every response includes `X-Correlation-ID`. API failures use the canonical `ErrorResponse` envelope
+with a stable code, safe message, matching correlation ID, retryability, optional suggested action,
+and optional JSON details. Framework debug tracebacks remain disabled in every environment so an
+unexpected exception cannot replace the public error contract with internal details.
+
 ## Quality checks
 
 ```bash

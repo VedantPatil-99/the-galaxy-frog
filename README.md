@@ -8,8 +8,8 @@ Phase 0 — Foundation and contracts, Step 3 of 4 in progress.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
-established. Step 3A established the local PostgreSQL 17 and pgvector foundation. Step 3B adds the
-API health and error contracts next.
+established. Steps 3A and 3B established local PostgreSQL/pgvector plus the API health, readiness,
+correlation-ID, and structured-error contracts. Deterministic OpenAPI generation is next.
 
 ## Architecture direction
 
@@ -60,6 +60,8 @@ bun run dev
 - Web: `http://localhost:3000`
 - FastAPI docs: `http://127.0.0.1:8000/docs`
 - OpenAPI: `http://127.0.0.1:8000/openapi.json`
+- Liveness: `http://127.0.0.1:8000/health/live`
+- Readiness: `http://127.0.0.1:8000/health/ready`
 
 Use `Ctrl+C` to stop both processes. Run either process independently with `bun run dev:web` or
 `bun run dev:api`.
