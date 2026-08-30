@@ -1,0 +1,16 @@
+[project]
+name = "galaxy-frog"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "VedantPatil-99", email = "vedantpatil9977@gmail.com" }
+]
+requires-python = ">=3.14.7"
+dependencies = []
+
+[project.scripts]
+galaxy-frog = "galaxy_frog:main"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
