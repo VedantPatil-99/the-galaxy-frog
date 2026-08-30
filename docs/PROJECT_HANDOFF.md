@@ -21,6 +21,7 @@ evidence and produce timestamp-grounded answers.
 - Step 3B — API health and structured error contracts: completed
 - Step 3C — Deterministic OpenAPI and generated frontend types: completed
 - Step 3D — Thin proxy and browser connectivity UI: completed
+- Step 4 — CI and the Phase 0 exit gate: implementation complete locally; first hosted CI run pending
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -69,7 +70,9 @@ database, `openapi-typescript` 7.13.0 derives the frontend declarations, and `bu
 stale artifacts. Step 3D is complete: live browser verification rendered successful liveness and
 readiness through the Next.js proxy, then rendered the backend's deliberate correlated `NOT_FOUND`
 envelope. Step 3 is complete; Step 4 — CI, troubleshooting documentation, and the final Phase 0 exit
-gate — is next.
+gate — now has commit-pinned contract, backend, and frontend GitHub Actions jobs, a local runbook,
+and a repeatable proxy smoke test. The complete local exit gate passes. A first hosted workflow run
+cannot be observed until a Git remote is configured and the branch is pushed.
 
 ## Step 2 technology requirements
 
