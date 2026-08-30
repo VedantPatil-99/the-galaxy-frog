@@ -6,7 +6,9 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 Phase 0 — Foundation and contracts, Step 2 of 4.
 
-Steps 2A and 2B are complete: the Next.js presentation shell, Base UI design foundation, and packaged Python workspace are established. Step 2C adds FastAPI and Python quality tooling next.
+Steps 2A, 2B, and 2C are complete: the Next.js presentation shell, Base UI design
+foundation, packaged Python workspace, FastAPI application boundary, and Python quality tooling are
+established. Step 2D adds root orchestration commands and completes local verification next.
 
 ## Architecture direction
 
@@ -26,13 +28,13 @@ See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-s
 3. API contracts and local infrastructure.
 4. CI, verification, and the Phase 0 exit gate.
 
-## PowerShell quick check
+## Git Bash quick check
 
-```powershell
-Set-Location .\galaxy-frog
+```bash
 git status --short
-Get-Content .\PLANS.md
-Get-ChildItem -Recurse -File | Select-Object FullName
+sed -n '1,220p' PLANS.md
+find docs/adr -maxdepth 1 -type f -print
 ```
 
-Do not run application build commands yet; application scaffolds are a Step 2 deliverable.
+Frontend and backend verification commands are available now. Root commands that orchestrate both
+workspaces are deferred to Step 2D.

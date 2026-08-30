@@ -18,13 +18,13 @@ Work packets: P0.1 repository scaffold and the foundation portion of P0.6 docume
 
 ### Step 2 — Frontend and backend foundations
 
-Status: **in progress — Steps 2A and 2B complete**
+Status: **in progress — Steps 2A, 2B, and 2C complete**
 
 Work packets: P0.2 Python quality tooling and P0.3 frontend design system.
 
 - [x] Scaffold Next.js 16, React 19, strict TypeScript, Bun, Tailwind CSS v4, and shadcn/ui with Base UI.
-- [ ] Scaffold Python 3.14.7, uv, FastAPI, and Pydantic v2.
-- [ ] Configure Ruff, Pyright, pytest, pre-commit, ESLint, and frontend tests.
+- [x] Scaffold Python 3.14.7, uv, FastAPI, and Pydantic v2.
+- [x] Configure Ruff, Pyright, pytest, pre-commit, ESLint, and frontend tests.
 - [ ] Add root commands that orchestrate both language workspaces without adding JavaScript server logic.
 
 ### Step 3 — Contracts and local infrastructure

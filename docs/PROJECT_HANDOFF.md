@@ -15,10 +15,11 @@ evidence and produce timestamp-grounded answers.
 - Step 2 — Frontend and backend foundations: in progress
 - Step 2A — Next.js and Python workspaces: completed
 - Step 2B — Frontend design foundation: completed
-- Step 2C — FastAPI and Python quality tooling: next
+- Step 2C — FastAPI and Python quality tooling: completed
+- Step 2D — Root commands and complete local verification: next
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
-- No FastAPI application has been scaffolded
+- The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
 - No database, retrieval, ingestion, OCR, ASR, or AI provider work has started
 
 ## Verified local tools
@@ -28,7 +29,7 @@ evidence and produce timestamp-grounded answers.
 - Python: `3.14.7`
 - uv: `0.12.7 (61291a8ca 2026-08-27 x86_64-pc-windows-msvc)`
 - Docker: not installed; deferred to Step 3 because it is not required for the frontend/backend scaffold.
-- Operating environment: Windows PowerShell or git bash
+- Preferred command shell: Git Bash
 
 Docker is not required for Step 2. It will be installed before Step 3.
 
@@ -38,8 +39,8 @@ Implement Phase 0 Step 2 in four reviewed batches:
 
 1. Step 2A — Scaffold Next.js and Python workspaces: completed
 2. Step 2B — Configure the frontend design foundation: completed
-3. Step 2C — Configure FastAPI and Python quality tooling: next
-4. Step 2D — Add root commands and verify both workspaces
+3. Step 2C — Configure FastAPI and Python quality tooling: completed
+4. Step 2D — Add root commands and verify both workspaces: next
 
 Do not begin Step 3 until Step 2 acceptance criteria pass.
 
@@ -54,7 +55,7 @@ Frontend:
 - Tailwind CSS v4
 - shadcn/ui using Base UI
 - next-themes
-- Lucide and Phosphor icons
+- Phosphor icons with direct CSR/SSR imports
 
 Backend:
 
