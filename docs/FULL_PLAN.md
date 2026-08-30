@@ -20,18 +20,18 @@ Do not run FFmpeg, Whisper, PaddleOCR, embeddings, or local VLMs inside Next.js 
 
 Your overall technology direction is good, but a few details should be adjusted.
 
-* Next.js 16.3 is the appropriate current target. Turbopack is the default bundler for Next.js 16 applications, including builds; the statement that production builds still default to webpack is outdated. Next.js 16 also includes React 19.2 features. [Next.js 16 announcement](https://nextjs.org/blog/next-16), [Next.js 16.3 updates](https://nextjs.org/blog)
-* Bun 1.4 was released on August 20, 2026 and includes the Rust core rewrite you mentioned. [Bun 1.4](https://bun.com/blog/bun-v1.4)
-* Base UI 1.6 is now shadcn’s default primitive choice for new projects. [shadcn Base UI announcement](https://ui.shadcn.com/docs/changelog/2026-07-base-ui-default)
-* Tailwind’s current line is 4.3, although depending on `^4` is usually preferable to hard-coding a minor release. [Tailwind CSS 4.3](https://tailwindcss.com/blog/tailwindcss-v4-3)
-* `gemini-3.6-flash` is a stable model and supports text, image, audio, video, and PDF input. Pin the stable model ID instead of `gemini-flash-latest`, because the latter can change underneath the application. [Gemini 3.6 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash)
-* Gemini 3.6 Flash and 3.5 Flash-Lite currently have free-tier inference, but Google states that free-tier submitted data may be used to improve its products. Do not silently send private videos or transcripts through the free tier. [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)
-* Cohere now exposes Rerank 4.0 Fast and Pro alongside 3.5. Use the model registry rather than embedding a model name in retrieval code. [Cohere models](https://docs.cohere.com/docs/models)
-* Supabase Free remains 500 MB of actual database data, 1 GB file storage, 5 GB egress, 50,000 MAU and two free active projects. [Supabase billing](https://supabase.com/docs/guides/platform/billing-on-supabase)
-* Supabase can pause a low-activity project after seven days. A keepalive must execute a real database query; merely calling a FastAPI `/health` route will not necessarily count as database activity. [Supabase project pausing](https://supabase.com/docs/guides/platform/free-project-pausing)
-* QStash Free currently permits 1,000 messages per day, 50 GB bandwidth and 1 MB messages. Only send IDs and metadata through QStash—never video bytes. [QStash pricing](https://upstash.com/pricing/qstash)
-* Use Python 3.13 for the main environment. Python 3.14 may work for some libraries, but media and ML packages such as Paddle, PyTorch, CTranslate2 and CUDA integrations frequently lag behind the newest Python release.
-* LlamaParse is not central to GalaxyFrog. Keep it for a later “supporting PDF/slides” capability rather than using document parsing credits on extracted video frames.
+- Next.js 16.3 is the appropriate current target. Turbopack is the default bundler for Next.js 16 applications, including builds; the statement that production builds still default to webpack is outdated. Next.js 16 also includes React 19.2 features. [Next.js 16 announcement](https://nextjs.org/blog/next-16), [Next.js 16.3 updates](https://nextjs.org/blog)
+- Bun 1.4 was released on August 20, 2026 and includes the Rust core rewrite you mentioned. [Bun 1.4](https://bun.com/blog/bun-v1.4)
+- Base UI 1.6 is now shadcn’s default primitive choice for new projects. [shadcn Base UI announcement](https://ui.shadcn.com/docs/changelog/2026-07-base-ui-default)
+- Tailwind’s current line is 4.3, although depending on `^4` is usually preferable to hard-coding a minor release. [Tailwind CSS 4.3](https://tailwindcss.com/blog/tailwindcss-v4-3)
+- `gemini-3.6-flash` is a stable model and supports text, image, audio, video, and PDF input. Pin the stable model ID instead of `gemini-flash-latest`, because the latter can change underneath the application. [Gemini 3.6 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash)
+- Gemini 3.6 Flash and 3.5 Flash-Lite currently have free-tier inference, but Google states that free-tier submitted data may be used to improve its products. Do not silently send private videos or transcripts through the free tier. [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)
+- Cohere now exposes Rerank 4.0 Fast and Pro alongside 3.5. Use the model registry rather than embedding a model name in retrieval code. [Cohere models](https://docs.cohere.com/docs/models)
+- Supabase Free remains 500 MB of actual database data, 1 GB file storage, 5 GB egress, 50,000 MAU and two free active projects. [Supabase billing](https://supabase.com/docs/guides/platform/billing-on-supabase)
+- Supabase can pause a low-activity project after seven days. A keepalive must execute a real database query; merely calling a FastAPI `/health` route will not necessarily count as database activity. [Supabase project pausing](https://supabase.com/docs/guides/platform/free-project-pausing)
+- QStash Free currently permits 1,000 messages per day, 50 GB bandwidth and 1 MB messages. Only send IDs and metadata through QStash—never video bytes. [QStash pricing](https://upstash.com/pricing/qstash)
+- Use Python 3.14.7 for the main environment. Python 3.14 may work for some libraries, but media and ML packages such as Paddle, PyTorch, CTranslate2 and CUDA integrations frequently lag behind the newest Python release.
+- LlamaParse is not central to GalaxyFrog. Keep it for a later “supporting PDF/slides” capability rather than using document parsing credits on extracted video frames.
 
 ---
 
@@ -57,30 +57,30 @@ This is a real GalaxyFrog MVP. OCR and VLM retrieval should not block it.
 
 After the transcript MVP is reliable, add:
 
-* OCR retrieval.
-* Scene-aware frame sampling.
-* Visual embeddings.
-* Query-adaptive VLM invocation.
-* Temporal expansion and interval merging.
-* Multimodal reranking.
-* Automatic chapters.
-* Notes, flashcards and quizzes.
-* Comparative evaluation and ablation experiments.
+- OCR retrieval.
+- Scene-aware frame sampling.
+- Visual embeddings.
+- Query-adaptive VLM invocation.
+- Temporal expansion and interval merging.
+- Multimodal reranking.
+- Automatic chapters.
+- Notes, flashcards and quizzes.
+- Comparative evaluation and ablation experiments.
 
 ## 2.3 Explicit non-goals for the MVP
 
 Do not initially build:
 
-* Multi-user collaboration.
-* Playlists or entire-channel ingestion.
-* Real-time live-stream indexing.
-* Full VLM processing of every frame.
-* Fine-tuning.
-* Bedrock Knowledge Bases.
-* Kubernetes.
-* Dedicated vector databases.
-* Always-on GPU hosting.
-* A general-purpose autonomous agent.
+- Multi-user collaboration.
+- Playlists or entire-channel ingestion.
+- Real-time live-stream indexing.
+- Full VLM processing of every frame.
+- Fine-tuning.
+- Bedrock Knowledge Bases.
+- Kubernetes.
+- Dedicated vector databases.
+- Always-on GPU hosting.
+- A general-purpose autonomous agent.
 
 ---
 
@@ -114,47 +114,47 @@ The FastAPI and worker processes should import the same Python domain package bu
 
 The Next.js application handles:
 
-* Pages and layouts.
-* Supabase Auth session.
-* YouTube player integration.
-* Forms and UI state.
-* Evidence timeline.
-* Progress display.
-* Toasts, errors and degraded-mode messages.
-* Thin proxy routes to FastAPI.
-* Generated API types.
+- Pages and layouts.
+- Supabase Auth session.
+- YouTube player integration.
+- Forms and UI state.
+- Evidence timeline.
+- Progress display.
+- Toasts, errors and degraded-mode messages.
+- Thin proxy routes to FastAPI.
+- Generated API types.
 
 It must not contain:
 
-* Prompt templates.
-* Provider selection.
-* Embedding calls.
-* Retrieval logic.
-* Database queries.
-* Supabase Storage operations.
-* Reranking.
-* Video processing.
-* LangGraph nodes.
+- Prompt templates.
+- Provider selection.
+- Embedding calls.
+- Retrieval logic.
+- Database queries.
+- Supabase Storage operations.
+- Reranking.
+- Video processing.
+- LangGraph nodes.
 
 ## Python handles everything else
 
 Python owns:
 
-* FastAPI endpoints.
-* Pydantic schemas.
-* Authentication verification.
-* SQLAlchemy repositories.
-* Alembic migrations.
-* Storage access.
-* QStash signature verification.
-* Ingestion jobs.
-* FFmpeg and yt-dlp invocation.
-* ASR, OCR and VLM inference.
-* Retrieval and reranking.
-* LangGraph.
-* Evaluation.
-* Observability.
-* AWS clients and deployment automation.
+- FastAPI endpoints.
+- Pydantic schemas.
+- Authentication verification.
+- SQLAlchemy repositories.
+- Alembic migrations.
+- Storage access.
+- QStash signature verification.
+- Ingestion jobs.
+- FFmpeg and yt-dlp invocation.
+- ASR, OCR and VLM inference.
+- Retrieval and reranking.
+- LangGraph.
+- Evaluation.
+- Observability.
+- AWS clients and deployment automation.
 
 Generate the frontend API client from FastAPI’s OpenAPI document. Do not maintain matching request/response types manually in two languages.
 
@@ -213,28 +213,28 @@ Do not use LangGraph merely to chain FFmpeg → Whisper → chunking → embeddi
 
 Define Python interfaces for each replaceable capability:
 
-* `GenerationProvider`
-* `TextEmbeddingProvider`
-* `VisualEmbeddingProvider`
-* `TextReranker`
-* `MultimodalReranker`
-* `TranscriptionProvider`
-* `OCRProvider`
-* `VisionReasoningProvider`
-* `ObjectStore`
-* `JobDispatcher`
+- `GenerationProvider`
+- `TextEmbeddingProvider`
+- `VisualEmbeddingProvider`
+- `TextReranker`
+- `MultimodalReranker`
+- `TranscriptionProvider`
+- `OCRProvider`
+- `VisionReasoningProvider`
+- `ObjectStore`
+- `JobDispatcher`
 
 Each adapter returns a common result envelope containing:
 
-* Provider name.
-* Model/version.
-* Latency.
-* Usage.
-* Estimated cost.
-* Warnings.
-* Retry metadata.
-* Trace ID.
-* Result data.
+- Provider name.
+- Model/version.
+- Latency.
+- Usage.
+- Estimated cost.
+- Warnings.
+- Retry metadata.
+- Trace ID.
+- Result data.
 
 ## 6.1 Provider profiles
 
@@ -259,11 +259,11 @@ A query vector produced by Cohere cannot search a collection indexed using BGE-M
 
 Therefore:
 
-* Record `provider`, `model`, `revision`, `dimension` and `normalization` for every embedding collection.
-* Query using the same embedding collection used during indexing.
-* If that provider fails, either query another precomputed collection or degrade to lexical search.
-* Never silently generate a vector with another provider and compare it against incompatible stored vectors.
-* Reindexing should create a new version rather than overwriting the active collection.
+- Record `provider`, `model`, `revision`, `dimension` and `normalization` for every embedding collection.
+- Query using the same embedding collection used during indexing.
+- If that provider fails, either query another precomputed collection or degrade to lexical search.
+- Never silently generate a vector with another provider and compare it against incompatible stored vectors.
+- Reindexing should create a new version rather than overwriting the active collection.
 
 For the MVP, standardize text embeddings at 1,024 dimensions. BGE-M3 natively produces 1,024-dimensional vectors and supports dense, sparse and multi-vector retrieval across over 100 languages. [BGE-M3 model card](https://huggingface.co/BAAI/bge-m3)
 
@@ -296,57 +296,57 @@ Qwen3-VL’s embedding/reranking family is particularly relevant because it supp
 
 Normalize provider and pipeline failures into:
 
-* `INVALID_INPUT`
-* `SOURCE_UNAVAILABLE`
-* `SOURCE_AUTH_REQUIRED`
-* `UNSUPPORTED_VIDEO`
-* `RATE_LIMITED`
-* `QUOTA_EXHAUSTED`
-* `PROVIDER_AUTH_FAILED`
-* `PROVIDER_UNAVAILABLE`
-* `PROVIDER_TIMEOUT`
-* `MODEL_NOT_AVAILABLE`
-* `RESOURCE_EXHAUSTED`
-* `SAFETY_BLOCKED`
-* `INDEX_INCOMPATIBLE`
-* `PROCESSING_FAILED`
-* `INTERNAL_ERROR`
+- `INVALID_INPUT`
+- `SOURCE_UNAVAILABLE`
+- `SOURCE_AUTH_REQUIRED`
+- `UNSUPPORTED_VIDEO`
+- `RATE_LIMITED`
+- `QUOTA_EXHAUSTED`
+- `PROVIDER_AUTH_FAILED`
+- `PROVIDER_UNAVAILABLE`
+- `PROVIDER_TIMEOUT`
+- `MODEL_NOT_AVAILABLE`
+- `RESOURCE_EXHAUSTED`
+- `SAFETY_BLOCKED`
+- `INDEX_INCOMPATIBLE`
+- `PROCESSING_FAILED`
+- `INTERNAL_ERROR`
 
 Each API error should include:
 
-* Safe user-facing message.
-* Error code.
-* Stage.
-* Whether it is retryable.
-* Suggested user action.
-* Retry-after duration when known.
-* Correlation ID.
-* Whether a fallback was attempted.
-* Whether the system is operating in degraded mode.
+- Safe user-facing message.
+- Error code.
+- Stage.
+- Whether it is retryable.
+- Suggested user action.
+- Retry-after duration when known.
+- Correlation ID.
+- Whether a fallback was attempted.
+- Whether the system is operating in degraded mode.
 
 ## 8.2 Retry and fallback rules
 
-* Retry only transient and idempotent operations.
-* Use exponential backoff with jitter.
-* Respect provider `Retry-After`.
-* Place a circuit breaker around each provider.
-* Do not retry authentication, invalid input or safety failures.
-* Use idempotency keys for ingestion and artifact generation.
-* Preserve completed stage outputs.
-* Retry from the failed stage, not from the start of the video.
+- Retry only transient and idempotent operations.
+- Use exponential backoff with jitter.
+- Respect provider `Retry-After`.
+- Place a circuit breaker around each provider.
+- Do not retry authentication, invalid input or safety failures.
+- Use idempotency keys for ingestion and artifact generation.
+- Preserve completed stage outputs.
+- Retry from the failed stage, not from the start of the video.
 
 ## 8.3 Degraded modes
 
 Examples:
 
-* Dense embedder unavailable → use Postgres FTS only.
-* Reranker unavailable → retain RRF ordering.
-* VLM unavailable → answer with transcript/OCR and show “visual reasoning unavailable.”
-* OCR unavailable → keep transcript search working.
-* Generator unavailable → return ranked evidence without a generated answer.
-* Cloud quota exhausted → offer local provider if installed.
-* Local GPU OOM → retry a smaller model or CPU backend.
-* Supabase Realtime unavailable → poll job status.
+- Dense embedder unavailable → use Postgres FTS only.
+- Reranker unavailable → retain RRF ordering.
+- VLM unavailable → answer with transcript/OCR and show “visual reasoning unavailable.”
+- OCR unavailable → keep transcript search working.
+- Generator unavailable → return ranked evidence without a generated answer.
+- Cloud quota exhausted → offer local provider if installed.
+- Local GPU OOM → retry a smaller model or CPU backend.
+- Supabase Realtime unavailable → poll job status.
 
 The frontend should display a non-blocking warning such as:
 
@@ -372,13 +372,13 @@ QUEUED
 
 Each stage records:
 
-* Start and completion time.
-* Attempt number.
-* Input fingerprint.
-* Output artifact IDs.
-* Provider/model.
-* Error code.
-* Logs and trace ID.
+- Start and completion time.
+- Attempt number.
+- Input fingerprint.
+- Output artifact IDs.
+- Provider/model.
+- Error code.
+- Logs and trace ID.
 
 ## 9.1 Transcript-first path
 
@@ -421,11 +421,11 @@ QStash should carry a message such as:
 
 It should not carry:
 
-* Audio.
-* Video.
-* Frames.
-* Transcripts.
-* Large prompts.
+- Audio.
+- Video.
+- Frames.
+- Transcripts.
+- Large prompts.
 
 The receiving endpoint should verify the QStash signature, record/dispatch the work and return quickly. A persistent worker should claim the job from Postgres. Do not depend on a multi-hour HTTP request remaining open.
 
@@ -450,9 +450,9 @@ LangChain splitters can assist with text boundaries, but they should not own tim
 
 Store three levels:
 
-* Raw cues: exact caption/ASR timestamps.
-* Retrieval segments: search units.
-* Chapters: larger semantic topic intervals.
+- Raw cues: exact caption/ASR timestamps.
+- Retrieval segments: search units.
+- Chapters: larger semantic topic intervals.
 
 ---
 
@@ -462,13 +462,13 @@ Store three levels:
 
 Classify each query into one or more intents:
 
-* Spoken/transcript.
-* Exact keyword/name.
-* OCR/screen text.
-* Visual description.
-* Temporal query.
-* “Explain this moment.”
-* Summary/artifact request.
+- Spoken/transcript.
+- Exact keyword/name.
+- OCR/screen text.
+- Visual description.
+- Temporal query.
+- “Explain this moment.”
+- Summary/artifact request.
 
 Start with deterministic patterns. Add a small model router only after you have labeled routing examples.
 
@@ -476,13 +476,13 @@ Start with deterministic patterns. Add a small model router only after you have 
 
 Recommended starting values:
 
-* Text dense search: top 30.
-* Transcript FTS: top 30.
-* OCR FTS/vector: top 20.
-* Visual retrieval: top 15 only for visual queries.
-* RRF fusion: top 30.
-* Cross-encoder reranking: top 20–30.
-* Final evidence: top 5–8 segments.
+- Text dense search: top 30.
+- Transcript FTS: top 30.
+- OCR FTS/vector: top 20.
+- Visual retrieval: top 15 only for visual queries.
+- RRF fusion: top 30.
+- Cross-encoder reranking: top 20–30.
+- Final evidence: top 5–8 segments.
 
 Treat these as experimental parameters, not permanent constants.
 
@@ -503,11 +503,11 @@ Before invoking the VLM, estimate whether transcript/OCR evidence is sufficient.
 
 Escalate to nearby-frame analysis when:
 
-* The question contains “shown,” “diagram,” “screen,” “code,” “color,” “object” or similar visual language.
-* Transcript retrieval has low confidence.
-* OCR indicates relevant screen text but lacks visual context.
-* The user asks “explain this moment.”
-* The answer requires comparing nearby frames.
+- The question contains “shown,” “diagram,” “screen,” “code,” “color,” “object” or similar visual language.
+- Transcript retrieval has low confidence.
+- OCR indicates relevant screen text but lacks visual context.
+- The user asks “explain this moment.”
+- The answer requires comparing nearby frames.
 
 ---
 
@@ -537,12 +537,12 @@ Conceptually:
 
 After generation, run a deterministic citation validator:
 
-* Every evidence ID exists.
-* Every cited segment belongs to the requested video.
-* Start time is before end time.
-* Quoted transcript is actually present.
-* Every major answer claim has evidence.
-* Unsupported citations are removed or cause regeneration.
+- Every evidence ID exists.
+- Every cited segment belongs to the requested video.
+- Start time is before end time.
+- Quoted transcript is actually present.
+- Every major answer claim has evidence.
+- Unsupported citations are removed or cause regeneration.
 
 If no adequate evidence exists, the correct response is:
 
@@ -587,45 +587,45 @@ Use PostgreSQL `tsvector` for lexical search and pgvector HNSW for approximate v
 
 ## Video and ingestion
 
-* `POST /v1/videos/import`
-* `POST /v1/videos/upload`
-* `GET /v1/videos`
-* `GET /v1/videos/{video_id}`
-* `DELETE /v1/videos/{video_id}`
-* `POST /v1/videos/{video_id}/reindex`
-* `GET /v1/jobs/{job_id}`
-* `GET /v1/jobs/{job_id}/events`
-* `POST /v1/jobs/{job_id}/retry`
-* `POST /v1/jobs/{job_id}/cancel`
+- `POST /v1/videos/import`
+- `POST /v1/videos/upload`
+- `GET /v1/videos`
+- `GET /v1/videos/{video_id}`
+- `DELETE /v1/videos/{video_id}`
+- `POST /v1/videos/{video_id}/reindex`
+- `GET /v1/jobs/{job_id}`
+- `GET /v1/jobs/{job_id}/events`
+- `POST /v1/jobs/{job_id}/retry`
+- `POST /v1/jobs/{job_id}/cancel`
 
 ## Search and QA
 
-* `POST /v1/videos/{video_id}/search`
-* `POST /v1/videos/{video_id}/questions`
-* `GET /v1/qa-runs/{run_id}`
-* `GET /v1/qa-runs/{run_id}/events`
-* `POST /v1/videos/{video_id}/explain-moment`
+- `POST /v1/videos/{video_id}/search`
+- `POST /v1/videos/{video_id}/questions`
+- `GET /v1/qa-runs/{run_id}`
+- `GET /v1/qa-runs/{run_id}/events`
+- `POST /v1/videos/{video_id}/explain-moment`
 
 ## Product intelligence
 
-* `POST /v1/videos/{video_id}/chapters`
-* `POST /v1/videos/{video_id}/artifacts`
-* `GET /v1/videos/{video_id}/artifacts`
-* `POST /v1/artifacts/{artifact_id}/regenerate`
+- `POST /v1/videos/{video_id}/chapters`
+- `POST /v1/videos/{video_id}/artifacts`
+- `GET /v1/videos/{video_id}/artifacts`
+- `POST /v1/artifacts/{artifact_id}/regenerate`
 
 ## Provider administration
 
-* `GET /v1/providers/capabilities`
-* `GET /v1/providers/health`
-* `GET /v1/provider-profiles`
-* `PUT /v1/provider-profiles/{profile_id}`
+- `GET /v1/providers/capabilities`
+- `GET /v1/providers/health`
+- `GET /v1/provider-profiles`
+- `PUT /v1/provider-profiles/{profile_id}`
 
 ## Internal callbacks
 
-* `POST /internal/qstash/dispatch`
-* `POST /internal/jobs/{job_id}/heartbeat`
-* `POST /internal/jobs/{job_id}/complete-stage`
-* `GET /internal/maintenance/keepalive`
+- `POST /internal/qstash/dispatch`
+- `POST /internal/jobs/{job_id}/heartbeat`
+- `POST /internal/jobs/{job_id}/complete-stage`
+- `GET /internal/maintenance/keepalive`
 
 Internal routes must use signature verification or service authentication and must never be exposed through the normal browser client.
 
@@ -778,35 +778,35 @@ Duration: 3–5 days.
 
 ### Work
 
-* Establish MVP/non-MVP boundaries.
-* Create the monorepo.
-* Initialize Next.js 16, React 19, Bun and shadcn/Base UI.
-* Initialize Python 3.13, uv, FastAPI and Pydantic.
-* Configure Ruff, Pyright, pytest and pre-commit.
-* Configure ESLint/TypeScript strict mode for the UI.
-* Add Docker Compose for local Postgres/pgvector.
-* Create `AGENTS.md`, `PLANS.md` and architecture ADRs.
-* Create CI for lint, type checks, tests and builds.
-* Add `/health/live` and `/health/ready`.
-* Generate frontend types from OpenAPI.
-* Establish structured error responses.
+- Establish MVP/non-MVP boundaries.
+- Create the monorepo.
+- Initialize Next.js 16, React 19, Bun and shadcn/Base UI.
+- Initialize Python 3.14.7, uv, FastAPI and Pydantic.
+- Configure Ruff, Pyright, pytest and pre-commit.
+- Configure ESLint/TypeScript strict mode for the UI.
+- Add Docker Compose for local Postgres/pgvector.
+- Create `AGENTS.md`, `PLANS.md` and architecture ADRs.
+- Create CI for lint, type checks, tests and builds.
+- Add `/health/live` and `/health/ready`.
+- Generate frontend types from OpenAPI.
+- Establish structured error responses.
 
 ### Exit gate
 
-* `bun run build` passes.
-* `uv run pytest` passes.
-* FastAPI OpenAPI is generated.
-* The browser can call FastAPI through the thin proxy.
-* A deliberate backend error renders correctly in the UI.
+- `bun run build` passes.
+- `uv run pytest` passes.
+- FastAPI OpenAPI is generated.
+- The browser can call FastAPI through the thin proxy.
+- A deliberate backend error renders correctly in the UI.
 
 ### AI-agent work packets
 
-* P0.1 repository scaffold.
-* P0.2 Python quality tooling.
-* P0.3 frontend design system.
-* P0.4 OpenAPI generation.
-* P0.5 CI and Docker Compose.
-* P0.6 documentation/invariants.
+- P0.1 repository scaffold.
+- P0.2 Python quality tooling.
+- P0.3 frontend design system.
+- P0.4 OpenAPI generation.
+- P0.5 CI and Docker Compose.
+- P0.6 documentation/invariants.
 
 Do not give one agent the whole phase.
 
@@ -818,31 +818,31 @@ Duration: 7–10 days.
 
 ### Work
 
-* Create `VideoSource` protocol.
-* Implement `YouTubeSource`.
-* Canonicalize YouTube URLs and IDs.
-* Extract safe metadata.
-* Retrieve available timestamped captions.
-* Add `LocalFileSource` as a fallback.
-* Normalize caption formats into `TranscriptCue`.
-* Implement `TemporalChunker`.
-* Store videos, cues and retrieval units.
-* Generate BGE-M3 embeddings.
-* Implement pgvector search.
-* Generate an answer using retrieved transcript segments.
-* Return evidence with timestamps.
-* Add YouTube seek actions in the UI.
+- Create `VideoSource` protocol.
+- Implement `YouTubeSource`.
+- Canonicalize YouTube URLs and IDs.
+- Extract safe metadata.
+- Retrieve available timestamped captions.
+- Add `LocalFileSource` as a fallback.
+- Normalize caption formats into `TranscriptCue`.
+- Implement `TemporalChunker`.
+- Store videos, cues and retrieval units.
+- Generate BGE-M3 embeddings.
+- Implement pgvector search.
+- Generate an answer using retrieved transcript segments.
+- Return evidence with timestamps.
+- Add YouTube seek actions in the UI.
 
 ### Exit gate
 
 For a captioned public video:
 
-* Import completes.
-* Transcript appears in the UI.
-* A user asks a question.
-* The answer contains at least one valid timestamp.
-* Clicking the citation seeks the player.
-* Re-importing the same video is idempotent.
+- Import completes.
+- Transcript appears in the UI.
+- A user asks a question.
+- The answer contains at least one valid timestamp.
+- Clicking the citation seeks the player.
+- Re-importing the same video is idempotent.
 
 This is MVP checkpoint A.
 
@@ -854,26 +854,26 @@ Duration: 7–10 days.
 
 ### Work
 
-* Add `ingestion_jobs` and `job_events`.
-* Build a worker claiming mechanism using Postgres locking.
-* Add QStash dispatch and signature verification.
-* Add job heartbeat, cancellation and retry.
-* Download audio only when captions are insufficient.
-* Integrate faster-whisper.
-* Support CPU/GPU device configuration.
-* Store ASR model, language and confidence.
-* Add resumable stage outputs.
-* Add progress UI and retry controls.
-* Add duration, file-size and concurrency limits.
-* Delete temporary audio after successful processing when configured.
+- Add `ingestion_jobs` and `job_events`.
+- Build a worker claiming mechanism using Postgres locking.
+- Add QStash dispatch and signature verification.
+- Add job heartbeat, cancellation and retry.
+- Download audio only when captions are insufficient.
+- Integrate faster-whisper.
+- Support CPU/GPU device configuration.
+- Store ASR model, language and confidence.
+- Add resumable stage outputs.
+- Add progress UI and retry controls.
+- Add duration, file-size and concurrency limits.
+- Delete temporary audio after successful processing when configured.
 
 ### Exit gate
 
-* A captionless video is transcribed.
-* Worker restart does not lose the job.
-* A failed transcription can resume at transcription.
-* Duplicate QStash delivery does not duplicate output.
-* The UI displays stage-specific progress and errors.
+- A captionless video is transcribed.
+- Worker restart does not lose the job.
+- A failed transcription can resume at transcription.
+- Duplicate QStash delivery does not duplicate output.
+- The UI displays stage-specific progress and errors.
 
 This is MVP checkpoint B.
 
@@ -885,24 +885,24 @@ Duration: 5–7 days.
 
 ### Work
 
-* Add PostgreSQL FTS indexes.
-* Implement transcript lexical retrieval.
-* Implement dense retrieval.
-* Add RRF.
-* Add local cross-encoder reranking.
-* Add temporal expansion and interval merging.
-* Add query analysis for spoken/exact/temporal questions.
-* Record retrieval traces and rankings.
-* Add “show evidence” panel.
-* Add retrieval-only mode for debugging.
+- Add PostgreSQL FTS indexes.
+- Implement transcript lexical retrieval.
+- Implement dense retrieval.
+- Add RRF.
+- Add local cross-encoder reranking.
+- Add temporal expansion and interval merging.
+- Add query analysis for spoken/exact/temporal questions.
+- Record retrieval traces and rankings.
+- Add “show evidence” panel.
+- Add retrieval-only mode for debugging.
 
 ### Exit gate
 
-* Exact terms work even when semantic similarity is weak.
-* Semantically equivalent queries work without exact keywords.
-* Neighboring results are merged into coherent intervals.
-* Retrieval results can be inspected independently of generation.
-* Hybrid retrieval is measured against dense-only retrieval.
+- Exact terms work even when semantic similarity is weak.
+- Semantically equivalent queries work without exact keywords.
+- Neighboring results are merged into coherent intervals.
+- Retrieval results can be inspected independently of generation.
+- Hybrid retrieval is measured against dense-only retrieval.
 
 This is the recommended final MVP boundary.
 
@@ -914,25 +914,25 @@ Duration: 7–10 days.
 
 ### Work
 
-* Add scene detection.
-* Sample scene boundaries plus periodic frames.
-* Calculate perceptual hashes.
-* Deduplicate frames.
-* Integrate PaddleOCR/PP-OCRv5.
-* Store OCR text, boxes and confidence.
-* Associate OCR blocks with temporal scenes.
-* Add OCR FTS and embeddings.
-* Add OCR-specific query routing.
-* Display relevant frames and highlighted OCR evidence.
+- Add scene detection.
+- Sample scene boundaries plus periodic frames.
+- Calculate perceptual hashes.
+- Deduplicate frames.
+- Integrate PaddleOCR/PP-OCRv5.
+- Store OCR text, boxes and confidence.
+- Associate OCR blocks with temporal scenes.
+- Add OCR FTS and embeddings.
+- Add OCR-specific query routing.
+- Display relevant frames and highlighted OCR evidence.
 
 ### Exit gate
 
 For questions whose answer appears only on screen:
 
-* The system retrieves the correct approximate interval.
-* OCR evidence appears separately from transcript evidence.
-* Duplicate slide frames do not flood results.
-* Low-confidence OCR is visibly marked or filtered.
+- The system retrieves the correct approximate interval.
+- OCR evidence appears separately from transcript evidence.
+- Duplicate slide frames do not flood results.
+- Low-confidence OCR is visibly marked or filtered.
 
 ---
 
@@ -942,25 +942,25 @@ Duration: 10–14 days.
 
 ### Work
 
-* Create `VisualEmbeddingProvider`.
-* Build a lightweight baseline using SigLIP/OpenCLIP.
-* Experiment with Qwen3-VL Embedding.
-* Add visual vector indexes.
-* Add visual query routing.
-* Implement evidence-sufficiency scoring.
-* Fetch nearby frames only after initial retrieval.
-* Add local Qwen3-VL and Gemini vision adapters.
-* Add a multimodal reranker experiment.
-* Cache frame reasoning by frame hash, model and prompt version.
-* Add privacy controls governing external frame submission.
+- Create `VisualEmbeddingProvider`.
+- Build a lightweight baseline using SigLIP/OpenCLIP.
+- Experiment with Qwen3-VL Embedding.
+- Add visual vector indexes.
+- Add visual query routing.
+- Implement evidence-sufficiency scoring.
+- Fetch nearby frames only after initial retrieval.
+- Add local Qwen3-VL and Gemini vision adapters.
+- Add a multimodal reranker experiment.
+- Cache frame reasoning by frame hash, model and prompt version.
+- Add privacy controls governing external frame submission.
 
 ### Exit gate
 
-* A visual-only question retrieves a relevant timestamp.
-* Normal transcript questions do not invoke a VLM.
-* The trace shows why visual escalation occurred.
-* Disabling the VLM leaves transcript/OCR QA functional.
-* Visual retrieval quality is evaluated separately from generated answers.
+- A visual-only question retrieves a relevant timestamp.
+- Normal transcript questions do not invoke a VLM.
+- The trace shows why visual escalation occurred.
+- Disabling the VLM leaves transcript/OCR QA functional.
+- Visual retrieval quality is evaluated separately from generated answers.
 
 This phase delivers the flagship contribution.
 
@@ -972,20 +972,20 @@ Duration: 4–6 days.
 
 ### Work
 
-* Accept current player timestamp.
-* Retrieve transcript cues around the position.
-* Load current, previous and next selected frames.
-* Include nearby OCR.
-* Run evidence sufficiency.
-* Invoke VLM only when needed.
-* Return explanation and related moments.
-* Add a player toolbar action.
+- Accept current player timestamp.
+- Retrieve transcript cues around the position.
+- Load current, previous and next selected frames.
+- Include nearby OCR.
+- Run evidence sufficiency.
+- Invoke VLM only when needed.
+- Return explanation and related moments.
+- Add a player toolbar action.
 
 ### Exit gate
 
-* Pausing at a slide/code/diagram returns an evidence-based explanation.
-* Transcript-only moments do not require visual inference.
-* Every explanation identifies the examined time window.
+- Pausing at a slide/code/diagram returns an evidence-based explanation.
+- Transcript-only moments do not require visual inference.
+- Every explanation identifies the examined time window.
 
 ---
 
@@ -995,22 +995,22 @@ Duration: 7–10 days.
 
 ### Work
 
-* Implement automatic chapters.
-* Combine transcript semantic shifts, silence and scene changes.
-* Generate chapter titles from evidence.
-* Build timestamped summaries and notes.
-* Generate flashcards with source intervals.
-* Generate objective quizzes with answer evidence.
-* Add artifact versioning and regeneration.
-* Export Markdown and JSON.
-* Optionally associate uploaded slides/PDFs using LlamaParse.
+- Implement automatic chapters.
+- Combine transcript semantic shifts, silence and scene changes.
+- Generate chapter titles from evidence.
+- Build timestamped summaries and notes.
+- Generate flashcards with source intervals.
+- Generate objective quizzes with answer evidence.
+- Add artifact versioning and regeneration.
+- Export Markdown and JSON.
+- Optionally associate uploaded slides/PDFs using LlamaParse.
 
 ### Exit gate
 
-* Each chapter has a valid interval.
-* Every flashcard or quiz answer points to evidence.
-* Regeneration creates a new version.
-* Exported artifacts retain timestamp links.
+- Each chapter has a valid interval.
+- Every flashcard or quiz answer points to evidence.
+- Regeneration creates a new version.
+- Exported artifacts retain timestamp links.
 
 ---
 
@@ -1022,24 +1022,24 @@ Provider abstractions should exist from Phase 0, but this phase completes the pr
 
 ### Work
 
-* Implement capability registry.
-* Add provider health checks.
-* Add circuit breakers and quota tracking.
-* Add provider profiles.
-* Add local/free/AWS switching UI.
-* Add privacy warnings before cloud processing.
-* Add per-provider timeouts and concurrency controls.
-* Track cost estimates and fallback events.
-* Add compatible embedding-collection selection.
-* Add degraded-mode banners and user actions.
+- Implement capability registry.
+- Add provider health checks.
+- Add circuit breakers and quota tracking.
+- Add provider profiles.
+- Add local/free/AWS switching UI.
+- Add privacy warnings before cloud processing.
+- Add per-provider timeouts and concurrency controls.
+- Track cost estimates and fallback events.
+- Add compatible embedding-collection selection.
+- Add degraded-mode banners and user actions.
 
 ### Exit gate
 
-* Disabling Gemini does not break local mode.
-* Exhausting a cloud quota produces a recoverable UI state.
-* An incompatible embedding fallback is rejected safely.
-* Provider choice is recorded on every run.
-* Evaluation mode disables automatic fallback.
+- Disabling Gemini does not break local mode.
+- Exhausting a cloud quota produces a recoverable UI state.
+- An incompatible embedding fallback is rejected safely.
+- Provider choice is recorded on every run.
+- Evaluation mode disables automatic fallback.
 
 ---
 
@@ -1051,62 +1051,62 @@ Duration: 10–14 days, but dataset collection should begin in Phase 1.
 
 Start with:
 
-* 10–20 videos.
-* Lectures, code tutorials, presentations and visually rich explainers.
-* 80–150 questions.
-* Transcript-only questions.
-* OCR-only questions.
-* Visual-only questions.
-* Temporal questions.
-* Multi-evidence questions.
-* Unanswerable questions.
+- 10–20 videos.
+- Lectures, code tutorials, presentations and visually rich explainers.
+- 80–150 questions.
+- Transcript-only questions.
+- OCR-only questions.
+- Visual-only questions.
+- Temporal questions.
+- Multi-evidence questions.
+- Unanswerable questions.
 
 Label:
 
-* Relevant segment IDs.
-* Ground-truth time intervals.
-* Evidence modality.
-* Reference answer.
-* Expected route.
-* Whether VLM escalation is required.
+- Relevant segment IDs.
+- Ground-truth time intervals.
+- Evidence modality.
+- Reference answer.
+- Expected route.
+- Whether VLM escalation is required.
 
 ### Experiments
 
-* A: Transcript dense-only.
-* B: Transcript dense + FTS.
-* C: Transcript + OCR.
-* D: Transcript + visual.
-* E: Transcript + OCR + visual.
-* F: Hybrid + reranker.
-* G: Hybrid + reranker + temporal expansion.
-* H: Full query-adaptive pipeline.
+- A: Transcript dense-only.
+- B: Transcript dense + FTS.
+- C: Transcript + OCR.
+- D: Transcript + visual.
+- E: Transcript + OCR + visual.
+- F: Hybrid + reranker.
+- G: Hybrid + reranker + temporal expansion.
+- H: Full query-adaptive pipeline.
 
 ### Metrics
 
-* Recall@K.
-* Precision@K.
-* MRR.
-* nDCG.
-* Temporal IoU.
-* Mean absolute timestamp error.
-* Evidence coverage.
-* Faithfulness.
-* Answer correctness.
-* Unanswerable-question accuracy.
-* P50/P95 latency.
-* Provider cost.
-* VLM invocation rate.
-* Recovery success after provider failure.
+- Recall@K.
+- Precision@K.
+- MRR.
+- nDCG.
+- Temporal IoU.
+- Mean absolute timestamp error.
+- Evidence coverage.
+- Faithfulness.
+- Answer correctness.
+- Unanswerable-question accuracy.
+- P50/P95 latency.
+- Provider cost.
+- VLM invocation rate.
+- Recovery success after provider failure.
 
 RAGAS provides context precision, recall and faithfulness, while MLflow provides built-in and custom RAG judges. [RAGAS metrics](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/), [MLflow RAG evaluation](https://mlflow.org/docs/latest/genai/eval-monitor/scorers/llm-judge/rag/)
 
 ### Exit gate
 
-* All claimed improvements are supported by measured results.
-* Experiment configuration is reproducible.
-* Provider, model revision and index version are recorded.
-* No benchmark numbers are manually invented.
-* At least one ablation demonstrates the value of OCR, visual retrieval or temporal expansion.
+- All claimed improvements are supported by measured results.
+- Experiment configuration is reproducible.
+- Provider, model revision and index version are recorded.
+- No benchmark numbers are manually invented.
+- At least one ablation demonstrates the value of OCR, visual retrieval or temporal expansion.
 
 ---
 
@@ -1118,46 +1118,46 @@ Duration: 5–7 days.
 
 Instrument:
 
-* Ingestion stage duration.
-* Queue delay.
-* ASR minutes processed.
-* Frame and OCR counts.
-* Embedding latency.
-* Retrieval latency per retriever.
-* Reranker latency.
-* VLM invocation count.
-* Generation tokens/cost.
-* Fallback and retry events.
-* Citation-validation failures.
+- Ingestion stage duration.
+- Queue delay.
+- ASR minutes processed.
+- Frame and OCR counts.
+- Embedding latency.
+- Retrieval latency per retriever.
+- Reranker latency.
+- VLM invocation count.
+- Generation tokens/cost.
+- Fallback and retry events.
+- Citation-validation failures.
 
 Use OpenTelemetry and self-hosted Jaeger during development. OpenTelemetry’s GenAI conventions standardize provider, model, token and latency data. [OpenTelemetry GenAI observability](https://opentelemetry.io/blog/2026/genai-observability/)
 
 ### Security
 
-* Allowlist supported URL hosts.
-* Prevent SSRF.
-* Pass subprocess arguments as arrays, never concatenated shell text.
-* Enforce video duration and media-size limits.
-* Sandbox worker files per job.
-* Verify Supabase JWTs in FastAPI.
-* Validate ownership in every repository query.
-* Use short-lived signed URLs.
-* Verify QStash signatures.
-* Do not log transcripts/prompts by default.
-* Encrypt secrets.
-* Rate-limit imports and question requests.
-* Add media-retention cleanup.
-* Respect video ownership, licensing and platform rules.
+- Allowlist supported URL hosts.
+- Prevent SSRF.
+- Pass subprocess arguments as arrays, never concatenated shell text.
+- Enforce video duration and media-size limits.
+- Sandbox worker files per job.
+- Verify Supabase JWTs in FastAPI.
+- Validate ownership in every repository query.
+- Use short-lived signed URLs.
+- Verify QStash signatures.
+- Do not log transcripts/prompts by default.
+- Encrypt secrets.
+- Rate-limit imports and question requests.
+- Add media-retention cleanup.
+- Respect video ownership, licensing and platform rules.
 
 The official YouTube caption download API requires authorization and appropriate content ownership permissions; it should not be treated as an arbitrary public-caption API. [YouTube captions download](https://developers.google.com/youtube/v3/docs/captions/download)
 
 ### Exit gate
 
-* Unauthorized cross-user access tests fail safely.
-* Malformed URLs cannot trigger arbitrary network access.
-* Logs contain no credentials.
-* Temporary media is cleaned.
-* P95 performance is recorded for each pipeline profile.
+- Unauthorized cross-user access tests fail safely.
+- Malformed URLs cannot trigger arbitrary network access.
+- Logs contain no credentials.
+- Temporary media is cleaned.
+- P95 performance is recorded for each pipeline profile.
 
 ---
 
@@ -1167,24 +1167,24 @@ Duration: 7–10 days.
 
 ### Recommended deployment
 
-* Next.js: Vercel Hobby for the academic demo.
-* Auth/DB: Supabase Free.
-* API: AWS Lambda + Mangum for JSON/polling endpoints.
-* Worker: local machine initially; ECS Fargate `RunTask` for AWS experiments.
-* Media/artifacts: Supabase Storage initially, S3 for AWS deployment.
-* Generation: Gemini free or Bedrock.
-* Status updates: Supabase Realtime or polling.
-* Observability: local MLflow/Jaeger, CloudWatch for AWS components.
+- Next.js: Vercel Hobby for the academic demo.
+- Auth/DB: Supabase Free.
+- API: AWS Lambda + Mangum for JSON/polling endpoints.
+- Worker: local machine initially; ECS Fargate `RunTask` for AWS experiments.
+- Media/artifacts: Supabase Storage initially, S3 for AWS deployment.
+- Generation: Gemini free or Bedrock.
+- Status updates: Supabase Realtime or polling.
+- Observability: local MLflow/Jaeger, CloudWatch for AWS components.
 
 Keep long processing outside Lambda. Lambda functions have a maximum 15-minute runtime and up to 10 GB `/tmp`; long video analysis can exceed both operational limits. [AWS Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
 
 ### Exit gate
 
-* Fresh deployment can ingest a selected test video.
-* A documented smoke test passes.
-* Cost alarms are active.
-* Local, free-cloud and AWS demo profiles work.
-* The final dashboard shows retrieval quality, latency and modality contributions.
+- Fresh deployment can ingest a selected test video.
+- A documented smoke test passes.
+- Cost alarms are active.
+- Local, free-cloud and AWS demo profiles work.
+- The final dashboard shows retrieval quality, latency and modality contributions.
 
 ---
 
@@ -1192,8 +1192,8 @@ Keep long processing outside Lambda. Lambda functions have a maximum 15-minute r
 
 Your sustainable average is approximately:
 
-* $0.54 per day.
-* $16.20 per 30-day month.
+- $0.54 per day.
+- $16.20 per 30-day month.
 
 Set a target of no more than $10–12 monthly, leaving room for experiments.
 
@@ -1217,24 +1217,24 @@ Fargate CPU pricing starts around $0.04048/vCPU-hour and $0.004445/GB-hour in th
 
 Amazon Transcribe batch processing is approximately $0.006/minute in the cited example:
 
-* 10 hours: about $3.60.
-* 100 hours: about $36.
+- 10 hours: about $3.60.
+- 100 hours: about $36.
 
 Therefore, faster-whisper should remain the default. [Amazon Transcribe pricing](https://aws.amazon.com/transcribe/pricing/)
 
 ## Avoid these initially
 
-* NAT Gateway.
-* Always-on EC2 GPU.
-* SageMaker real-time endpoints.
-* OpenSearch Serverless.
-* RDS.
-* ElastiCache.
-* Always-on ECS service with an Application Load Balancer.
-* Provisioned Bedrock throughput.
-* Bedrock Knowledge Bases.
-* Bedrock Data Automation for the entire dataset.
-* TwelveLabs video embedding across large collections.
+- NAT Gateway.
+- Always-on EC2 GPU.
+- SageMaker real-time endpoints.
+- OpenSearch Serverless.
+- RDS.
+- ElastiCache.
+- Always-on ECS service with an Application Load Balancer.
+- Provisioned Bedrock throughput.
+- Bedrock Knowledge Bases.
+- Bedrock Data Automation for the entire dataset.
+- TwelveLabs video embedding across large collections.
 
 ## Suggested credit allocation
 
@@ -1249,13 +1249,13 @@ Therefore, faster-whisper should remain the default. [Amazon Transcribe pricing]
 
 Add:
 
-* Monthly warnings at $5 and $10.
-* A hard personal stop at $12/month.
-* Maximum one Fargate worker initially.
-* Maximum video duration per profile.
-* Automatic S3 cleanup.
-* Explicit opt-in for paid providers.
-* Token ceilings for every Bedrock request.
+- Monthly warnings at $5 and $10.
+- A hard personal stop at $12/month.
+- Maximum one Fargate worker initially.
+- Maximum video duration per profile.
+- Automatic S3 cleanup.
+- Explicit opt-in for paid providers.
+- Token ceilings for every Bedrock request.
 
 ---
 
@@ -1265,17 +1265,17 @@ Add:
 
 Your root `AGENTS.md` should state permanent invariants:
 
-* Next.js is presentation-only.
-* All AI and database logic is Python.
-* No direct frontend database/storage access except Auth and optional Realtime.
-* Timestamps must never be discarded.
-* Provider calls must go through interfaces.
-* Embedding collections cannot be mixed.
-* Ingestion must be resumable and idempotent.
-* Expensive visual inference is query-adaptive.
-* New features require tests.
-* API contracts originate in FastAPI.
-* No stage is complete until its exit gate passes.
+- Next.js is presentation-only.
+- All AI and database logic is Python.
+- No direct frontend database/storage access except Auth and optional Realtime.
+- Timestamps must never be discarded.
+- Provider calls must go through interfaces.
+- Embedding collections cannot be mixed.
+- Ingestion must be resumable and idempotent.
+- Expensive visual inference is query-adaptive.
+- New features require tests.
+- API contracts originate in FastAPI.
+- No stage is complete until its exit gate passes.
 
 `PLANS.md` should contain active execution plans, task IDs, status, dependencies and decisions. It should not repeat all permanent rules from `AGENTS.md`.
 
@@ -1321,29 +1321,29 @@ uv run pyright backend
 
 Safe parallel work:
 
-* UI components and backend domain code.
-* Provider adapters for different providers.
-* Unit tests and documentation.
-* Evaluation tooling and unrelated ingestion components.
+- UI components and backend domain code.
+- Provider adapters for different providers.
+- Unit tests and documentation.
+- Evaluation tooling and unrelated ingestion components.
 
 Unsafe parallel work:
 
-* Two agents editing the same migration.
-* Database schema and repository code without an agreed contract.
-* FastAPI schema and manually duplicated frontend types.
-* Multiple agents changing the provider base interfaces simultaneously.
-* Retrieval ranking and evaluation metric definitions without shared fixtures.
+- Two agents editing the same migration.
+- Database schema and repository code without an agreed contract.
+- FastAPI schema and manually duplicated frontend types.
+- Multiple agents changing the provider base interfaces simultaneously.
+- Retrieval ranking and evaluation metric definitions without shared fixtures.
 
 ## Commit/PR size
 
 Aim for:
 
-* One task per branch.
-* 200–500 meaningful changed lines where practical.
-* One migration per schema task.
-* One acceptance gate.
-* No unrelated refactors.
-* Generated OpenAPI client committed with the API change.
+- One task per branch.
+- 200–500 meaningful changed lines where practical.
+- One migration per schema task.
+- One acceptance gate.
+- No unrelated refactors.
+- Generated OpenAPI client committed with the API change.
 
 ---
 
@@ -1395,6 +1395,5 @@ The novelty is not “chat with a YouTube video.” It is:
 That framing is technically stronger, measurable and much better for a project report, resume and viva.
 
 If helpful, I can set up “Review GalaxyFrog progress weekly” so each phase stays aligned with its exit gate.
-
 
 Scheduled **GalaxyFrog Weekly Review** for every Sunday evening around **7:00 PM IST**, starting August 30, 2026. It will review phase exit gates, blockers, scope drift, and next-week priorities.

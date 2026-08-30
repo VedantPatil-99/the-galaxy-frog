@@ -23,7 +23,7 @@ Status: **planned**
 Work packets: P0.2 Python quality tooling and P0.3 frontend design system.
 
 - [ ] Scaffold Next.js 16, React 19, strict TypeScript, Bun, Tailwind CSS v4, and shadcn/ui with Base UI.
-- [ ] Scaffold Python 3.13, uv, FastAPI, and Pydantic v2.
+- [ ] Scaffold Python 3.14.7, uv, FastAPI, and Pydantic v2.
 - [ ] Configure Ruff, Pyright, pytest, pre-commit, ESLint, and frontend tests.
 - [ ] Add root commands that orchestrate both language workspaces without adding JavaScript server logic.
 

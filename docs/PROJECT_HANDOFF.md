@@ -19,12 +19,12 @@ evidence and produce timestamp-grounded answers.
 
 ## Verified local tools
 
-- Git: 2.46.2.windows.1
-- Bun: 1.3.9
-- Python: 3.13.2
-- uv: 0.12.3
-- Docker: not installed
-- Operating environment: Windows PowerShell
+- Git: `2.55.0.windows.5`
+- Bun: `1.4`
+- Python: `3.14.7`
+- uv: `0.12.7 (61291a8ca 2026-08-27 x86_64-pc-windows-msvc)`
+- Docker: not installed; deferred to Step 3 because it is not required for the frontend/backend scaffold.
+- Operating environment: Windows PowerShell or git bash
 
 Docker is not required for Step 2. It will be installed before Step 3.
 
@@ -54,7 +54,7 @@ Frontend:
 
 Backend:
 
-- Python 3.13
+- Python 3.14.7
 - uv
 - FastAPI
 - Pydantic v2
