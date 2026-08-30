@@ -36,7 +36,7 @@ Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 - [x] Add local PostgreSQL with the pgvector image and a persistent development volume.
 - [x] Implement `/health/live` and dependency-aware `/health/ready`.
 - [x] Define the stable structured error envelope and correlation IDs.
-- [ ] Export FastAPI OpenAPI and generate frontend TypeScript types.
+- [x] Export FastAPI OpenAPI and generate frontend TypeScript types.
 - [ ] Add a thin Next.js proxy, API connectivity screen, and deliberate-error UI state.
 
 #### Step 3A — Local PostgreSQL foundation
@@ -53,6 +53,12 @@ Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 - [x] Add validated correlation IDs to request state, response headers, and error bodies.
 - [x] Normalize deliberate, validation, HTTP, and unexpected failures into the stable error envelope.
 - [x] Verify healthy, unavailable, invalid-input, not-found, and unexpected-error behavior.
+
+#### Step 3C — Generated API contracts
+
+- [x] Export a canonical, deterministic OpenAPI document without requiring a running API or database.
+- [x] Generate frontend TypeScript declarations from FastAPI OpenAPI with `openapi-typescript`.
+- [x] Add root generation and stale-artifact checks to the standard verification workflow.
 
 ### Step 4 — CI and exit gate
 
@@ -83,3 +89,5 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
 - 2026-08-30: Use Bun's root workspace and native parallel/sequential task runner to orchestrate frontend and backend commands without adding a JavaScript server layer.
 - 2026-08-30: Use pinned PostgreSQL 17 plus pgvector in Docker Compose for local development and
   keep migrations portable to a later hosted Supabase deployment.
+- 2026-08-31: Commit deterministic FastAPI OpenAPI and generated TypeScript declarations; verify
+  both artifacts are current through the root quality workflow.

@@ -30,6 +30,13 @@ flowchart TD
 - Configuration selects adapters at startup and validates invalid combinations early.
 - Frontend code depends on generated API contracts, not backend implementation details.
 
+## API contract generation
+
+FastAPI and Pydantic are the sole source of truth for HTTP schemas. The backend exports a sorted,
+stable `backend/openapi.json` without loading local environment configuration or connecting to
+PostgreSQL. `openapi-typescript` derives `apps/web/lib/api/generated/schema.d.ts` from that document.
+Both files are committed, and `bun run contracts:check` fails when either artifact is stale.
+
 ## Failure model
 
 Every API failure will expose a stable error code, human-safe message, correlation ID, retry guidance, and optional structured details. Provider fallback decisions will be visible in telemetry and response metadata; a silent quality downgrade is not acceptable.

@@ -27,6 +27,18 @@ with a stable code, safe message, matching correlation ID, retryability, optiona
 and optional JSON details. Framework debug tracebacks remain disabled in every environment so an
 unexpected exception cannot replace the public error contract with internal details.
 
+## OpenAPI contract
+
+From `backend/`, export or verify the canonical schema without starting the API or PostgreSQL:
+
+```bash
+uv run python -m galaxy_frog.openapi
+uv run python -m galaxy_frog.openapi --check
+```
+
+The deterministic artifact is `backend/openapi.json`. Run `bun run contracts:generate` from the
+repository root when an API schema changes so the frontend declarations are regenerated as well.
+
 ## Quality checks
 
 ```bash

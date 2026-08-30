@@ -8,8 +8,8 @@ Phase 0 — Foundation and contracts, Step 3 of 4 in progress.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
-established. Steps 3A and 3B established local PostgreSQL/pgvector plus the API health, readiness,
-correlation-ID, and structured-error contracts. Deterministic OpenAPI generation is next.
+established. Steps 3A–3C established local PostgreSQL/pgvector, the operational API contracts, and
+deterministic OpenAPI-derived frontend types. The thin proxy and API connectivity UI are next.
 
 ## Architecture direction
 
@@ -66,6 +66,17 @@ bun run dev
 Use `Ctrl+C` to stop both processes. Run either process independently with `bun run dev:web` or
 `bun run dev:api`.
 
+## API contracts
+
+```bash
+bun run contracts:generate
+bun run contracts:check
+```
+
+Generation exports FastAPI's canonical schema to `backend/openapi.json`, then derives
+`apps/web/lib/api/generated/schema.d.ts` with `openapi-typescript`. Neither command requires a
+running API or database. Commit both generated artifacts with every API contract change.
+
 ## Verification
 
 ```bash
@@ -73,6 +84,6 @@ bun run check
 bun run precommit
 ```
 
-`bun run check` runs frontend and backend linting, formatting checks, strict type checks, tests,
-coverage enforcement, and the frontend production build. `bun run precommit` executes all configured
-repository hooks.
+`bun run check` first verifies that both generated API artifacts are current, then runs frontend and
+backend linting, formatting checks, strict type checks, tests, coverage enforcement, and the frontend
+production build. `bun run precommit` executes all configured repository hooks.
