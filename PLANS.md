@@ -1,8 +1,10 @@
 # Galaxy Frog implementation plans
 
-## Active plan: Phase 0 — Foundation and contracts
+## Completed plan: Phase 0 — Foundation and contracts
 
 Duration target: 3–5 focused development days.
+
+Status: **complete**. Phase 1 has not started.
 
 ### Step 1 — Scope, repository, and invariants
 
@@ -69,13 +71,12 @@ Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 
 ### Step 4 — CI and exit gate
 
-Status: **in progress**
+Status: **complete**
 
 Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
 
 - [x] Add GitHub Actions for backend lint/type/test and frontend lint/type/test/build.
-- [ ] Verify generated OpenAPI/types are current in the first hosted CI run. The workflow enforces
-  the check, but this repository does not yet have a Git remote.
+- [x] Verify generated OpenAPI/types are current in the first hosted CI run.
 - [x] Add a local setup and troubleshooting runbook.
 - [x] Run and record the complete local Phase 0 exit gate.
 
@@ -97,8 +98,9 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
 - Step 3D browser verification passed liveness and PostgreSQL-backed readiness through the proxy,
   then rendered the deliberate correlated `NOT_FOUND` backend envelope. `scripts/smoke-test.sh`
   preserves those HTTP checks for repeatable local verification.
-- The first GitHub-hosted workflow run remains pending until a GitHub remote is configured and the
-  branch is pushed.
+- Pull request #1 in `VedantPatil-99/the-galaxy-frog` passed the generated-contract, backend-quality,
+  and frontend-quality GitHub Actions jobs. The clean runner also exposed and verified the fix for
+  generating Next.js route-aware types before standalone TypeScript checks.
 
 ## Decision log
 
@@ -116,3 +118,5 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
   fixed-upstream Next.js proxy that preserves FastAPI status and correlation metadata.
 - 2026-08-31: Split CI into contract, backend, and frontend jobs with locked toolchains and
   commit-pinned third-party actions; keep the live database smoke test local for Phase 0.
+- 2026-08-31: Phase 0 completed after all local exit gates and the first hosted pull-request CI run
+  passed. Phase 1 remains unstarted.
