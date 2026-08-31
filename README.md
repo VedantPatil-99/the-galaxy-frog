@@ -4,14 +4,15 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phase 0 — Foundation and contracts, Step 4 of 4 in progress.
+Phase 0 — Foundation and contracts — is complete. Phase 1 has not started.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
 established. Steps 3A–3D established local PostgreSQL/pgvector, operational API contracts,
 deterministic OpenAPI-derived frontend types, and verified browser-to-FastAPI connectivity through
-the thin Next.js proxy. Step 4 adds reproducible CI, the local runbook, and the final Phase 0 exit
-gate without introducing Phase 1 behavior.
+the thin Next.js proxy. Step 4 added reproducible GitHub Actions, the local runbook, and the final
+Phase 0 exit gate without introducing Phase 1 behavior. The first hosted contract, backend, and
+frontend jobs passed on pull request #1 in `VedantPatil-99/the-galaxy-frog`.
 
 ## Architecture direction
 

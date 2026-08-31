@@ -21,7 +21,7 @@ evidence and produce timestamp-grounded answers.
 - Step 3B — API health and structured error contracts: completed
 - Step 3C — Deterministic OpenAPI and generated frontend types: completed
 - Step 3D — Thin proxy and browser connectivity UI: completed
-- Step 4 — CI and the Phase 0 exit gate: implementation complete locally; first hosted CI run pending
+- Step 4 — CI and the Phase 0 exit gate: completed
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -51,7 +51,7 @@ evidence and produce timestamp-grounded answers.
 Docker was not required for Step 2. Step 3A uses Docker Desktop with the WSL 2 backend for local
 PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
-## Current task
+## Current state and next task
 
 Phase 0 Step 2 is complete in four reviewed batches:
 
@@ -71,8 +71,13 @@ stale artifacts. Step 3D is complete: live browser verification rendered success
 readiness through the Next.js proxy, then rendered the backend's deliberate correlated `NOT_FOUND`
 envelope. Step 3 is complete; Step 4 — CI, troubleshooting documentation, and the final Phase 0 exit
 gate — now has commit-pinned contract, backend, and frontend GitHub Actions jobs, a local runbook,
-and a repeatable proxy smoke test. The complete local exit gate passes. A first hosted workflow run
-cannot be observed until a Git remote is configured and the branch is pushed.
+and a repeatable proxy smoke test. The complete local exit gate passes. Pull request #1 in
+`VedantPatil-99/the-galaxy-frog` passed all three hosted jobs after the frontend type-check command
+was made clean-runner-safe with `next typegen`.
+
+Phase 0 is complete. Phase 1 — the transcript-first vertical slice — has not started. Begin Phase 1
+only from its first approved work packet, preserving the permanent boundaries below and avoiding
+later multimodal capabilities until their planned checkpoints.
 
 ## Step 2 technology requirements
 
