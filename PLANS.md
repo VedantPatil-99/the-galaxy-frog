@@ -69,22 +69,36 @@ Work packets: P0.4 OpenAPI generation and P0.5 Docker Compose infrastructure.
 
 ### Step 4 — CI and exit gate
 
-Status: **planned**
+Status: **in progress**
 
 Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
 
-- [ ] Add GitHub Actions for backend lint/type/test and frontend lint/type/test/build.
-- [ ] Verify generated OpenAPI/types are current in CI.
-- [ ] Add a local setup and troubleshooting runbook.
-- [ ] Run and record the complete Phase 0 exit gate.
+- [x] Add GitHub Actions for backend lint/type/test and frontend lint/type/test/build.
+- [ ] Verify generated OpenAPI/types are current in the first hosted CI run. The workflow enforces
+  the check, but this repository does not yet have a Git remote.
+- [x] Add a local setup and troubleshooting runbook.
+- [x] Run and record the complete local Phase 0 exit gate.
 
 ## Phase 0 exit gate
 
-- [ ] `bun run build` passes.
-- [ ] `uv run pytest` passes.
-- [ ] FastAPI OpenAPI is generated deterministically.
-- [ ] The browser calls FastAPI through the thin proxy.
-- [ ] A deliberate backend error renders as a useful UI state.
+- [x] `bun run build` passes.
+- [x] `uv run pytest` passes.
+- [x] FastAPI OpenAPI is generated deterministically.
+- [x] The browser calls FastAPI through the thin proxy.
+- [x] A deliberate backend error renders as a useful UI state.
+
+### Phase 0 exit-gate record — 2026-08-31
+
+- `bun ci` reproduced the frontend workspace from `bun.lock` without changes.
+- `uv sync --directory backend --locked --python 3.14.7` reproduced the backend environment.
+- `bun run check` passed contract drift checks, both linters, formatting, both strict type checks,
+  10 frontend tests, 28 backend tests at 100% coverage, and the Next.js production build.
+- `bun run precommit` passed every configured repository hook.
+- Step 3D browser verification passed liveness and PostgreSQL-backed readiness through the proxy,
+  then rendered the deliberate correlated `NOT_FOUND` backend envelope. `scripts/smoke-test.sh`
+  preserves those HTTP checks for repeatable local verification.
+- The first GitHub-hosted workflow run remains pending until a GitHub remote is configured and the
+  branch is pushed.
 
 ## Decision log
 
@@ -100,3 +114,5 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
   both artifacts are current through the root quality workflow.
 - 2026-08-31: Keep `FASTAPI_BASE_URL` server-only and route browser API traffic through a no-store,
   fixed-upstream Next.js proxy that preserves FastAPI status and correlation metadata.
+- 2026-08-31: Split CI into contract, backend, and frontend jobs with locked toolchains and
+  commit-pinned third-party actions; keep the live database smoke test local for Phase 0.

@@ -33,6 +33,7 @@
     "test:web": "bun run --cwd apps/web test",
     "test:backend": "uv run --directory backend pytest",
     "build": "bun run --cwd apps/web build",
+    "smoke": "bash scripts/smoke-test.sh",
     "check": "bun run --sequential contracts:check lint format:check typecheck test build",
     "precommit": "uv run --directory backend pre-commit run --all-files"
   },

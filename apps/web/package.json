@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "bun test",
     "api:generate": "openapi-typescript ../../backend/openapi.json --output lib/api/generated/schema.d.ts --alphabetize",
     "api:check": "bun run api:generate --check"
