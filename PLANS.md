@@ -102,11 +102,11 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
   and frontend-quality GitHub Actions jobs. The clean runner also exposed and verified the fix for
   generating Next.js route-aware types before standalone TypeScript checks.
 
-## Active plan: Phase 1 — Transcript-first vertical slice
+## Completed plan: Phase 1 — Transcript-first vertical slice
 
 Duration target: 7–10 focused development days.
 
-Status: **in progress**. The approved plan is recorded in the Galaxy Frog Workspace as
+Status: **complete**. The approved plan is recorded in the Galaxy Frog Workspace as
 `P1.0 — Phase 1: Transcript-first Vertical Slice`.
 
 ### P1.1 — Video source contract
@@ -169,16 +169,16 @@ Status: **in progress**. The approved plan is recorded in the Galaxy Frog Worksp
 
 - [x] Import a public captioned video, display its transcript, and verify duplicate-free re-import.
 - [x] Answer a caption-grounded question through the live UI with validated timestamp evidence.
-- [ ] Run the scripted Phase 1 smoke and click a citation to confirm live player seeking.
+- [x] Run the scripted Phase 1 smoke and click a citation to confirm live player seeking.
 - [x] Verify re-import idempotency, database integration, generated contracts, and full quality gates.
 
-Implementation through P1.9 is present on `feat/video-source-contract`. On 2026-09-02,
+Phase 1 is complete on `feat/video-source-contract`. On 2026-09-02,
 `bun run check`, `bun run precommit`, both migrations, and the opt-in PostgreSQL/pgvector integration
 test passed; the backend gate has 174 passing tests and 100% statement/branch coverage, and the
 frontend has 14 passing tests. The user then installed the configured BGE-M3 and Qwen3 4B models and
-verified live import, transcript rendering, idempotent reuse, and grounded answering. P1.10 remains
-open only for the scripted smoke and manual citation-seek confirmation. Do not mark Phase 1 complete
-until both run.
+verified live import, transcript rendering, idempotent reuse, and grounded answering. On 2026-09-03,
+the scripted exit smoke passed with 217 cues, 20 retrieval units, two validated citations, and an
+idempotent re-import; the user also confirmed that selecting a citation seeks the live player.
 
 ## Phase 1 non-goals
 

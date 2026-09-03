@@ -22,10 +22,9 @@ evidence and produce timestamp-grounded answers.
 - Step 3C — Deterministic OpenAPI and generated frontend types: completed
 - Step 3D — Thin proxy and browser connectivity UI: completed
 - Step 4 — CI and the Phase 0 exit gate: completed
-- Phase 1 — Transcript-first vertical slice: in progress
-- P1.1–P1.9 — Transcript-first implementation: implemented, awaiting the Phase 1 exit gate
-- P1.10 — Quality/database gates and the live import/question flow pass; scripted smoke and manual
-  citation seeking remain open
+- Phase 1 — Transcript-first vertical slice: complete
+- P1.1–P1.9 — Transcript-first implementation: complete
+- P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -101,9 +100,10 @@ Qwen3 compatibility issue was found and fixed: the provider request pins `think:
 JSON is returned in the final `response` field instead of only the thinking channel. The targeted
 provider suite passes 19 tests, and the complete quality gate still passes.
 
-P1.10 remains open only for `bun run smoke:phase1` with the approved video/question and one manual
-citation click to verify live player seeking. The Ollama setup and recovery guide is
-[`docs/ollama.md`](ollama.md). The matching Notion records are:
+On 2026-09-03, `bun run smoke:phase1` passed with 217 cues, 20 retrieval units, two validated
+citations, and an idempotent re-import. The user also confirmed that clicking a citation seeks the
+live YouTube player, completing P1.10 and the Phase 1 exit gate. The Ollama setup and recovery guide
+is [`docs/ollama.md`](ollama.md). The matching Notion records are:
 
 - <https://app.notion.com/p/3ce7942fa8e481ff8d79fb7fe241b2d7>
 - <https://app.notion.com/p/3ce7942fa8e4815191abcf289fea5ecc>

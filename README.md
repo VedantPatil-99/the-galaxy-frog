@@ -4,19 +4,18 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phase 0 — Foundation and contracts — is complete. Phase 1 is implemented through the
-transcript-first UI and is completing its live exit gate.
+Phase 0 — Foundation and contracts — and Phase 1 — Transcript-first vertical slice — are complete.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
 established. Steps 3A–3D established local PostgreSQL/pgvector, operational API contracts,
 deterministic OpenAPI-derived frontend types, and verified browser-to-FastAPI connectivity through
 the thin Next.js proxy. Step 4 added reproducible GitHub Actions, the local runbook, and the final
-Phase 0 exit gate. Phase 1 now imports captioned public YouTube videos, preserves cue-to-segment
+Phase 0 exit gate. Phase 1 imports captioned public YouTube videos, preserves cue-to-segment
 provenance, performs video-scoped dense retrieval, generates validated transcript citations, and
-seeks the player from evidence intervals. The user has verified live import, duplicate-free reuse,
-transcript rendering, and grounded answering; the scripted smoke and manual citation-seek
-confirmation remain.
+seeks the player from evidence intervals. The live exit gate verified import, transcript rendering,
+duplicate-free reuse, grounded answering, validated timestamp citations, and citation-to-player
+seeking.
 
 ## Architecture direction
 
