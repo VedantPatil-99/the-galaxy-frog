@@ -1,7 +1,7 @@
 # Galaxy Frog local runbook
 
-This runbook covers the Phase 0 development stack: Next.js, FastAPI, and local PostgreSQL with
-pgvector. Run commands from the repository root in Git Bash unless a section says otherwise.
+This runbook covers the local Next.js, FastAPI, PostgreSQL/pgvector, and Phase 1 transcript-first
+stack. Run commands from the repository root in Git Bash unless a section says otherwise.
 
 ## Prerequisites
 
@@ -45,6 +45,17 @@ Start both application processes:
 bun run dev
 ```
 
+Phase 1 uses user-managed Ollama models. Install and start Ollama manually, then provision the exact
+models named in `.env`; these commands download model weights and therefore are never run by Codex:
+
+```bash
+ollama pull bge-m3
+ollama pull qwen3:4b
+```
+
+See [`docs/ollama.md`](ollama.md) for Windows installation, GPU verification, model checks, and the
+provider troubleshooting workflow.
+
 The development endpoints are:
 
 - Web application: `http://localhost:3000`
@@ -80,7 +91,7 @@ bun run contracts:check
 
 Never hand-edit the generated files.
 
-## Verification and Phase 0 smoke test
+## Verification and smoke tests
 
 Run the complete static and automated test gate:
 
@@ -98,6 +109,34 @@ bash scripts/smoke-test.sh
 The smoke test requires liveness and readiness to return `200`, then confirms that a missing backend
 route travels through the proxy as the structured `404 NOT_FOUND` response with a correlation ID.
 Set `WEB_BASE_URL` only when the web application intentionally uses a different local address.
+
+Run the real migration, repository, idempotency, pgvector, and HTTP integration test explicitly:
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_phase_one_slice.py
+```
+
+Targeted backend tests must disable the repository-wide coverage gate; use the complete suite to
+prove 100% coverage:
+
+```bash
+uv run --directory backend pytest --no-cov tests/unit/providers/test_ollama.py
+bun run test:backend
+```
+
+After selecting and approving one stable public captioned video, run the Phase 1 exit smoke through
+the browser-facing proxy. The question must be answerable from that video's captions:
+
+```bash
+export PHASE1_VIDEO_URL='https://www.youtube.com/watch?v=APPROVED_VIDEO_ID'
+export PHASE1_QUESTION='What specific claim does the speaker make?'
+bun run smoke:phase1
+```
+
+The Phase 1 runner requires a non-empty transcript, at least one valid timestamp citation, matching
+video ownership, ordered cue provenance, and an idempotent second import. Citation-to-player seeking
+is verified by the frontend player-command test and should also be clicked once during the live UI
+smoke.
 
 ## Troubleshooting
 
@@ -133,6 +172,30 @@ bun run db:migrate
 curl --fail-with-body http://127.0.0.1:8000/health/ready
 ```
 
+### Ollama models are missing or grounded generation returns 503
+
+Confirm that the user-managed service is running and both exact model tags are present:
+
+```bash
+curl --fail-with-body http://127.0.0.1:11434/api/tags
+ollama list
+```
+
+If a model pull ends with `unexpected EOF`, retry the same command so reusable layers resume. If
+both models are present, restart `bun run dev` so FastAPI loads the current adapter. Galaxy Frog pins
+`think: false` for `qwen3:4b`; without it, current Ollama versions can put structured output in the
+thinking channel and leave the final response empty. See [`docs/ollama.md`](ollama.md) for the full
+diagnostic sequence.
+
+### `bun run smoke` tries to start WSL Bash
+
+The supported manual shell is Git Bash. Do not run the smoke command from Command Prompt. In Git
+Bash, run:
+
+```bash
+./scripts/smoke-test.sh
+```
+
 ### A port is already in use
 
 The defaults are web `3000`, API `8000`, and PostgreSQL `5432`. Stop the conflicting local process or
@@ -165,8 +228,17 @@ Use Bun `1.4.0`, Python `3.14.7`, and uv `0.12.7`. `bun ci` and `uv sync --locke
 when a manifest and lockfile disagree; update dependencies and lockfiles as a separate reviewed
 change rather than bypassing the frozen install.
 
+### Windows Application Control blocks Python or Next.js modules
+
+If Python reports that `_sqlite3`, `select`, or another standard-library DLL was blocked, or Next.js
+cannot load its native SWC module, stop and repair/allow the managed runtime through the machine's
+Application Control policy. Do not disable coverage, substitute generated contracts, or install a
+different runtime to claim the exit gate. Temporary diagnostic shims are not part of the supported
+development workflow.
+
 ## Deployment boundary
 
-Local Phase 0 uses PostgreSQL with pgvector in Docker. Hosted Supabase remains a later deployment
-choice. FastAPI remains the only database owner in either environment, and existing portable
-migrations are the path to a hosted PostgreSQL service.
+The local Phase 1 stack uses PostgreSQL with pgvector in Docker and a user-managed native Ollama
+service. Hosted Supabase and cloud generation remain later deployment decisions. FastAPI remains
+the only database and provider owner in either environment, and existing portable migrations are
+the path to a hosted PostgreSQL service.

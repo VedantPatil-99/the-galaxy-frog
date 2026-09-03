@@ -8,8 +8,10 @@ Galaxy Frog begins as a modular monolith in one repository. Deployment boundarie
 flowchart TD
     UI["Next.js web<br>presentation only"] -->|"thin proxy + generated types"| API["FastAPI<br>application boundary"]
     API --> CORE["Python domain modules"]
-    CORE --> DATA["PostgreSQL + object storage"]
+    CORE --> DATA["PostgreSQL + pgvector"]
     CORE --> PROVIDERS["Replaceable provider adapters"]
+    PROVIDERS --> YOUTUBE["YouTube metadata + captions<br>no media download"]
+    PROVIDERS --> OLLAMA["User-managed Ollama<br>BGE-M3 + Qwen3 4B"]
 ```
 
 ## Repository modules
@@ -59,6 +61,22 @@ framework HTTP, deliberate application, and unexpected failures all use the same
 `/health/live` proves only that the API process can respond. `/health/ready` executes a PostgreSQL
 query through an application-lifespan engine; database failure must never make liveness fail.
 
-## Phase 0 deployment view
+Provider availability is reported by the import/question operation that requires it rather than by
+database readiness. A missing embedder or generator produces a stable, correlated API failure; it
+does not silently change the model or answer quality.
 
-During Phase 0, the only runnable application processes will be the Next.js development server, FastAPI development server, and local PostgreSQL container. Background workers and AI providers arrive in later phases.
+## Phase 1 transcript path
+
+1. FastAPI canonicalizes an allowlisted YouTube URL and retrieves safe metadata and captions only.
+2. Ordered transcript cues retain source identity and half-open millisecond intervals.
+3. Deterministic retrieval units retain their contributing cue IDs.
+4. BGE-M3 vectors are stored in a versioned 1,024-dimensional collection.
+5. Video-scoped cosine retrieval returns units with complete cue provenance.
+6. Qwen3 receives only retrieved transcript evidence; FastAPI validates every returned citation.
+7. The browser renders evidence and asks the YouTube IFrame player to seek to validated timestamps.
+
+## Phase 1 deployment view
+
+The runnable local services are the Next.js development server, FastAPI development server,
+PostgreSQL/pgvector container, and user-managed native Ollama service. Phase 1 has no worker, durable
+job queue, media pipeline, ASR, OCR, visual retrieval, hybrid retrieval, reranker, or cloud provider.
