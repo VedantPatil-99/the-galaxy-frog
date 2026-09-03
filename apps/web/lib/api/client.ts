@@ -1,10 +1,16 @@
 import {
   isApiErrorResponse,
+  isAnswerResponse,
   isHealthResponse,
+  isImportVideoResponse,
   isReadinessResponse,
+  isTranscriptResponse,
   type ApiErrorResponse,
+  type AnswerResponse,
   type HealthResponse,
+  type ImportVideoResponse,
   type ReadinessResponse,
+  type TranscriptResponse,
 } from "@/lib/api/contracts"
 
 const PROXY_BASE_PATH = "/api/proxy"
@@ -44,13 +50,19 @@ async function requestApi<T>(
   path: string,
   guard: ResponseGuard<T>,
   fetcher: Fetcher,
+  init: RequestInit = {},
 ): Promise<T> {
   let response: Response
 
   try {
     response = await fetcher(`${PROXY_BASE_PATH}${path}`, {
+      ...init,
       cache: "no-store",
-      headers: { accept: "application/json" },
+      headers: {
+        accept: "application/json",
+        ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+        ...init.headers,
+      },
     })
   } catch {
     throw new ApiClientError(
@@ -80,6 +92,40 @@ async function requestApi<T>(
   }
 
   return body
+}
+
+export async function importVideo(
+  sourceUrl: string,
+  fetcher: Fetcher = fetch,
+): Promise<ImportVideoResponse> {
+  return requestApi("/v1/videos/import", isImportVideoResponse, fetcher, {
+    method: "POST",
+    body: JSON.stringify({ source_url: sourceUrl }),
+  })
+}
+
+export async function getTranscript(
+  videoId: string,
+  fetcher: Fetcher = fetch,
+): Promise<TranscriptResponse> {
+  return requestApi(
+    `/v1/videos/${encodeURIComponent(videoId)}/transcript`,
+    isTranscriptResponse,
+    fetcher,
+  )
+}
+
+export async function askVideoQuestion(
+  videoId: string,
+  question: string,
+  fetcher: Fetcher = fetch,
+): Promise<AnswerResponse> {
+  return requestApi(
+    `/v1/videos/${encodeURIComponent(videoId)}/questions`,
+    isAnswerResponse,
+    fetcher,
+    { method: "POST", body: JSON.stringify({ question }) },
+  )
 }
 
 export async function checkApiConnectivity(
