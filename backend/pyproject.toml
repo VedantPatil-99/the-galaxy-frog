@@ -10,10 +10,13 @@ dependencies = [
     "alembic>=1.18,<2",
     "asyncpg>=0.31,<1",
     "fastapi[standard]>=0.141.1",
+    "httpx>=0.28,<1",
+    "pgvector>=0.4,<1",
     "pydantic>=2",
     "pydantic-settings>=2.15.0",
     "sqlalchemy[asyncio]>=2.0,<3",
     "starlette>=1.6,<2",
+    "yt-dlp>=2026.8,<2027",
 ]
 
 [build-system]
@@ -22,7 +25,6 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "pre-commit>=4.6.2",
     "pyright>=1.1.411",
     "pytest>=9.1.1",
