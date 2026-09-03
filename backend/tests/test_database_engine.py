@@ -7,7 +7,12 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from galaxy_frog.config import Settings
-from galaxy_frog.db.engine import DatabaseConfigurationError, create_database_engine, probe_database
+from galaxy_frog.db.engine import (
+    POSTGRES_SERVER_SETTINGS,
+    DatabaseConfigurationError,
+    create_database_engine,
+    probe_database,
+)
 
 
 def test_database_engine_requires_configuration() -> None:
@@ -27,6 +32,7 @@ async def test_database_engine_uses_asyncpg_without_exposing_password() -> None:
     assert engine.url.render_as_string(hide_password=True) == (
         "postgresql+asyncpg://galaxy_frog:***@localhost:5432/galaxy_frog"
     )
+    assert POSTGRES_SERVER_SETTINGS == {"search_path": "public,extensions"}
 
     await engine.dispose()
 

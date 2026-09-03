@@ -77,7 +77,14 @@ async def test_docs_and_openapi_are_available() -> None:
     assert info["title"] == "Galaxy Frog API"
     assert info["version"] == "0.1.0"
     paths = cast(dict[str, object], schema["paths"])
-    assert set(paths) == {"/health/live", "/health/ready"}
+    assert set(paths) == {
+        "/health/live",
+        "/health/ready",
+        "/v1/videos/import",
+        "/v1/videos/{video_id}",
+        "/v1/videos/{video_id}/questions",
+        "/v1/videos/{video_id}/transcript",
+    }
 
     ready_path = cast(dict[str, object], paths["/health/ready"])
     ready_operation = cast(dict[str, object], ready_path["get"])

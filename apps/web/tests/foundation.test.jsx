@@ -3,14 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import Home from "@/app/page"
 
-test("renders the evidence-first product foundation", () => {
+test("renders the transcript-first workspace", () => {
   const markup = renderToStaticMarkup(<Home />)
 
-  expect(markup).toContain("Find the moment.")
-  expect(markup).toContain("Prove the answer.")
-  expect(markup).toContain("Grounded answer contract")
-  expect(markup).toContain("API connectivity")
-  expect(markup).toContain("Check connection")
-  expect(markup).toContain("Preview error")
+  expect(markup).toContain("Ask the video. Keep the receipts.")
+  expect(markup).toContain("Import video")
+  expect(markup).toContain("Your evidence workspace is ready.")
+  expect(markup).toContain("does not download audio or video")
   expect(markup).toContain('aria-label="Toggle color theme"')
 })

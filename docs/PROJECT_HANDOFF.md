@@ -22,6 +22,9 @@ evidence and produce timestamp-grounded answers.
 - Step 3C — Deterministic OpenAPI and generated frontend types: completed
 - Step 3D — Thin proxy and browser connectivity UI: completed
 - Step 4 — CI and the Phase 0 exit gate: completed
+- Phase 1 — Transcript-first vertical slice: complete
+- P1.1–P1.9 — Transcript-first implementation: complete
+- P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -35,7 +38,14 @@ evidence and produce timestamp-grounded answers.
   local stale-file checks
 - The browser reaches FastAPI only through the server-configured Next.js proxy and renders both
   healthy dependency state and correlated backend errors
-- No application schema, retrieval, ingestion, OCR, ASR, or AI provider work has started
+- No Phase 2+ worker, audio, ASR, OCR, visual, reranking, or orchestration work has started
+- FastAPI now exposes caption-only import, video detail, transcript, and grounded-question contracts
+- YouTube metadata/captions remain download-free; transcript cues and retrieval units retain exact
+  millisecond intervals and ordered cue provenance
+- Versioned 1,024-dimensional BGE-M3 collections and video-scoped pgvector cosine retrieval are
+  implemented behind provider-independent ports
+- The presentation-only UI imports a video, renders its transcript, asks grounded questions, and
+  seeks the YouTube IFrame player from validated evidence citations
 
 ## Verified local tools
 
@@ -75,9 +85,28 @@ and a repeatable proxy smoke test. The complete local exit gate passes. Pull req
 `VedantPatil-99/the-galaxy-frog` passed all three hosted jobs after the frontend type-check command
 was made clean-runner-safe with `next typegen`.
 
-Phase 0 is complete. Phase 1 — the transcript-first vertical slice — has not started. Begin Phase 1
-only from its first approved work packet, preserving the permanent boundaries below and avoiding
-later multimodal capabilities until their planned checkpoints.
+Phase 0 is complete. Phase 1 — the transcript-first vertical slice — is implemented through P1.9 on
+`feat/video-source-contract`. Its authoritative Notion page is
+`P1.0 — Phase 1: Transcript-first Vertical Slice` at
+<https://app.notion.com/p/3cd7942fa8e481239d63c35a8466f917>. On 2026-09-02, `bun run check`
+passed with 174 backend tests, 100% statement/branch coverage, 14 frontend tests, current generated
+contracts, strict type checks, and a production build. `bun run precommit` passed. Alembic applied
+both Phase 1 revisions to the configured PostgreSQL database, and the opt-in integration test passed
+through FastAPI, duplicate-free re-import, pgvector indexing/search, and validated citations.
+
+The user manually installed Ollama and the configured BGE-M3/Qwen3 4B models. Live verification now
+proves public-caption import, transcript rendering, duplicate-free reuse, and a grounded answer. A
+Qwen3 compatibility issue was found and fixed: the provider request pins `think: false` so structured
+JSON is returned in the final `response` field instead of only the thinking channel. The targeted
+provider suite passes 19 tests, and the complete quality gate still passes.
+
+On 2026-09-03, `bun run smoke:phase1` passed with 217 cues, 20 retrieval units, two validated
+citations, and an idempotent re-import. The user also confirmed that clicking a citation seeks the
+live YouTube player, completing P1.10 and the Phase 1 exit gate. The Ollama setup and recovery guide
+is [`docs/ollama.md`](ollama.md). The matching Notion records are:
+
+- <https://app.notion.com/p/3ce7942fa8e481ff8d79fb7fe241b2d7>
+- <https://app.notion.com/p/3ce7942fa8e4815191abcf289fea5ecc>
 
 ## Step 2 technology requirements
 
@@ -122,22 +151,19 @@ Backend:
 - New functionality requires tests.
 - Do not implement future-phase features early.
 
-## Step 2 non-goals
+## Phase 1 non-goals
 
 Do not implement:
 
-- PostgreSQL or pgvector
-- Docker Compose
-- Supabase
-- YouTube ingestion
-- FFmpeg or yt-dlp
-- Embeddings
-- Retrieval
-- LangGraph
+- Background jobs and QStash
+- Audio extraction and FFmpeg
 - ASR
 - OCR
 - VLM processing
-- Real provider API calls
+- Visual retrieval
+- FTS, RRF, and reranking
+- LangGraph
+- AWS deployment
 
 ## Documentation
 

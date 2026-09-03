@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from galaxy_frog.config import Settings
 
+POSTGRES_SERVER_SETTINGS = {"search_path": "public,extensions"}
+
 
 class DatabaseConfigurationError(RuntimeError):
     """Raised when database infrastructure is requested without configuration."""
@@ -20,6 +22,7 @@ def create_database_engine(settings: Settings) -> AsyncEngine:
     return create_async_engine(
         settings.database_url.get_secret_value(),
         pool_pre_ping=True,
+        connect_args={"server_settings": POSTGRES_SERVER_SETTINGS},
     )
 
 

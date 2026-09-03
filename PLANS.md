@@ -4,7 +4,7 @@
 
 Duration target: 3–5 focused development days.
 
-Status: **complete**. Phase 1 has not started.
+Status: **complete**.
 
 ### Step 1 — Scope, repository, and invariants
 
@@ -102,6 +102,90 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
   and frontend-quality GitHub Actions jobs. The clean runner also exposed and verified the fix for
   generating Next.js route-aware types before standalone TypeScript checks.
 
+## Completed plan: Phase 1 — Transcript-first vertical slice
+
+Duration target: 7–10 focused development days.
+
+Status: **complete**. The approved plan is recorded in the Galaxy Frog Workspace as
+`P1.0 — Phase 1: Transcript-first Vertical Slice`.
+
+### P1.1 — Video source contract
+
+- [x] Add immutable source-reference, metadata, caption-track, and source-cue value objects.
+- [x] Define the asynchronous provider-independent `VideoSource` protocol.
+- [x] Preserve canonical source identity and integer millisecond half-open intervals.
+
+### P1.2 — YouTube identity and metadata
+
+- [x] Allowlist supported YouTube hosts, reject playlists, and canonicalize video IDs.
+- [x] Retrieve safe metadata through a metadata-only `yt-dlp` adapter.
+- [x] Normalize source failures into stable application errors.
+
+### P1.3 — Caption retrieval and normalization
+
+- [x] Prefer requested-language manual captions, then requested-language automatic captions,
+  without downloading media.
+- [x] Normalize timestamped captions into ordered `TranscriptCue` records.
+- [x] Return `TRANSCRIPT_UNAVAILABLE` rather than starting ASR.
+
+### P1.4 — Temporal chunking
+
+- [x] Produce deterministic, sentence-aware transcript retrieval units.
+- [x] Target 150–300 approximate tokens, 20–45 seconds, and 3–8 seconds of overlap.
+- [x] Preserve the ordered cue IDs and exact reconstructed interval for every unit.
+
+### P1.5 — Persistence and idempotent import
+
+- [x] Add portable video, cue, retrieval-unit, and provenance-link migrations.
+- [x] Add repositories and a synchronous caption-only import use case.
+- [x] Make canonical re-imports deterministic and duplicate-free.
+
+### P1.6 — BGE-M3 embeddings
+
+- [x] Verify the locked Python 3.14 environment can resolve the optional direct BGE-M3 stack;
+  use the user-managed Ollama adapter so no model runtime or weights are installed automatically.
+- [x] Add a provider-independent embedding protocol and 1,024-dimensional BGE-M3 adapter.
+- [x] Version embedding collections by provider, model, revision, dimension, and normalization.
+
+### P1.7 — Dense transcript retrieval
+
+- [x] Store transcript embeddings in pgvector and query them with video-scoped cosine search.
+- [x] Reject incompatible embedding collections.
+- [x] Return ranked retrieval units with their complete cue provenance.
+
+### P1.8 — Grounded answers
+
+- [x] Add a provider-independent generation protocol and user-configured Ollama adapter.
+- [x] Generate only from retrieved transcript evidence and validate citations deterministically.
+- [x] Return the insufficient-evidence response when support is inadequate.
+
+### P1.9 — Transcript-first UI
+
+- [x] Add generated API contracts for import, transcript, and question flows.
+- [x] Render the YouTube player, transcript, grounded answer, and evidence intervals.
+- [x] Seek the player when a citation is selected.
+
+### P1.10 — Exit gate
+
+- [x] Import a public captioned video, display its transcript, and verify duplicate-free re-import.
+- [x] Answer a caption-grounded question through the live UI with validated timestamp evidence.
+- [x] Run the scripted Phase 1 smoke and click a citation to confirm live player seeking.
+- [x] Verify re-import idempotency, database integration, generated contracts, and full quality gates.
+
+Phase 1 is complete on `feat/video-source-contract`. On 2026-09-02,
+`bun run check`, `bun run precommit`, both migrations, and the opt-in PostgreSQL/pgvector integration
+test passed; the backend gate has 174 passing tests and 100% statement/branch coverage, and the
+frontend has 14 passing tests. The user then installed the configured BGE-M3 and Qwen3 4B models and
+verified live import, transcript rendering, idempotent reuse, and grounded answering. On 2026-09-03,
+the scripted exit smoke passed with 217 cues, 20 retrieval units, two validated citations, and an
+idempotent re-import; the user also confirmed that selecting a citation seeks the live player.
+
+## Phase 1 non-goals
+
+- Background jobs, workers, QStash, retries, cancellation, audio extraction, FFmpeg, and Whisper.
+- OCR, frames, VLMs, visual retrieval, FTS, RRF, reranking, temporal expansion, and LangGraph.
+- AWS deployment, chapters, notes, flashcards, quizzes, and other later-phase product features.
+
 ## Decision log
 
 - 2026-08-29: Project name confirmed as **Galaxy Frog: A Video RAG**.
@@ -119,4 +203,8 @@ Work packets: remaining P0.5 CI and remaining P0.6 documentation/invariants.
 - 2026-08-31: Split CI into contract, backend, and frontend jobs with locked toolchains and
   commit-pinned third-party actions; keep the live database smoke test local for Phase 0.
 - 2026-08-31: Phase 0 completed after all local exit gates and the first hosted pull-request CI run
-  passed. Phase 1 remains unstarted.
+  passed.
+- 2026-08-31: Approved and started Phase 1 as ten sequential transcript-first work packets. Keep
+  caption ingestion synchronous, preserve cue provenance, and stop before every Phase 2+ capability.
+- 2026-09-02: Pin Ollama generation to `think: false` because the current `qwen3:4b` tag otherwise
+  returns structured output in a separate thinking channel and leaves the final response empty.
