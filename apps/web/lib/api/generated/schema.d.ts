@@ -44,10 +44,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/videos/{video_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Video
+         * @description Return safe canonical metadata for one imported video.
+         */
+        get: operations["get_video_v1_videos__video_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Question
+         * @description Retrieve transcript evidence and return a deterministically validated answer.
+         */
+        post: operations["ask_question_v1_videos__video_id__questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Transcript
+         * @description Return exact cues and retrieval units with complete provenance.
+         */
+        get: operations["get_transcript_v1_videos__video_id__transcript_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Video
+         * @description Synchronously import metadata and available captions without downloading media.
+         */
+        post: operations["import_video_v1_videos_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AnswerResponse
+         * @description Evidence-grounded answer contract.
+         */
+        AnswerResponse: {
+            /** Answer */
+            answer: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "low" | "medium" | "high";
+            /** Degraded Mode */
+            degraded_mode: boolean;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceResponse"][];
+            /** Warnings */
+            warnings: string[];
+        };
         /**
          * ErrorPayload
          * @description Stable, human-safe API error information.
@@ -76,6 +175,33 @@ export interface components {
             error: components["schemas"]["ErrorPayload"];
         };
         /**
+         * EvidenceResponse
+         * @description One validated transcript citation returned with an answer.
+         */
+        EvidenceResponse: {
+            /** Cue Ids */
+            cue_ids: string[];
+            /** End Ms */
+            end_ms: number;
+            /**
+             * Modality
+             * @default transcript
+             * @constant
+             */
+            modality: "transcript";
+            /** Quote */
+            quote: string;
+            /** Retrieval Unit Id */
+            retrieval_unit_id: string;
+            /** Start Ms */
+            start_ms: number;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+        };
+        /**
          * HealthResponse
          * @description Liveness response independent of external dependencies.
          */
@@ -87,7 +213,40 @@ export interface components {
              */
             status: "ok";
         };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ImportVideoRequest
+         * @description A caller-supplied video locator accepted by the source registry.
+         */
+        ImportVideoRequest: {
+            /**
+             * Source Url
+             * Format: uri
+             */
+            source_url: string;
+        };
+        /**
+         * ImportVideoResponse
+         * @description Import result that makes idempotent reuse explicit.
+         */
+        ImportVideoResponse: {
+            /** Reused */
+            reused: boolean;
+            video: components["schemas"]["VideoResponse"];
+        };
         JsonValue: unknown;
+        /**
+         * QuestionRequest
+         * @description A non-empty transcript question.
+         */
+        QuestionRequest: {
+            /** Question */
+            question: string;
+        };
         /**
          * ReadinessResponse
          * @description Readiness response returned after all required dependencies respond.
@@ -103,6 +262,101 @@ export interface components {
              * @constant
              */
             status: "ready";
+        };
+        /**
+         * RetrievalUnitResponse
+         * @description One retrieval interval with ordered cue provenance.
+         */
+        RetrievalUnitResponse: {
+            /** Cue Ids */
+            cue_ids: string[];
+            /** End Ms */
+            end_ms: number;
+            /** Retrieval Unit Id */
+            retrieval_unit_id: string;
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+        };
+        /**
+         * TranscriptCueResponse
+         * @description One exact normalized caption cue.
+         */
+        TranscriptCueResponse: {
+            /**
+             * Caption Kind
+             * @enum {string}
+             */
+            caption_kind: "manual" | "automatic";
+            /** Cue Id */
+            cue_id: string;
+            /** End Ms */
+            end_ms: number;
+            /** Language Code */
+            language_code: string;
+            /** Source Order */
+            source_order: number;
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+        };
+        /**
+         * TranscriptResponse
+         * @description Complete transcript projection used by the Phase 1 UI.
+         */
+        TranscriptResponse: {
+            /** Cues */
+            cues: components["schemas"]["TranscriptCueResponse"][];
+            /** Retrieval Units */
+            retrieval_units: components["schemas"]["RetrievalUnitResponse"][];
+            video: components["schemas"]["VideoResponse"];
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
+        /**
+         * VideoResponse
+         * @description Safe canonical metadata returned by import and detail endpoints.
+         */
+        VideoResponse: {
+            /** Canonical Url */
+            canonical_url: string;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Duration Ms */
+            duration_ms: number;
+            /** External Id */
+            external_id: string;
+            /** Index Ready */
+            index_ready: boolean;
+            /** Source Kind */
+            source_kind: string;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Transcript Ready
+             * @default true
+             */
+            transcript_ready: boolean;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
         };
     };
     responses: never;
@@ -149,6 +403,199 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_video_v1_videos__video_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ask_question_v1_videos__video_id__questions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_transcript_v1_videos__video_id__transcript_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_video_v1_videos_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportVideoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportVideoResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */

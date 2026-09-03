@@ -1,6 +1,51 @@
 {
   "components": {
     "schemas": {
+      "AnswerResponse": {
+        "description": "Evidence-grounded answer contract.",
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "confidence": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "degraded_mode": {
+            "title": "Degraded Mode",
+            "type": "boolean"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceResponse"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answer",
+          "confidence",
+          "evidence",
+          "warnings",
+          "degraded_mode"
+        ],
+        "title": "AnswerResponse",
+        "type": "object"
+      },
       "ErrorPayload": {
         "description": "Stable, human-safe API error information.",
         "properties": {
@@ -68,6 +113,70 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "EvidenceResponse": {
+        "description": "One validated transcript citation returned with an answer.",
+        "properties": {
+          "cue_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cue Ids",
+            "type": "array"
+          },
+          "end_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "modality": {
+            "const": "transcript",
+            "default": "transcript",
+            "title": "Modality",
+            "type": "string"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "retrieval_unit_id": {
+            "title": "Retrieval Unit Id",
+            "type": "string"
+          },
+          "start_ms": {
+            "minimum": 0.0,
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "retrieval_unit_id",
+          "cue_ids",
+          "quote",
+          "start_ms",
+          "end_ms"
+        ],
+        "title": "EvidenceResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "HealthResponse": {
         "description": "Liveness response independent of external dependencies.",
         "properties": {
@@ -81,7 +190,58 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "ImportVideoRequest": {
+        "description": "A caller-supplied video locator accepted by the source registry.",
+        "properties": {
+          "source_url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_url"
+        ],
+        "title": "ImportVideoRequest",
+        "type": "object"
+      },
+      "ImportVideoResponse": {
+        "description": "Import result that makes idempotent reuse explicit.",
+        "properties": {
+          "reused": {
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "video": {
+            "$ref": "#/components/schemas/VideoResponse"
+          }
+        },
+        "required": [
+          "video",
+          "reused"
+        ],
+        "title": "ImportVideoResponse",
+        "type": "object"
+      },
       "JsonValue": {},
+      "QuestionRequest": {
+        "description": "A non-empty transcript question.",
+        "properties": {
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "QuestionRequest",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "description": "Readiness response returned after all required dependencies respond.",
         "properties": {
@@ -101,6 +261,238 @@
           }
         },
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "RetrievalUnitResponse": {
+        "description": "One retrieval interval with ordered cue provenance.",
+        "properties": {
+          "cue_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cue Ids",
+            "type": "array"
+          },
+          "end_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "retrieval_unit_id": {
+            "title": "Retrieval Unit Id",
+            "type": "string"
+          },
+          "start_ms": {
+            "minimum": 0.0,
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "retrieval_unit_id",
+          "start_ms",
+          "end_ms",
+          "text",
+          "cue_ids"
+        ],
+        "title": "RetrievalUnitResponse",
+        "type": "object"
+      },
+      "TranscriptCueResponse": {
+        "description": "One exact normalized caption cue.",
+        "properties": {
+          "caption_kind": {
+            "enum": [
+              "manual",
+              "automatic"
+            ],
+            "title": "Caption Kind",
+            "type": "string"
+          },
+          "cue_id": {
+            "title": "Cue Id",
+            "type": "string"
+          },
+          "end_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "language_code": {
+            "title": "Language Code",
+            "type": "string"
+          },
+          "source_order": {
+            "minimum": 0.0,
+            "title": "Source Order",
+            "type": "integer"
+          },
+          "start_ms": {
+            "minimum": 0.0,
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cue_id",
+          "source_order",
+          "start_ms",
+          "end_ms",
+          "text",
+          "language_code",
+          "caption_kind"
+        ],
+        "title": "TranscriptCueResponse",
+        "type": "object"
+      },
+      "TranscriptResponse": {
+        "description": "Complete transcript projection used by the Phase 1 UI.",
+        "properties": {
+          "cues": {
+            "items": {
+              "$ref": "#/components/schemas/TranscriptCueResponse"
+            },
+            "title": "Cues",
+            "type": "array"
+          },
+          "retrieval_units": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalUnitResponse"
+            },
+            "title": "Retrieval Units",
+            "type": "array"
+          },
+          "video": {
+            "$ref": "#/components/schemas/VideoResponse"
+          }
+        },
+        "required": [
+          "video",
+          "cues",
+          "retrieval_units"
+        ],
+        "title": "TranscriptResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VideoResponse": {
+        "description": "Safe canonical metadata returned by import and detail endpoints.",
+        "properties": {
+          "canonical_url": {
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "duration_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "index_ready": {
+            "title": "Index Ready",
+            "type": "boolean"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "transcript_ready": {
+            "default": true,
+            "title": "Transcript Ready",
+            "type": "boolean"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "source_kind",
+          "external_id",
+          "canonical_url",
+          "title",
+          "duration_ms",
+          "index_ready"
+        ],
+        "title": "VideoResponse",
         "type": "object"
       }
     }
@@ -162,6 +554,260 @@
         "summary": "Ready",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/videos/import": {
+      "post": {
+        "description": "Synchronously import metadata and available captions without downloading media.",
+        "operationId": "import_video_v1_videos_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportVideoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportVideoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Import Video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}": {
+      "get": {
+        "description": "Return safe canonical metadata for one imported video.",
+        "operationId": "get_video_v1_videos__video_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/questions": {
+      "post": {
+        "description": "Retrieve transcript evidence and return a deterministically validated answer.",
+        "operationId": "ask_question_v1_videos__video_id__questions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ask Question",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/transcript": {
+      "get": {
+        "description": "Return exact cues and retrieval units with complete provenance.",
+        "operationId": "get_transcript_v1_videos__video_id__transcript_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Transcript",
+        "tags": [
+          "videos"
         ]
       }
     }
