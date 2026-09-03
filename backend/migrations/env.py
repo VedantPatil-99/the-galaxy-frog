@@ -9,6 +9,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from galaxy_frog.config import Settings
+from galaxy_frog.db.engine import POSTGRES_SERVER_SETTINGS
 
 config = context.config
 
@@ -60,6 +61,7 @@ async def run_async_migrations() -> None:
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"server_settings": POSTGRES_SERVER_SETTINGS},
     )
 
     async with connectable.connect() as connection:
