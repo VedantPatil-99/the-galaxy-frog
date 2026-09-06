@@ -220,9 +220,15 @@ with 242 tests, three opt-in database tests skipped, and 100% statement and bran
 
 ### P2.3 — Job API and generated contracts
 
-- [ ] Make import create or reuse a durable job and return promptly.
-- [ ] Add FastAPI-owned job detail, ordered-event, retry, and cancellation endpoints.
-- [ ] Regenerate committed OpenAPI and frontend TypeScript declarations.
+- [x] Make import create or reuse a durable job and return promptly.
+- [x] Add FastAPI-owned job detail, ordered-event, retry, and cancellation endpoints.
+- [x] Regenerate committed OpenAPI and frontend TypeScript declarations.
+
+FastAPI now returns `202` with the durable job projection, exposes current state and ordered event
+history, and enforces retry/cancel transitions with stable errors. The generated frontend client
+polls that contract only through the Next.js proxy before loading the existing transcript view. The
+real PostgreSQL end-to-end test proves duplicate import requests share one job, the worker completes
+it once, event order remains intact, and Phase 1 transcript/retrieval/question data stays readable.
 
 ### P2.4 — Dispatch adapters
 
@@ -305,3 +311,6 @@ with 242 tests, three opt-in database tests skipped, and 100% statement and bran
 - 2026-09-06: Complete P2.2 with the standalone local worker, caption-first persisted handlers,
   provider-operation heartbeats, and a real PostgreSQL restart-resume acceptance test. Keep P2.3
   responsible for replacing the synchronous import contract and exposing job APIs.
+- 2026-09-06: Complete P2.3 with prompt durable import, job detail/events/retry/cancel endpoints,
+  regenerated OpenAPI/TypeScript contracts, and a PostgreSQL-backed FastAPI-to-worker acceptance
+  test that preserves the Phase 1 read and grounded-answer paths.

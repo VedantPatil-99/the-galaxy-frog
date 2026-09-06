@@ -19,12 +19,12 @@ seeks the player from evidence intervals. The live exit gate verified import, tr
 duplicate-free reuse, grounded answering, validated timestamp citations, and citation-to-player
 seeking.
 
-The first two Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
+The first three Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
 tables and repository operations, lease-safe claims and heartbeats, deterministic idempotency
 fingerprints, cancellation/retry transitions, a standalone local worker, and resumable caption-first
 stage handlers. Real PostgreSQL gates prove concurrent claim exclusion, stale-lease recovery, and
-restart from the last completed stage. P2.3 will replace the synchronous Phase 1 import contract with
-the durable job API.
+restart from the last completed stage. FastAPI import now returns a durable job promptly, exposes its
+current state and ordered events, and keeps retry/cancel schemas generated into the frontend client.
 
 ## Architecture direction
 
@@ -83,13 +83,17 @@ bun run dev
 - Readiness: `http://127.0.0.1:8000/health/ready`
 - Browser proxy: `http://localhost:3000/api/proxy/health/live`
 - Video import: `POST http://127.0.0.1:8000/v1/videos/import`
+- Job detail: `GET http://127.0.0.1:8000/v1/jobs/{job_id}`
+- Job events: `GET http://127.0.0.1:8000/v1/jobs/{job_id}/events`
+- Job retry: `POST http://127.0.0.1:8000/v1/jobs/{job_id}/retry`
+- Job cancellation: `POST http://127.0.0.1:8000/v1/jobs/{job_id}/cancel`
 - Transcript: `GET http://127.0.0.1:8000/v1/videos/{video_id}/transcript`
 - Grounded question: `POST http://127.0.0.1:8000/v1/videos/{video_id}/questions`
 
 Use `Ctrl+C` to stop all processes. Run a process independently with `bun run dev:web`,
 `bun run dev:api`, or `bun run dev:worker`. `FASTAPI_BASE_URL` is read only by the Next.js server; it
-is never exposed as a `NEXT_PUBLIC_` browser variable. Until P2.3 lands, the public import endpoint
-remains synchronous and the worker normally waits on an empty durable queue.
+is never exposed as a `NEXT_PUBLIC_` browser variable. Keep the worker running while importing;
+otherwise jobs remain safely queued in PostgreSQL until a worker starts.
 
 ## API contracts
 

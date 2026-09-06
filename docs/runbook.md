@@ -54,8 +54,8 @@ bun run dev:worker
 
 `INGESTION_LEASE_SECONDS` and `INGESTION_POLL_SECONDS` control the local lease and idle polling
 intervals. Leave `INGESTION_WORKER_ID` unset for a hostname/process-derived identity, or set a unique
-value per process. Until P2.3 changes the import API, the public import remains synchronous and the
-worker normally waits on an empty queue.
+value per process. The public import returns a durable job immediately. Keep one worker running to
+process queued jobs; stopping it leaves work safely queued until a worker starts again.
 
 Phase 1 uses user-managed Ollama models. Install and start Ollama manually, then provision the exact
 models named in `.env`; these commands download model weights and therefore are never run by Codex:
@@ -75,6 +75,11 @@ The development endpoints are:
 - FastAPI liveness: `http://127.0.0.1:8000/health/live`
 - FastAPI readiness: `http://127.0.0.1:8000/health/ready`
 - Browser-to-FastAPI proxy: `http://localhost:3000/api/proxy/health/live`
+- Durable video import: `POST http://127.0.0.1:8000/v1/videos/import`
+- Job detail and events: `GET http://127.0.0.1:8000/v1/jobs/{job_id}` and
+  `GET http://127.0.0.1:8000/v1/jobs/{job_id}/events`
+- Job actions: `POST http://127.0.0.1:8000/v1/jobs/{job_id}/retry` and
+  `POST http://127.0.0.1:8000/v1/jobs/{job_id}/cancel`
 
 Use `Ctrl+C` to stop the application processes. Stop the local database separately when desired:
 
@@ -122,7 +127,8 @@ The smoke test requires liveness and readiness to return `200`, then confirms th
 route travels through the proxy as the structured `404 NOT_FOUND` response with a correlation ID.
 Set `WEB_BASE_URL` only when the web application intentionally uses a different local address.
 
-Run the real migration, repository, idempotency, pgvector, and HTTP integration test explicitly:
+Run the real migration, durable FastAPI-to-worker flow, idempotency, pgvector, and HTTP integration
+test explicitly:
 
 ```bash
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_phase_one_slice.py
@@ -135,8 +141,8 @@ stale-lease recovery, persisted-stage restart resume, ordered events, cancellati
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_durable_ingestion.py
 ```
 
-This test creates uniquely identified jobs and deletes them when it finishes. Do not advance P2.1
-to complete based only on the unit tests or offline migration render.
+These tests create uniquely identified jobs and delete them when they finish. Do not complete a
+durable-ingestion checkpoint based only on unit tests or an offline migration render.
 
 Targeted backend tests must disable the repository-wide coverage gate; use the complete suite to
 prove 100% coverage:

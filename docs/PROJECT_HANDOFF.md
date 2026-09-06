@@ -28,6 +28,7 @@ evidence and produce timestamp-grounded answers.
 - Phase 2 — Durable ingestion and ASR fallback: in progress
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
+- P2.3 — Job API and generated contracts: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -44,9 +45,10 @@ evidence and produce timestamp-grounded answers.
 - Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
   operations, deterministic idempotency, a standalone local worker, and caption-first persisted
   stage handlers are implemented
-- No Phase 2 audio acquisition, ASR provider, job HTTP API, QStash adapter, progress UI, OCR,
+- No Phase 2 audio acquisition, ASR provider, QStash adapter, progress UI, OCR,
   visual retrieval, reranking, or orchestration work has started
-- FastAPI now exposes caption-only import, video detail, transcript, and grounded-question contracts
+- FastAPI now exposes prompt durable import, job detail/events/retry/cancel, video detail,
+  transcript, and grounded-question contracts
 - YouTube metadata/captions remain download-free; transcript cues and retrieval units retain exact
   millisecond intervals and ordered cue provenance
 - Versioned 1,024-dimensional BGE-M3 collections and video-scoped pgvector cosine retrieval are
@@ -133,9 +135,17 @@ worker, while `bun run dev:worker` runs it independently. The real PostgreSQL re
 replacement process resumes at metadata after source resolution was checkpointed and does not append
 a duplicate source-completed event. The default backend suite passes 242 tests with three opt-in
 database tests skipped and 100% statement/branch coverage; the two durable-ingestion database tests
-also pass. P2.3 — job API and generated contracts — is the next active packet. The public import API
-remains synchronous until that packet moves it atomically with its FastAPI schemas and generated
-frontend declarations.
+also pass.
+
+P2.3 is complete on 2026-09-06. `POST /v1/videos/import` now creates or reuses one durable job and
+returns `202` without running provider work. FastAPI owns job detail, ordered event, retry, and cancel
+schemas; committed OpenAPI and TypeScript declarations are regenerated from those schemas. The thin
+frontend client waits through the Next.js proxy before loading the existing transcript view, without
+implementing the later P2.8 progress controls. The real PostgreSQL FastAPI-to-worker test proves two
+imports share one job, the worker completes it once, ordered event provenance is retained, and the
+Phase 1 transcript, pgvector retrieval, and grounded-question paths remain readable. The default
+backend suite passes 253 tests with three opt-in database tests skipped and 100% coverage; all three
+database integration tests and 16 frontend tests pass. P2.4 — dispatch adapters — is next.
 
 ## Step 2 technology requirements
 
