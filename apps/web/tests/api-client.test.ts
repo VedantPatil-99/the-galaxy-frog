@@ -3,10 +3,14 @@ import { describe, expect, test } from "bun:test"
 import {
   ApiClientError,
   askVideoQuestion,
+  cancelIngestionJob,
   checkApiConnectivity,
+  getIngestionEvents,
   getTranscript,
   importVideo,
   previewDeliberateApiError,
+  retryIngestionJob,
+  waitForIngestionJob,
 } from "@/lib/api/client"
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -25,6 +29,25 @@ describe("API client", () => {
     thumbnail_url: null,
     transcript_ready: true,
     index_ready: true,
+  }
+  const job = {
+    job_id: "fd2d7b28-d75c-49ec-b906-7883deff0f4e",
+    source_kind: "youtube" as const,
+    external_id: video.external_id,
+    canonical_url: video.canonical_url,
+    input_fingerprint: "a".repeat(64),
+    status: "queued" as const,
+    stage: "source_resolution" as const,
+    attempt: 0,
+    video_id: null,
+    cancel_requested_at: null,
+    started_at: null,
+    completed_at: null,
+    last_error_code: null,
+    last_error_message: null,
+    last_error_retryable: null,
+    created_at: "2026-09-06T15:00:00Z",
+    updated_at: "2026-09-06T15:00:00Z",
   }
 
   test("reads generated health contracts through the proxy", async () => {
@@ -74,7 +97,19 @@ describe("API client", () => {
     const fetcher = async (input: URL | RequestInfo, init?: RequestInit) => {
       const path = String(input)
       requests.push({ path, init })
-      if (path.endsWith("/import")) return jsonResponse({ video, reused: false })
+      if (path.endsWith("/import")) return jsonResponse({ job, reused: false }, 202)
+      if (path.includes("/v1/jobs/")) {
+        return jsonResponse({
+          ...job,
+          status: "succeeded",
+          stage: "completed",
+          attempt: 1,
+          video_id: video.video_id,
+          started_at: "2026-09-06T15:00:01Z",
+          completed_at: "2026-09-06T15:00:02Z",
+          updated_at: "2026-09-06T15:00:02Z",
+        })
+      }
       return jsonResponse({
         video,
         cues: [
@@ -101,14 +136,76 @@ describe("API client", () => {
     }
 
     const imported = await importVideo(video.canonical_url, fetcher)
-    const transcript = await getTranscript(imported.video.video_id, fetcher)
+    const completed = await waitForIngestionJob(imported.job, fetcher, {
+      pollIntervalMs: 0,
+      maxPolls: 1,
+    })
+    if (completed.video_id === null || completed.video_id === undefined) {
+      throw new Error("Expected a completed video id")
+    }
+    const transcript = await getTranscript(completed.video_id, fetcher)
 
     expect(imported.reused).toBeFalse()
+    expect(completed.status).toBe("succeeded")
     expect(transcript.cues[0]?.text).toBe("Exact transcript.")
     expect(requests[0]?.init?.method).toBe("POST")
     expect(requests[0]?.init?.body).toBe(
       JSON.stringify({ source_url: video.canonical_url }),
     )
+  })
+
+  test("reads events and submits generated retry and cancel contracts", async () => {
+    const methods: string[] = []
+    const fetcher = async (input: URL | RequestInfo, init?: RequestInit) => {
+      methods.push(init?.method ?? "GET")
+      if (String(input).endsWith("/events")) {
+        return jsonResponse({
+          job_id: job.job_id,
+          events: [
+            {
+              event_id: "ad42d0bd-32f5-4e67-bffe-f60e41bdc66d",
+              job_id: job.job_id,
+              sequence: 1,
+              event_type: "created",
+              stage: "source_resolution",
+              attempt: 0,
+              occurred_at: job.created_at,
+              details: {
+                source_kind: "youtube",
+                external_id: video.external_id,
+              },
+            },
+          ],
+        })
+      }
+      return jsonResponse(job)
+    }
+
+    const events = await getIngestionEvents(job.job_id, fetcher)
+    await retryIngestionJob(job.job_id, fetcher)
+    await cancelIngestionJob(job.job_id, fetcher)
+
+    expect(events.events[0]?.details?.external_id).toBe(video.external_id)
+    expect(methods).toEqual(["GET", "POST", "POST"])
+  })
+
+  test("returns terminal failures and bounds local job polling", async () => {
+    const failed = {
+      ...job,
+      status: "failed" as const,
+      completed_at: "2026-09-06T15:00:02Z",
+      last_error_code: "SOURCE_UNAVAILABLE",
+      last_error_message: "The source is unavailable.",
+      last_error_retryable: true,
+    }
+
+    expect(await waitForIngestionJob(failed)).toEqual(failed)
+    await expect(
+      waitForIngestionJob(job, async () => jsonResponse(job), {
+        pollIntervalMs: 0,
+        maxPolls: 1,
+      }),
+    ).rejects.toBeInstanceOf(ApiClientError)
   })
 
   test("returns timestamped answer evidence", async () => {

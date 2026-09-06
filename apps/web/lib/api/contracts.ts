@@ -4,6 +4,8 @@ export type ApiErrorResponse = components["schemas"]["ErrorResponse"]
 export type AnswerResponse = components["schemas"]["AnswerResponse"]
 export type HealthResponse = components["schemas"]["HealthResponse"]
 export type ImportVideoResponse = components["schemas"]["ImportVideoResponse"]
+export type IngestionEventsResponse = components["schemas"]["IngestionEventsResponse"]
+export type IngestionJobResponse = components["schemas"]["IngestionJobResponse"]
 export type ReadinessResponse = components["schemas"]["ReadinessResponse"]
 export type TranscriptCueResponse = components["schemas"]["TranscriptCueResponse"]
 export type TranscriptResponse = components["schemas"]["TranscriptResponse"]
@@ -71,6 +73,91 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
 }
 
+function isNullableString(value: unknown): value is string | null | undefined {
+  return value === undefined || value === null || typeof value === "string"
+}
+
+function isNullableBoolean(value: unknown): value is boolean | null | undefined {
+  return value === undefined || value === null || typeof value === "boolean"
+}
+
+const ingestionStatuses = new Set(["queued", "running", "succeeded", "failed", "cancelled"])
+const ingestionStages = new Set([
+  "source_resolution",
+  "metadata",
+  "caption_retrieval",
+  "audio_acquisition",
+  "transcription",
+  "chunking",
+  "persistence",
+  "embedding",
+  "indexing",
+  "cleanup",
+  "completed",
+])
+const ingestionEventTypes = new Set([
+  "created",
+  "claimed",
+  "heartbeat",
+  "stage_started",
+  "stage_completed",
+  "retry_requested",
+  "cancel_requested",
+  "cancelled",
+  "failed",
+  "completed",
+])
+
+export function isIngestionJobResponse(
+  value: unknown,
+): value is IngestionJobResponse {
+  return (
+    isRecord(value) &&
+    typeof value.job_id === "string" &&
+    (value.source_kind === "youtube" || value.source_kind === "local_file") &&
+    typeof value.external_id === "string" &&
+    typeof value.canonical_url === "string" &&
+    typeof value.input_fingerprint === "string" &&
+    ingestionStatuses.has(String(value.status)) &&
+    ingestionStages.has(String(value.stage)) &&
+    typeof value.attempt === "number" &&
+    isNullableString(value.video_id) &&
+    isNullableString(value.cancel_requested_at) &&
+    isNullableString(value.started_at) &&
+    isNullableString(value.completed_at) &&
+    isNullableString(value.last_error_code) &&
+    isNullableString(value.last_error_message) &&
+    isNullableBoolean(value.last_error_retryable) &&
+    typeof value.created_at === "string" &&
+    typeof value.updated_at === "string"
+  )
+}
+
+export function isIngestionEventsResponse(
+  value: unknown,
+): value is IngestionEventsResponse {
+  return (
+    isRecord(value) &&
+    typeof value.job_id === "string" &&
+    Array.isArray(value.events) &&
+    value.events.every(
+      (event) =>
+        isRecord(event) &&
+        typeof event.event_id === "string" &&
+        event.job_id === value.job_id &&
+        typeof event.sequence === "number" &&
+        ingestionEventTypes.has(String(event.event_type)) &&
+        ingestionStages.has(String(event.stage)) &&
+        typeof event.attempt === "number" &&
+        typeof event.occurred_at === "string" &&
+        isNullableString(event.message) &&
+        isNullableString(event.error_code) &&
+        isNullableBoolean(event.retryable) &&
+        (event.details === undefined || event.details === null || isRecord(event.details)),
+    )
+  )
+}
+
 function isTranscriptCue(value: unknown): value is TranscriptCueResponse {
   return (
     isRecord(value) &&
@@ -89,7 +176,7 @@ export function isImportVideoResponse(
 ): value is ImportVideoResponse {
   return (
     isRecord(value) &&
-    isVideoResponse(value.video) &&
+    isIngestionJobResponse(value.job) &&
     typeof value.reused === "boolean"
   )
 }
