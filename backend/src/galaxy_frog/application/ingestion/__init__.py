@@ -13,14 +13,17 @@ from galaxy_frog.application.ingestion.runner import (
     StageContext,
     StageResult,
 )
+from galaxy_frog.application.ingestion.worker import ClaimedJobRunner, IngestionWorker
 
 __all__ = [
+    "ClaimedJobRunner",
     "CreateIngestionJob",
     "CreateIngestionJobResult",
     "IngestionJobRunner",
     "IngestionRepository",
     "IngestionStageError",
     "IngestionStageHandler",
+    "IngestionWorker",
     "StageContext",
     "StageResult",
     "ingestion_input_fingerprint",
