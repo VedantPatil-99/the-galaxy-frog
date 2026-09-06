@@ -309,6 +309,14 @@ async def test_stage_failures_are_safe_and_provider_independent() -> None:
         "The source is temporarily unavailable.",
         retryable=True,
     )
+    with pytest.raises(IngestionStageError) as resolution_failure:
+        await handlers(source, videos, search)[IngestionStage.SOURCE_RESOLUTION].execute(
+            job,
+            stage_context,
+        )
+    assert resolution_failure.value.code == VideoSourceErrorCode.SOURCE_UNAVAILABLE
+    assert resolution_failure.value.retryable is True
+
     metadata_job = running_job(IngestionStage.METADATA)
     metadata_context, _repository = context(metadata_job)
     with pytest.raises(IngestionStageError) as failure:
