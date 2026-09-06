@@ -6,11 +6,18 @@ from typing import cast
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from galaxy_frog.application.ingestion.dispatch import JobDispatcher
 from galaxy_frog.db.engine import probe_database
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 
 type DatabaseProbe = Callable[[], Awaitable[None]]
+
+
+def get_job_dispatcher(request: Request) -> JobDispatcher:
+    """Return the configured provider-independent dispatch adapter."""
+
+    return cast(JobDispatcher, request.app.state.job_dispatcher)
 
 
 def _database_engine(request: Request) -> AsyncEngine:

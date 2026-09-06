@@ -12,6 +12,11 @@ from httpx import ASGITransport, AsyncClient
 
 from galaxy_frog.api.app import create_app
 from galaxy_frog.api.dependencies import get_ingestion_repository
+from galaxy_frog.application.ingestion.dispatch import (
+    DispatchMessage,
+    DispatchReceipt,
+    JobDispatchError,
+)
 from galaxy_frog.db.ingestion_repository import (
     IngestionRepositoryError,
     PostgresIngestionRepository,
@@ -103,23 +108,37 @@ class MemoryIngestionRepository:
         return self.job
 
 
+class RecordingDispatcher:
+    def __init__(self) -> None:
+        self.messages: list[DispatchMessage] = []
+        self.error: JobDispatchError | None = None
+
+    async def dispatch(self, message: DispatchMessage) -> DispatchReceipt:
+        self.messages.append(message)
+        if self.error is not None:
+            raise self.error
+        return DispatchReceipt(dispatcher="recording")
+
+
 @pytest.fixture
-def job_api() -> tuple[FastAPI, MemoryIngestionRepository]:
+def job_api() -> tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher]:
     application = create_app()
     repository = MemoryIngestionRepository(queued_job())
+    dispatcher = RecordingDispatcher()
 
     async def repository_dependency() -> AsyncGenerator[PostgresIngestionRepository]:
         yield cast(PostgresIngestionRepository, repository)
 
     application.dependency_overrides[get_ingestion_repository] = repository_dependency
-    return application, repository
+    application.state.job_dispatcher = dispatcher
+    return application, repository, dispatcher
 
 
 @pytest.mark.asyncio
 async def test_job_detail_and_ordered_events_preserve_provenance(
-    job_api: tuple[FastAPI, MemoryIngestionRepository],
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
 ) -> None:
-    application, repository = job_api
+    application, repository, _dispatcher = job_api
     repository.events = (
         IngestionEvent(
             event_id=uuid4(),
@@ -160,9 +179,9 @@ async def test_job_detail_and_ordered_events_preserve_provenance(
 
 @pytest.mark.asyncio
 async def test_import_returns_promptly_and_reuses_the_durable_job(
-    job_api: tuple[FastAPI, MemoryIngestionRepository],
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
 ) -> None:
-    application, repository = job_api
+    application, repository, dispatcher = job_api
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         first = await client.post(
@@ -183,13 +202,39 @@ async def test_import_returns_promptly_and_reuses_the_durable_job(
     assert first.json()["job"]["stage"] == "source_resolution"
     assert first.json()["job"]["canonical_url"] == repository.job.source.canonical_url
     assert len(first.json()["job"]["input_fingerprint"]) == 64
+    assert [message.job_id for message in dispatcher.messages] == [
+        repository.job.job_id,
+        repository.job.job_id,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_import_preserves_queued_job_when_dispatch_is_unavailable(
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
+) -> None:
+    application, repository, dispatcher = job_api
+    dispatcher.error = JobDispatchError("private provider detail")
+    transport = ASGITransport(app=application)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/videos/import",
+            json={"source_url": "https://youtu.be/dQw4w9WgXcQ"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "JOB_DISPATCH_UNAVAILABLE"
+    assert response.json()["error"]["retryable"] is True
+    assert "private provider detail" not in response.text
+    assert repository.job.status is IngestionJobStatus.QUEUED
+    assert dispatcher.messages[0].job_id == repository.job.job_id
 
 
 @pytest.mark.asyncio
 async def test_import_rejects_unsupported_sources_safely(
-    job_api: tuple[FastAPI, MemoryIngestionRepository],
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
 ) -> None:
-    application, _repository = job_api
+    application, _repository, _dispatcher = job_api
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
@@ -203,9 +248,9 @@ async def test_import_rejects_unsupported_sources_safely(
 
 @pytest.mark.asyncio
 async def test_import_reports_a_retryable_source_registry_failure(
-    job_api: tuple[FastAPI, MemoryIngestionRepository],
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
 ) -> None:
-    application, _repository = job_api
+    application, _repository, _dispatcher = job_api
 
     class UnavailableSource:
         source_kind = VideoSourceKind.YOUTUBE
@@ -233,9 +278,9 @@ async def test_import_reports_a_retryable_source_registry_failure(
 
 @pytest.mark.asyncio
 async def test_retry_and_cancel_return_the_current_projection(
-    job_api: tuple[FastAPI, MemoryIngestionRepository],
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
 ) -> None:
-    application, repository = job_api
+    application, repository, dispatcher = job_api
     repository.job = replace(
         repository.job,
         status=IngestionJobStatus.FAILED,
@@ -255,15 +300,16 @@ async def test_retry_and_cancel_return_the_current_projection(
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert cancelled.json()["cancel_requested_at"] == "2026-09-06T15:00:00Z"
+    assert dispatcher.messages[-1].job_id == repository.job.job_id
 
 
 @pytest.mark.parametrize("suffix", ["", "/events", "/retry", "/cancel"])
 @pytest.mark.asyncio
 async def test_unknown_job_returns_one_stable_error(
-    job_api: tuple[FastAPI, MemoryIngestionRepository],
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
     suffix: str,
 ) -> None:
-    application, _repository = job_api
+    application, _repository, _dispatcher = job_api
     method = "POST" if suffix in {"/retry", "/cancel"} else "GET"
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -276,10 +322,10 @@ async def test_unknown_job_returns_one_stable_error(
 @pytest.mark.parametrize("suffix", ["/retry", "/cancel"])
 @pytest.mark.asyncio
 async def test_invalid_transition_returns_a_safe_conflict(
-    job_api: tuple[FastAPI, MemoryIngestionRepository],
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
     suffix: str,
 ) -> None:
-    application, repository = job_api
+    application, repository, _dispatcher = job_api
     repository.transition_error = IngestionRepositoryError("private transition detail")
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

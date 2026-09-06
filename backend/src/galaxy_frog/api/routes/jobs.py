@@ -6,7 +6,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from galaxy_frog.api.dependencies import get_ingestion_repository
+from galaxy_frog.api.dependencies import get_ingestion_repository, get_job_dispatcher
+from galaxy_frog.api.dispatching import dispatch_ingestion_job
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.job_schemas import (
     IngestionEventsResponse,
@@ -15,6 +16,7 @@ from galaxy_frog.api.job_schemas import (
     ingestion_job_response,
 )
 from galaxy_frog.api.schemas import ErrorResponse
+from galaxy_frog.application.ingestion.dispatch import JobDispatcher
 from galaxy_frog.db.ingestion_repository import (
     IngestionRepositoryError,
     PostgresIngestionRepository,
@@ -24,6 +26,7 @@ from galaxy_frog.domain.ingestion.models import IngestionJob
 router = APIRouter(prefix="/v1/jobs", tags=["ingestion"])
 
 RepositoryDependency = Annotated[PostgresIngestionRepository, Depends(get_ingestion_repository)]
+DispatcherDependency = Annotated[JobDispatcher, Depends(get_job_dispatcher)]
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     int(HTTPStatus.NOT_FOUND): {"model": ErrorResponse},
     int(HTTPStatus.CONFLICT): {"model": ErrorResponse},
@@ -94,6 +97,7 @@ async def get_job_events(
 async def retry_job(
     job_id: UUID,
     repository: RepositoryDependency,
+    dispatcher: DispatcherDependency,
 ) -> IngestionJobResponse:
     """Requeue an eligible retryable failure from its persisted checkpoint."""
 
@@ -102,6 +106,7 @@ async def retry_job(
         job = await repository.retry(job_id)
     except IngestionRepositoryError as exc:
         _raise_transition_error(exc)
+    await dispatch_ingestion_job(dispatcher, job.job_id)
     return ingestion_job_response(job)
 
 

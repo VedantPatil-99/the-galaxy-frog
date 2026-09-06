@@ -10,7 +10,12 @@ from fastapi import APIRouter, Depends, Request
 from galaxy_frog.adapters.embeddings.ollama import EmbeddingProviderError
 from galaxy_frog.adapters.generation.ollama import GenerationProviderError
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
-from galaxy_frog.api.dependencies import get_ingestion_repository, get_video_repository
+from galaxy_frog.api.dependencies import (
+    get_ingestion_repository,
+    get_job_dispatcher,
+    get_video_repository,
+)
+from galaxy_frog.api.dispatching import dispatch_ingestion_job
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.job_schemas import ingestion_job_response
 from galaxy_frog.api.schemas import ErrorResponse
@@ -26,6 +31,7 @@ from galaxy_frog.api.video_schemas import (
     VideoResponse,
 )
 from galaxy_frog.application.ingestion.create_job import CreateIngestionJob
+from galaxy_frog.application.ingestion.dispatch import JobDispatcher
 from galaxy_frog.application.questions.answer_question import (
     AnswerQuestion,
     CitationValidationError,
@@ -45,6 +51,7 @@ IngestionRepositoryDependency = Annotated[
     PostgresIngestionRepository,
     Depends(get_ingestion_repository),
 ]
+DispatcherDependency = Annotated[JobDispatcher, Depends(get_job_dispatcher)]
 
 
 def _transcript_search(
@@ -134,6 +141,7 @@ async def import_video(
     body: ImportVideoRequest,
     request: Request,
     repository: IngestionRepositoryDependency,
+    dispatcher: DispatcherDependency,
 ) -> ImportVideoResponse:
     """Create or reuse a durable job without running provider work in the request."""
 
@@ -145,6 +153,7 @@ async def import_video(
         result = await service.execute(str(body.source_url))
     except VideoSourceError as exc:
         raise _source_error(exc) from exc
+    await dispatch_ingestion_job(dispatcher, result.job.job_id)
     return ImportVideoResponse(
         job=ingestion_job_response(result.job),
         reused=not result.created,

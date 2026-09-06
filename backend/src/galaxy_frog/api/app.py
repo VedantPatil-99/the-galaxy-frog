@@ -7,6 +7,7 @@ from importlib.metadata import version
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from galaxy_frog.adapters.dispatch.local import LocalJobDispatcher
 from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
@@ -46,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.database_engine = None
     application.state.settings = resolved_settings
     application.state.video_sources = (YouTubeSource(),)
+    application.state.job_dispatcher = LocalJobDispatcher()
     application.state.embedding_provider_factory = lambda: OllamaBgeM3EmbeddingProvider(
         base_url=resolved_settings.ollama_base_url,
         model=resolved_settings.embedding_model,
