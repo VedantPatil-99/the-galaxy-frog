@@ -5,6 +5,8 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 ## Current checkpoint
 
 Phase 0 — Foundation and contracts — and Phase 1 — Transcript-first vertical slice — are complete.
+Phase 2 — Durable ingestion and ASR fallback — is in progress on
+`feat/durable-ingestion-foundation`.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
@@ -17,6 +19,12 @@ seeks the player from evidence intervals. The live exit gate verified import, tr
 duplicate-free reuse, grounded answering, validated timestamp citations, and citation-to-player
 seeking.
 
+The first Phase 2 packet adds framework-independent ingestion job and event models, PostgreSQL
+tables and repository operations, lease-safe claims and heartbeats, deterministic idempotency
+fingerprints, cancellation/retry transitions, and a resumable stage runner. It does not yet replace
+the synchronous Phase 1 import API. The migration and real PostgreSQL concurrency/recovery gate pass;
+the separate worker entry point and persisted execution loop are the next Phase 2 packet.
+
 ## Architecture direction
 
 - `apps/web`: presentation-only Next.js/React/TypeScript application.
@@ -25,6 +33,8 @@ seeking.
 - The web application consumes generated TypeScript types and reaches FastAPI through a thin proxy.
 - PostgreSQL is the system of record; Phase 1 stores versioned BGE-M3 vectors in pgvector and runs
   video-scoped cosine retrieval without later-phase hybrid search or reranking.
+- Phase 2 stores the durable ingestion projection and append-only event history in PostgreSQL;
+  workers claim bounded leases and resume only from persisted stage checkpoints.
 - Provider-specific integrations stay behind Python interfaces and configuration.
 
 See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-scope.md), and [PLANS.md](PLANS.md).

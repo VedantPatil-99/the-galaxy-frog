@@ -80,3 +80,30 @@ does not silently change the model or answer quality.
 The runnable local services are the Next.js development server, FastAPI development server,
 PostgreSQL/pgvector container, and user-managed native Ollama service. Phase 1 has no worker, durable
 job queue, media pipeline, ASR, OCR, visual retrieval, hybrid retrieval, reranker, or cloud provider.
+
+## Phase 2 durable ingestion foundation
+
+Phase 2 introduces a durable job boundary without moving business rules out of the Python modular
+monolith:
+
+1. A canonical source locator, normalized language preferences, and pipeline revision produce a
+   deterministic SHA-256 input fingerprint.
+2. PostgreSQL stores one idempotent `ingestion_jobs` projection per fingerprint and an append-only,
+   per-job sequence of `job_events`.
+3. Workers claim jobs through row locking with bounded leases, heartbeat while running, and may
+   reclaim only expired work.
+4. Every stage transition is committed as a checkpoint before the worker proceeds, so restart
+   recovery does not depend on process memory.
+5. Cancellation, retryability, safe error codes, attempt count, worker ownership, and lease expiry
+   are explicit persisted state rather than implicit queue behavior.
+
+The application layer owns the job lifecycle through provider-independent protocols. The initial
+stage runner is transport-neutral: local PostgreSQL polling remains the development default, while
+a later optional QStash adapter may carry identifiers only and cannot become the source of truth.
+The existing Phase 1 HTTP import remains synchronous until the Phase 2 job API packet changes the
+FastAPI contract and regenerates the frontend declarations.
+
+The durable stage vocabulary is deliberately limited to Phase 2 ingestion work. It preserves video
+identity and will preserve every transcript cue's half-open millisecond interval and source
+provenance when caption-to-ASR fallback is added; it does not introduce OCR, visual retrieval,
+hybrid retrieval, reranking, or LangGraph.

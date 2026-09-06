@@ -1,7 +1,8 @@
 # Galaxy Frog local runbook
 
-This runbook covers the local Next.js, FastAPI, PostgreSQL/pgvector, and Phase 1 transcript-first
-stack. Run commands from the repository root in Git Bash unless a section says otherwise.
+This runbook covers the local Next.js, FastAPI, PostgreSQL/pgvector, Phase 1 transcript-first stack,
+and the Phase 2 durable-ingestion database foundation. Run commands from the repository root in Git
+Bash unless a section says otherwise.
 
 ## Prerequisites
 
@@ -115,6 +116,16 @@ Run the real migration, repository, idempotency, pgvector, and HTTP integration 
 ```bash
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_phase_one_slice.py
 ```
+
+After applying the Phase 2 migration, prove real PostgreSQL idempotency, concurrent claim exclusion,
+stale-lease recovery, ordered events, cancellation, and retry rules:
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_durable_ingestion.py
+```
+
+This test creates uniquely identified jobs and deletes them when it finishes. Do not advance P2.1
+to complete based only on the unit tests or offline migration render.
 
 Targeted backend tests must disable the repository-wide coverage gate; use the complete suite to
 prove 100% coverage:

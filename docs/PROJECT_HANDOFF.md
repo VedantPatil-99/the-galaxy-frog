@@ -25,6 +25,8 @@ evidence and produce timestamp-grounded answers.
 - Phase 1 — Transcript-first vertical slice: complete
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
+- Phase 2 — Durable ingestion and ASR fallback: in progress
+- P2.1 — Durable ingestion foundation: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -38,7 +40,10 @@ evidence and produce timestamp-grounded answers.
   local stale-file checks
 - The browser reaches FastAPI only through the server-configured Next.js proxy and renders both
   healthy dependency state and correlated backend errors
-- No Phase 2+ worker, audio, ASR, OCR, visual, reranking, or orchestration work has started
+- Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
+  operations, deterministic idempotency, and a persisted stage runner are implemented
+- No Phase 2 audio acquisition, ASR provider, job HTTP API, QStash adapter, progress UI, OCR,
+  visual retrieval, reranking, or orchestration work has started
 - FastAPI now exposes caption-only import, video detail, transcript, and grounded-question contracts
 - YouTube metadata/captions remain download-free; transcript cues and retrieval units retain exact
   millisecond intervals and ordered cue provenance
@@ -54,8 +59,8 @@ evidence and produce timestamp-grounded answers.
 - Python: `3.14.7`
 - uv: `0.12.7 (61291a8ca 2026-08-27 x86_64-pc-windows-msvc)`
 - WSL: `2.7.12.0`, kernel `6.18.33.2-2`
-- Docker Engine: `29.7.2`
-- Docker Compose: `v5.4.0`
+- Docker Engine: `29.7.2` (verified 2026-09-06)
+- Docker Compose: `v5.5.0` (verified 2026-09-06)
 - Preferred command shell: Git Bash
 
 Docker was not required for Step 2. Step 3A uses Docker Desktop with the WSL 2 backend for local
@@ -107,6 +112,19 @@ is [`docs/ollama.md`](ollama.md). The matching Notion records are:
 
 - <https://app.notion.com/p/3ce7942fa8e481ff8d79fb7fe241b2d7>
 - <https://app.notion.com/p/3ce7942fa8e4815191abcf289fea5ecc>
+
+Phase 2 started on 2026-09-05 on `feat/durable-ingestion-foundation`. The first packet adds the
+framework-independent ingestion lifecycle, an Alembic revision for `ingestion_jobs` and append-only
+`job_events`, a PostgreSQL repository with idempotent creation and bounded lease operations, a
+deterministic source-input fingerprint, and a resumable application stage runner. The complete
+runnable backend suite passes with 226 tests and two opt-in integration modules skipped.
+
+The migration renders successfully in Alembic offline mode. On 2026-09-06, Docker Desktop and the
+configured PostgreSQL service were healthy, Alembic revision `20260905_0004` was current, and
+`tests/integration/test_durable_ingestion.py` passed against the real database. The gate proved
+duplicate-free concurrent creation, concurrent claim exclusion, stale-lease recovery, ordered
+events, cancellation, retry, and non-retryable terminal behavior. P2.1 is complete; P2.2 is the next
+active packet.
 
 ## Step 2 technology requirements
 
