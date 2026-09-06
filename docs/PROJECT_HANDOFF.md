@@ -29,6 +29,7 @@ evidence and produce timestamp-grounded answers.
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
+- P2.4 — Local and optional QStash dispatch adapters: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -45,8 +46,10 @@ evidence and produce timestamp-grounded answers.
 - Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
   operations, deterministic idempotency, a standalone local worker, and caption-first persisted
   stage handlers are implemented
-- No Phase 2 audio acquisition, ASR provider, QStash adapter, progress UI, OCR,
-  visual retrieval, reranking, or orchestration work has started
+- No Phase 2 audio acquisition, ASR provider, progress UI, OCR, visual retrieval, reranking, or
+  orchestration work has started
+- Provider-neutral dispatch uses PostgreSQL polling by default; optional QStash messages contain
+  only a job identifier/action and terminate at a URL-bound signature-verified internal callback
 - FastAPI now exposes prompt durable import, job detail/events/retry/cancel, video detail,
   transcript, and grounded-question contracts
 - YouTube metadata/captions remain download-free; transcript cues and retrieval units retain exact
@@ -145,7 +148,19 @@ implementing the later P2.8 progress controls. The real PostgreSQL FastAPI-to-wo
 imports share one job, the worker completes it once, ordered event provenance is retained, and the
 Phase 1 transcript, pgvector retrieval, and grounded-question paths remain readable. The default
 backend suite passes 253 tests with three opt-in database tests skipped and 100% coverage; all three
-database integration tests and 16 frontend tests pass. P2.4 — dispatch adapters — is next.
+database integration tests and 16 frontend tests passed at that checkpoint.
+
+P2.4 is complete on 2026-09-06. A provider-independent `JobDispatcher` sends wake-up hints after
+imports and retries have committed durable state. Local PostgreSQL polling remains the zero-credential
+default. The optional QStash adapter sends only `job_id` and `requested_action`, deduplicates the
+message by job/action, and translates provider failures without losing the queued job. The internal
+callback verifies the exact raw body and configured destination URL with current/next signing keys,
+forbids extra data, is excluded from OpenAPI/generated frontend types, and is blocked by the Next.js
+proxy. Duplicate authenticated deliveries only read and acknowledge the current job projection.
+The default backend suite passes 270 tests with three opt-in database tests skipped and 100% statement
+and branch coverage; all three real PostgreSQL integration tests and 17 frontend tests pass. A live
+hosted QStash smoke remains optional and requires user-managed credentials plus a public HTTPS
+callback. P2.5 is next and stops at the manual FFmpeg/media-runtime setup gate.
 
 ## Step 2 technology requirements
 

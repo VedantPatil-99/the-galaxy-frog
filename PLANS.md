@@ -232,10 +232,17 @@ it once, event order remains intact, and Phase 1 transcript/retrieval/question d
 
 ### P2.4 — Dispatch adapters
 
-- [ ] Define a provider-independent `JobDispatcher` protocol.
-- [ ] Keep local PostgreSQL dispatch as the default development path.
-- [ ] Add optional QStash dispatch and signature verification using identifier-only messages.
-- [ ] Make duplicate authenticated delivery idempotent.
+- [x] Define a provider-independent `JobDispatcher` protocol.
+- [x] Keep local PostgreSQL dispatch as the default development path.
+- [x] Add optional QStash dispatch and signature verification using identifier-only messages.
+- [x] Make duplicate authenticated delivery idempotent.
+
+Imports and retries now send provider-neutral wake-up hints after durable state is committed. Local
+development acknowledges jobs already visible to PostgreSQL polling; optional QStash publishing
+carries only `job_id` and `requested_action`, uses deterministic message deduplication, and verifies
+the exact raw callback body against the configured URL with current/next signing keys. The internal
+callback is excluded from OpenAPI and blocked by the Next.js proxy. Repeated authenticated delivery
+only reads and acknowledges the current job projection, so it cannot duplicate events or outputs.
 
 ### P2.5 — Bounded audio acquisition
 
@@ -314,3 +321,8 @@ it once, event order remains intact, and Phase 1 transcript/retrieval/question d
 - 2026-09-06: Complete P2.3 with prompt durable import, job detail/events/retry/cancel endpoints,
   regenerated OpenAPI/TypeScript contracts, and a PostgreSQL-backed FastAPI-to-worker acceptance
   test that preserves the Phase 1 read and grounded-answer paths.
+- 2026-09-06: Complete P2.4 with a provider-neutral dispatcher, local PostgreSQL polling as the
+  default, an optional identifier-only QStash adapter with URL-bound current/next-key signature
+  verification, a private callback outside generated browser contracts, and idempotent duplicate
+  delivery acknowledgement. Keep live QStash credentials optional and stop before P2.5's manual
+  FFmpeg/media-runtime gate.

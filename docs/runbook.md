@@ -90,6 +90,30 @@ bun run infra:down
 `infra:down` preserves the named database volume. Do not add `--volumes` unless intentionally
 discarding all local database data.
 
+## Dispatch modes
+
+`JOB_DISPATCHER=local` is the default and requires no hosted service or credential. Imports and
+retries commit durable PostgreSQL state, then the local adapter acknowledges the job already visible
+to `bun run dev:worker` polling.
+
+QStash is optional. To exercise hosted delivery, create the QStash resource manually and add these
+values only to the untracked `.env` file:
+
+```bash
+JOB_DISPATCHER=qstash
+QSTASH_TOKEN=replace-with-local-secret
+QSTASH_CALLBACK_URL=https://your-public-host/internal/qstash/dispatch
+QSTASH_CURRENT_SIGNING_KEY=replace-with-local-secret
+QSTASH_NEXT_SIGNING_KEY=replace-with-local-secret
+```
+
+The callback URL must be the exact public URL configured as the QStash destination because signature
+verification binds the message subject to it. QStash sends only `job_id` and `requested_action`.
+`/internal/qstash/dispatch` is deliberately absent from OpenAPI and the generated frontend types,
+and the Next.js proxy returns `404` for every `/internal/*` path. Keep FastAPI and the persistent
+worker running; the callback acknowledges the durable pointer quickly while the worker claims from
+PostgreSQL. Never place QStash tokens or signing keys in source control.
+
 ## API contract workflow
 
 FastAPI is the source of truth for HTTP schemas. After an intentional API schema change, regenerate

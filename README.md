@@ -19,12 +19,15 @@ seeks the player from evidence intervals. The live exit gate verified import, tr
 duplicate-free reuse, grounded answering, validated timestamp citations, and citation-to-player
 seeking.
 
-The first three Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
+The first four Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
 tables and repository operations, lease-safe claims and heartbeats, deterministic idempotency
 fingerprints, cancellation/retry transitions, a standalone local worker, and resumable caption-first
 stage handlers. Real PostgreSQL gates prove concurrent claim exclusion, stale-lease recovery, and
 restart from the last completed stage. FastAPI import now returns a durable job promptly, exposes its
 current state and ordered events, and keeps retry/cancel schemas generated into the frontend client.
+Provider-neutral wake-up hints use local PostgreSQL polling by default; the optional QStash adapter
+sends identifier-only messages to a signature-verified internal callback that is neither exported in
+OpenAPI nor reachable through the browser proxy.
 
 ## Architecture direction
 
@@ -36,6 +39,8 @@ current state and ordered events, and keeps retry/cancel schemas generated into 
   video-scoped cosine retrieval without later-phase hybrid search or reranking.
 - Phase 2 stores the durable ingestion projection and append-only event history in PostgreSQL;
   workers claim bounded leases and resume only from persisted stage checkpoints.
+- Local dispatch is the default; optional QStash delivery carries no media, transcript, prompt, or
+  evidence data and never becomes a second source of truth.
 - Provider-specific integrations stay behind Python interfaces and configuration.
 
 See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-scope.md), and [PLANS.md](PLANS.md).
