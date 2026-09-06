@@ -24,6 +24,7 @@ from galaxy_frog.domain.ingestion.models import (
     IngestionStage,
 )
 from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
+from galaxy_frog.domain.videos.source import VideoSourceError, VideoSourceErrorCode
 
 NOW = datetime(2026, 9, 6, 15, tzinfo=UTC)
 
@@ -50,6 +51,21 @@ class MemoryIngestionRepository:
         self.job = job
         self.events: tuple[IngestionEvent, ...] = ()
         self.transition_error: IngestionRepositoryError | None = None
+        self.create_next = True
+
+    async def create_or_get(
+        self,
+        source: SourceReference,
+        input_fingerprint: str,
+    ) -> tuple[IngestionJob, bool]:
+        self.job = replace(
+            self.job,
+            source=source,
+            input_fingerprint=input_fingerprint,
+        )
+        created = self.create_next
+        self.create_next = False
+        return self.job, created
 
     async def get(self, job_id: UUID) -> IngestionJob | None:
         return self.job if self.job.job_id == job_id else None
@@ -140,6 +156,79 @@ async def test_job_detail_and_ordered_events_preserve_provenance(
         "external_id": "dQw4w9WgXcQ",
     }
     assert events.json()["events"][1]["details"] is None
+
+
+@pytest.mark.asyncio
+async def test_import_returns_promptly_and_reuses_the_durable_job(
+    job_api: tuple[FastAPI, MemoryIngestionRepository],
+) -> None:
+    application, repository = job_api
+    transport = ASGITransport(app=application)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        first = await client.post(
+            "/v1/videos/import",
+            json={"source_url": "https://youtu.be/dQw4w9WgXcQ"},
+        )
+        second = await client.post(
+            "/v1/videos/import",
+            json={"source_url": "https://youtu.be/dQw4w9WgXcQ"},
+        )
+
+    assert first.status_code == 202
+    assert first.json()["reused"] is False
+    assert second.status_code == 202
+    assert second.json()["reused"] is True
+    assert first.json()["job"]["job_id"] == second.json()["job"]["job_id"]
+    assert first.json()["job"]["status"] == "queued"
+    assert first.json()["job"]["stage"] == "source_resolution"
+    assert first.json()["job"]["canonical_url"] == repository.job.source.canonical_url
+    assert len(first.json()["job"]["input_fingerprint"]) == 64
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_unsupported_sources_safely(
+    job_api: tuple[FastAPI, MemoryIngestionRepository],
+) -> None:
+    application, _repository = job_api
+    transport = ASGITransport(app=application)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/videos/import",
+            json={"source_url": "https://example.com/video"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_SOURCE"
+
+
+@pytest.mark.asyncio
+async def test_import_reports_a_retryable_source_registry_failure(
+    job_api: tuple[FastAPI, MemoryIngestionRepository],
+) -> None:
+    application, _repository = job_api
+
+    class UnavailableSource:
+        source_kind = VideoSourceKind.YOUTUBE
+
+        def canonicalize(self, locator: str) -> SourceReference:
+            del locator
+            raise VideoSourceError(
+                VideoSourceErrorCode.SOURCE_UNAVAILABLE,
+                "The source registry is temporarily unavailable.",
+                retryable=True,
+            )
+
+    application.state.video_sources = (UnavailableSource(),)
+    transport = ASGITransport(app=application)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/videos/import",
+            json={"source_url": "https://youtu.be/dQw4w9WgXcQ"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "SOURCE_UNAVAILABLE"
+    assert response.json()["error"]["retryable"] is True
 
 
 @pytest.mark.asyncio

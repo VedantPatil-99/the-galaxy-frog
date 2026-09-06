@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from galaxy_frog.api.job_schemas import IngestionJobResponse
+
 
 class ImportVideoRequest(BaseModel):
     """A caller-supplied video locator accepted by the source registry."""
@@ -28,9 +30,9 @@ class VideoResponse(BaseModel):
 
 
 class ImportVideoResponse(BaseModel):
-    """Import result that makes idempotent reuse explicit."""
+    """Prompt durable-import acknowledgement with idempotent job reuse."""
 
-    video: VideoResponse
+    job: IngestionJobResponse
     reused: bool
 
 

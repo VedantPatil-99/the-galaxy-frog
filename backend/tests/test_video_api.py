@@ -150,25 +150,21 @@ def api(monkeypatch: pytest.MonkeyPatch) -> tuple[FastAPI, MemoryRepository]:
 async def test_import_read_question_and_reimport_flow(
     api: tuple[FastAPI, MemoryRepository],
 ) -> None:
-    application, _repository = api
+    application, repository = api
+    imported = await ImportVideo(
+        sources=(FixtureSource(),),
+        repository=repository,
+        transcript_search=MemorySearch(repository),
+    ).execute("https://youtu.be/dQw4w9WgXcQ")
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        first = await client.post(
-            "/v1/videos/import", json={"source_url": "https://youtu.be/dQw4w9WgXcQ"}
-        )
-        second = await client.post(
-            "/v1/videos/import", json={"source_url": "https://youtu.be/dQw4w9WgXcQ"}
-        )
-        video_id = first.json()["video"]["video_id"]
+        video_id = imported.video.video_id
         detail = await client.get(f"/v1/videos/{video_id}")
         transcript = await client.get(f"/v1/videos/{video_id}/transcript")
         answer = await client.post(
             f"/v1/videos/{video_id}/questions", json={"question": "What is grounded?"}
         )
 
-    assert first.status_code == 200
-    assert first.json()["reused"] is False
-    assert second.json()["reused"] is True
     assert detail.json()["index_ready"] is True
     assert transcript.json()["cues"][0]["start_ms"] == 1000
     assert answer.json()["evidence"][0]["cue_ids"]
@@ -201,50 +197,6 @@ async def test_unknown_video_transcript_and_question_return_stable_errors(
 
     assert transcript.status_code == 404
     assert question.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_transcript_unavailable_is_structured(
-    api: tuple[FastAPI, MemoryRepository], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    application, _repository = api
-
-    async def no_tracks(
-        self: FixtureSource, reference: SourceReference
-    ) -> tuple[CaptionTrack, ...]:
-        del self, reference
-        return ()
-
-    monkeypatch.setattr(FixtureSource, "list_caption_tracks", no_tracks)
-    transport = ASGITransport(app=application)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/v1/videos/import", json={"source_url": "https://youtu.be/dQw4w9WgXcQ"}
-        )
-
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "TRANSCRIPT_UNAVAILABLE"
-
-
-@pytest.mark.asyncio
-async def test_import_index_failure_is_structured(
-    api: tuple[FastAPI, MemoryRepository], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    application, _repository = api
-
-    async def fail_index(self: MemorySearch, video_id: UUID) -> UUID:
-        del self, video_id
-        raise TranscriptIndexError("index failed")
-
-    monkeypatch.setattr(MemorySearch, "ensure_indexed", fail_index)
-    transport = ASGITransport(app=application)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/v1/videos/import", json={"source_url": "https://youtu.be/dQw4w9WgXcQ"}
-        )
-
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "EMBEDDING_UNAVAILABLE"
 
 
 @pytest.mark.parametrize(

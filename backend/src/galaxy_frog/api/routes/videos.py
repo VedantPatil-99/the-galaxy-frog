@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, Request
 from galaxy_frog.adapters.embeddings.ollama import EmbeddingProviderError
 from galaxy_frog.adapters.generation.ollama import GenerationProviderError
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
-from galaxy_frog.api.dependencies import get_video_repository
+from galaxy_frog.api.dependencies import get_ingestion_repository, get_video_repository
 from galaxy_frog.api.errors import ApiError
+from galaxy_frog.api.job_schemas import ingestion_job_response
 from galaxy_frog.api.schemas import ErrorResponse
 from galaxy_frog.api.video_schemas import (
     AnswerResponse,
@@ -24,11 +25,12 @@ from galaxy_frog.api.video_schemas import (
     TranscriptResponse,
     VideoResponse,
 )
+from galaxy_frog.application.ingestion.create_job import CreateIngestionJob
 from galaxy_frog.application.questions.answer_question import (
     AnswerQuestion,
     CitationValidationError,
 )
-from galaxy_frog.application.videos.import_video import ImportVideo
+from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch, TranscriptIndexError
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.generation.ports import GenerationProvider
@@ -39,6 +41,10 @@ from galaxy_frog.domain.videos.source import VideoSource, VideoSourceError, Vide
 router = APIRouter(prefix="/v1/videos", tags=["videos"])
 
 RepositoryDependency = Annotated[SqlAlchemyVideoRepository, Depends(get_video_repository)]
+IngestionRepositoryDependency = Annotated[
+    PostgresIngestionRepository,
+    Depends(get_ingestion_repository),
+]
 
 
 def _transcript_search(
@@ -121,35 +127,27 @@ def _source_error(error: VideoSourceError) -> ApiError:
 @router.post(
     "/import",
     response_model=ImportVideoResponse,
+    status_code=HTTPStatus.ACCEPTED,
     responses={422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
 )
 async def import_video(
     body: ImportVideoRequest,
     request: Request,
-    repository: RepositoryDependency,
+    repository: IngestionRepositoryDependency,
 ) -> ImportVideoResponse:
-    """Synchronously import metadata and available captions without downloading media."""
+    """Create or reuse a durable job without running provider work in the request."""
 
     sources = cast(
         tuple[VideoSource, ...], getattr(request.app.state, "video_sources", (YouTubeSource(),))
     )
-    search = _transcript_search(request, repository)
-    service = ImportVideo(sources=sources, repository=repository, transcript_search=search)
+    service = CreateIngestionJob(sources=sources, repository=repository)
     try:
         result = await service.execute(str(body.source_url))
     except VideoSourceError as exc:
         raise _source_error(exc) from exc
-    except (EmbeddingProviderError, TranscriptIndexError) as exc:
-        raise ApiError(
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-            code="EMBEDDING_UNAVAILABLE",
-            message="The transcript was saved but could not be indexed with BGE-M3.",
-            retryable=True,
-            suggested_action="Start Ollama with the configured BGE-M3 model, then re-import.",
-        ) from exc
     return ImportVideoResponse(
-        video=_video_response(result.video, index_ready=True),
-        reused=result.reused,
+        job=ingestion_job_response(result.job),
+        reused=not result.created,
     )
 
 
