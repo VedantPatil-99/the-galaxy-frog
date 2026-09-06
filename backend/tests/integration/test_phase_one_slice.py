@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Mapping
+from datetime import timedelta
 from pathlib import Path
 from typing import cast
 from uuid import UUID, uuid4
@@ -15,8 +16,16 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.api.app import create_app
+from galaxy_frog.application.ingestion import (
+    IngestionJobRunner,
+    IngestionWorker,
+    caption_ingestion_handlers,
+)
 from galaxy_frog.config import Settings
-from galaxy_frog.db.models import RetrievalUnitRow, TranscriptCueRow, VideoRow
+from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
+from galaxy_frog.db.models import IngestionJobRow, RetrievalUnitRow, TranscriptCueRow, VideoRow
+from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
+from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.generation.models import (
     AnswerConfidence,
     GenerationCitation,
@@ -47,7 +56,10 @@ class FixtureSource:
         self.external_id = uuid4().hex[:11]
 
     def canonicalize(self, locator: str) -> SourceReference:
-        assert locator == "https://youtu.be/integration"
+        assert locator in {
+            "https://youtu.be/integration",
+            f"https://www.youtube.com/watch?v={self.external_id}",
+        }
         return SourceReference(
             self.source_kind,
             self.external_id,
@@ -136,17 +148,59 @@ async def test_import_retrieval_and_question_endpoints_are_idempotent() -> None:
                 json={"source_url": "https://youtu.be/integration"},
             )
 
-            assert first.status_code == 200, first.text
-            assert second.status_code == 200, second.text
+            assert first.status_code == 202, first.text
+            assert second.status_code == 202, second.text
             first_body = cast(Mapping[str, object], first.json())
             second_body = cast(Mapping[str, object], second.json())
-            first_video = cast(Mapping[str, object], first_body["video"])
-            second_video = cast(Mapping[str, object], second_body["video"])
-            video_id = UUID(cast(str, first_video["video_id"]))
+            first_job = cast(Mapping[str, object], first_body["job"])
+            second_job = cast(Mapping[str, object], second_body["job"])
+            job_id = UUID(cast(str, first_job["job_id"]))
             assert first_body["reused"] is False
             assert second_body["reused"] is True
-            assert second_video["video_id"] == first_video["video_id"]
-            assert first_video["index_ready"] is True
+            assert second_job["job_id"] == first_job["job_id"]
+            assert first_job["status"] == "queued"
+
+            engine = cast(AsyncEngine, application.state.database_engine)
+            session_factory = async_sessionmaker(
+                engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+            async with session_factory() as worker_session:
+                ingestion = PostgresIngestionRepository(worker_session)
+                videos = SqlAlchemyVideoRepository(worker_session)
+                transcript_search = PgVectorTranscriptSearch(
+                    session=worker_session,
+                    videos=videos,
+                    provider=FixtureEmbeddings(),
+                )
+                lease_duration = timedelta(minutes=2)
+                worker_id = "phase-one-integration-worker"
+                runner = IngestionJobRunner(
+                    repository=ingestion,
+                    handlers=caption_ingestion_handlers(
+                        sources=(source,),
+                        videos=videos,
+                        transcript_search=transcript_search,
+                    ),
+                    worker_id=worker_id,
+                    lease_duration=lease_duration,
+                )
+                completed = await IngestionWorker(
+                    repository=ingestion,
+                    runner=runner,
+                    worker_id=worker_id,
+                    lease_duration=lease_duration,
+                    poll_interval=timedelta(milliseconds=1),
+                ).run_once()
+
+            assert completed is not None
+            assert completed.job_id == job_id
+            assert completed.video_id is not None
+            video_id = completed.video_id
+
+            job = await client.get(f"/v1/jobs/{job_id}")
+            events = await client.get(f"/v1/jobs/{job_id}/events")
 
             detail = await client.get(f"/v1/videos/{video_id}")
             transcript = await client.get(f"/v1/videos/{video_id}/transcript")
@@ -155,6 +209,13 @@ async def test_import_retrieval_and_question_endpoints_are_idempotent() -> None:
                 json={"question": "What does Galaxy Frog preserve?"},
             )
 
+            assert job.status_code == 200
+            assert job.json()["status"] == "succeeded"
+            assert job.json()["video_id"] == str(video_id)
+            assert events.status_code == 200
+            assert [event["sequence"] for event in events.json()["events"]] == list(
+                range(1, len(events.json()["events"]) + 1)
+            )
             assert detail.status_code == 200
             assert detail.json()["index_ready"] is True
             assert transcript.status_code == 200
@@ -163,9 +224,6 @@ async def test_import_retrieval_and_question_endpoints_are_idempotent() -> None:
             assert answer.status_code == 200, answer.text
             assert answer.json()["evidence"][0]["video_id"] == str(video_id)
             assert answer.json()["evidence"][0]["modality"] == "transcript"
-
-        engine = cast(AsyncEngine, application.state.database_engine)
-        session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with session_factory() as session:
             assert (
                 await session.scalar(
@@ -189,5 +247,6 @@ async def test_import_retrieval_and_question_endpoints_are_idempotent() -> None:
                 )
                 == 1
             )
+            await session.execute(delete(IngestionJobRow).where(IngestionJobRow.id == job_id))
             await session.execute(delete(VideoRow).where(VideoRow.id == video_id))
             await session.commit()
