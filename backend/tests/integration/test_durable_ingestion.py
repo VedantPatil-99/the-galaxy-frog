@@ -13,6 +13,13 @@ from alembic.config import Config
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from galaxy_frog.application.ingestion.runner import (
+    IngestionJobRunner,
+    IngestionStageError,
+    StageContext,
+    StageResult,
+)
+from galaxy_frog.application.ingestion.worker import IngestionWorker
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
 from galaxy_frog.db.ingestion_repository import (
@@ -24,6 +31,7 @@ from galaxy_frog.domain.ingestion.models import (
     IngestionEventType,
     IngestionJob,
     IngestionJobStatus,
+    IngestionStage,
 )
 from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
 
@@ -148,4 +156,126 @@ async def test_concurrent_claim_recovery_cancellation_and_retry_are_durable() ->
         async with sessions() as session:
             await session.execute(delete(IngestionJobRow).where(IngestionJobRow.id.in_(job_ids)))
             await session.commit()
+        await engine.dispose()
+
+
+class FailAfterRestart:
+    """Record the resumed stage, then stop without advancing into later Phase 2 work."""
+
+    stage = IngestionStage.METADATA
+
+    def __init__(self) -> None:
+        self.jobs: list[IngestionJob] = []
+
+    async def execute(self, job: IngestionJob, context: StageContext) -> StageResult:
+        del context
+        self.jobs.append(job)
+        raise IngestionStageError(
+            "RESTART_CHECK_COMPLETE",
+            "The restart recovery checkpoint was exercised.",
+            retryable=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_worker_restart_resumes_the_last_completed_stage() -> None:
+    """Prove a new process resumes at metadata without repeating source resolution."""
+
+    engine = create_database_engine(Settings(app_env="test"))
+    sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    external_id = uuid4().hex[:11]
+    source = SourceReference(
+        VideoSourceKind.YOUTUBE,
+        external_id,
+        f"https://www.youtube.com/watch?v={external_id}",
+    )
+    fingerprint = sha256(f"restart:{external_id}".encode()).hexdigest()
+    crash_time = datetime.now(UTC) - timedelta(minutes=1)
+    job_id: UUID | None = None
+
+    try:
+        async with sessions() as session:
+            repository = PostgresIngestionRepository(session)
+            created, was_created = await repository.create_or_get(
+                source,
+                fingerprint,
+                now=crash_time,
+            )
+            assert was_created is True
+            job_id = created.job_id
+            claimed = await repository.claim_next(
+                "worker-before-crash",
+                timedelta(seconds=1),
+                now=crash_time,
+            )
+            assert claimed is not None
+            assert claimed.job_id == job_id
+            await repository.start_stage(
+                job_id,
+                "worker-before-crash",
+                IngestionStage.SOURCE_RESOLUTION,
+                now=crash_time,
+            )
+            checkpoint = await repository.complete_stage(
+                job_id,
+                "worker-before-crash",
+                IngestionStage.SOURCE_RESOLUTION,
+                IngestionStage.METADATA,
+                details={"source_kind": "youtube", "external_id": external_id},
+                now=crash_time,
+            )
+            assert checkpoint.stage is IngestionStage.METADATA
+
+        resumed_stage = FailAfterRestart()
+        async with sessions() as session:
+            repository = PostgresIngestionRepository(session)
+            lease_duration = timedelta(minutes=2)
+            runner = IngestionJobRunner(
+                repository=repository,
+                handlers=(resumed_stage,),
+                worker_id="worker-after-restart",
+                lease_duration=lease_duration,
+            )
+            worker = IngestionWorker(
+                repository=repository,
+                runner=runner,
+                worker_id="worker-after-restart",
+                lease_duration=lease_duration,
+                poll_interval=timedelta(milliseconds=1),
+            )
+
+            result = await worker.run_once()
+
+            assert result is not None
+            assert result.job_id == job_id
+            assert result.status is IngestionJobStatus.FAILED
+            assert result.stage is IngestionStage.METADATA
+            assert result.attempt == 2
+            assert [job.stage for job in resumed_stage.jobs] == [IngestionStage.METADATA]
+            events = await repository.list_events(job_id)
+            assert [event.event_type for event in events] == [
+                IngestionEventType.CREATED,
+                IngestionEventType.CLAIMED,
+                IngestionEventType.STAGE_STARTED,
+                IngestionEventType.STAGE_COMPLETED,
+                IngestionEventType.CLAIMED,
+                IngestionEventType.STAGE_STARTED,
+                IngestionEventType.FAILED,
+            ]
+            source_completions = [
+                event
+                for event in events
+                if event.event_type is IngestionEventType.STAGE_COMPLETED
+                and event.stage is IngestionStage.SOURCE_RESOLUTION
+            ]
+            assert len(source_completions) == 1
+            assert source_completions[0].details == {
+                "source_kind": "youtube",
+                "external_id": external_id,
+            }
+    finally:
+        if job_id is not None:
+            async with sessions() as session:
+                await session.execute(delete(IngestionJobRow).where(IngestionJobRow.id == job_id))
+                await session.commit()
         await engine.dispose()
