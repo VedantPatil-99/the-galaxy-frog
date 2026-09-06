@@ -128,6 +128,16 @@ async def test_signature_is_verified_before_payload_validation_or_database_acces
     assert "private verification detail" not in response.text
     assert repository.get_calls == 0
 
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        invalid_encoding = await client.post(
+            "/internal/qstash/dispatch",
+            content=b"\xff",
+            headers={"Upstash-Signature": "signed"},
+        )
+    assert invalid_encoding.status_code == 422
+    assert invalid_encoding.json()["error"]["code"] == "INVALID_DISPATCH_MESSAGE"
+    assert repository.get_calls == 0
+
 
 @pytest.mark.asyncio
 async def test_authenticated_message_forbids_embedded_data_and_unknown_jobs(

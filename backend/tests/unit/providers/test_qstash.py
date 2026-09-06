@@ -77,7 +77,10 @@ async def test_qstash_publishes_only_identifier_action_and_deduplicates() -> Non
     assert receipt.external_message_id == "message-1"
 
 
-@pytest.mark.parametrize("response", [RuntimeError("network"), object()])
+@pytest.mark.parametrize(
+    "response",
+    [RuntimeError("network"), object(), PublishResponse("", False)],
+)
 @pytest.mark.asyncio
 async def test_qstash_translates_provider_failures(response: object) -> None:
     dispatcher = QStashJobDispatcher(
