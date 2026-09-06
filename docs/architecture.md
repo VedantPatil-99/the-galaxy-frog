@@ -99,9 +99,9 @@ monolith:
 
 The application layer owns the job lifecycle through provider-independent protocols. The initial
 stage runner is transport-neutral: local PostgreSQL polling remains the development default, while
-a later optional QStash adapter may carry identifiers only and cannot become the source of truth.
-The existing Phase 1 HTTP import remains synchronous until the Phase 2 job API packet changes the
-FastAPI contract and regenerates the frontend declarations.
+an optional QStash adapter may carry identifiers only and cannot become the source of truth. The
+Phase 2 import API queues or reuses a durable job and returns immediately; the frontend declarations
+for that asynchronous contract are generated from FastAPI OpenAPI.
 
 The durable stage vocabulary is deliberately limited to Phase 2 ingestion work. It preserves video
 identity and will preserve every transcript cue's half-open millisecond interval and source
