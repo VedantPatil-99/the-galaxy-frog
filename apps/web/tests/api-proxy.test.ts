@@ -76,6 +76,29 @@ describe("API proxy", () => {
     expect(body.error.correlation_id).toBe("safe-test-id")
   })
 
+  test("does not expose internal service routes through the browser proxy", async () => {
+    let called = false
+    const fetcher = (async () => {
+      called = true
+      return new Response()
+    })
+    const request = new Request(
+      "http://web.test/api/proxy/internal/qstash/dispatch",
+    )
+
+    const response = await proxyRequest(
+      request,
+      ["internal", "qstash", "dispatch"],
+      fetcher,
+      "http://api.test",
+    )
+    const body = await response.json()
+
+    expect(called).toBeFalse()
+    expect(response.status).toBe(404)
+    expect(body.error.code).toBe("PROXY_ROUTE_NOT_FOUND")
+  })
+
   test("normalizes an unavailable upstream into a safe error", async () => {
     const fetcher = (async () => {
       throw new Error("private connection detail")
