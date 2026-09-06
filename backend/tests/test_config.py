@@ -70,3 +70,35 @@ def test_settings_reject_invalid_ollama_origins(value: str) -> None:
 def test_settings_reject_invalid_worker_configuration(field: str, value: object) -> None:
     with pytest.raises(ValidationError):
         Settings.model_validate({field: value})
+
+
+def test_qstash_dispatch_requires_complete_secret_configuration() -> None:
+    with pytest.raises(ValidationError, match=r"QSTASH_TOKEN.*QSTASH_CALLBACK_URL"):
+        Settings.model_validate({"job_dispatcher": "qstash"})
+
+    settings = Settings.model_validate(
+        {
+            "job_dispatcher": "qstash",
+            "qstash_token": "token",
+            "qstash_callback_url": "https://frog.example/internal/qstash/dispatch/",
+            "qstash_current_signing_key": "current",
+            "qstash_next_signing_key": "next",
+        }
+    )
+
+    assert settings.qstash_callback_url == "https://frog.example/internal/qstash/dispatch"
+    assert settings.qstash_token is not None
+    assert settings.qstash_token.get_secret_value() == "token"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "frog.example/internal/qstash/dispatch",
+        "ftp://frog.example/dispatch",
+        "https://frog.example/dispatch?x=1",
+    ],
+)
+def test_settings_reject_invalid_qstash_callback_urls(value: str) -> None:
+    with pytest.raises(ValidationError, match="QSTASH_CALLBACK_URL"):
+        Settings.model_validate({"qstash_callback_url": value})

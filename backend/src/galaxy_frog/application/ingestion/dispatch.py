@@ -32,7 +32,17 @@ class JobDispatchError(RuntimeError):
     """Raised when an optional dispatcher cannot accept a wake-up hint."""
 
 
+class DispatchSignatureError(RuntimeError):
+    """Raised when an authenticated dispatch message cannot be verified."""
+
+
 class JobDispatcher(Protocol):
     """Send identifier-only wake-up hints without owning durable job state."""
 
     async def dispatch(self, message: DispatchMessage) -> DispatchReceipt: ...
+
+
+class DispatchSignatureVerifier(Protocol):
+    """Verify a provider signature over the exact raw identifier message."""
+
+    def verify(self, *, signature: str, body: str, url: str) -> None: ...

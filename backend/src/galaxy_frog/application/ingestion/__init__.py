@@ -10,6 +10,8 @@ from galaxy_frog.application.ingestion.dispatch import (
     DispatchAction,
     DispatchMessage,
     DispatchReceipt,
+    DispatchSignatureError,
+    DispatchSignatureVerifier,
     JobDispatcher,
 )
 from galaxy_frog.application.ingestion.ports import IngestionRepository
@@ -29,6 +31,8 @@ __all__ = [
     "DispatchAction",
     "DispatchMessage",
     "DispatchReceipt",
+    "DispatchSignatureError",
+    "DispatchSignatureVerifier",
     "IngestionJobRunner",
     "IngestionRepository",
     "IngestionStageError",
