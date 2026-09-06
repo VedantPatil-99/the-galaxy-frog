@@ -27,6 +27,7 @@ evidence and produce timestamp-grounded answers.
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: in progress
 - P2.1 — Durable ingestion foundation: complete
+- P2.2 — Worker and persisted stage runner: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -41,7 +42,8 @@ evidence and produce timestamp-grounded answers.
 - The browser reaches FastAPI only through the server-configured Next.js proxy and renders both
   healthy dependency state and correlated backend errors
 - Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
-  operations, deterministic idempotency, and a persisted stage runner are implemented
+  operations, deterministic idempotency, a standalone local worker, and caption-first persisted
+  stage handlers are implemented
 - No Phase 2 audio acquisition, ASR provider, job HTTP API, QStash adapter, progress UI, OCR,
   visual retrieval, reranking, or orchestration work has started
 - FastAPI now exposes caption-only import, video detail, transcript, and grounded-question contracts
@@ -113,18 +115,27 @@ is [`docs/ollama.md`](ollama.md). The matching Notion records are:
 - <https://app.notion.com/p/3ce7942fa8e481ff8d79fb7fe241b2d7>
 - <https://app.notion.com/p/3ce7942fa8e4815191abcf289fea5ecc>
 
-Phase 2 started on 2026-09-05 on `feat/durable-ingestion-foundation`. The first packet adds the
+Phase 2 started on 2026-09-05 on `feat/durable-ingestion-foundation`. P2.1 adds the
 framework-independent ingestion lifecycle, an Alembic revision for `ingestion_jobs` and append-only
 `job_events`, a PostgreSQL repository with idempotent creation and bounded lease operations, a
-deterministic source-input fingerprint, and a resumable application stage runner. The complete
-runnable backend suite passes with 226 tests and two opt-in integration modules skipped.
+deterministic source-input fingerprint, and a resumable application stage runner.
 
 The migration renders successfully in Alembic offline mode. On 2026-09-06, Docker Desktop and the
 configured PostgreSQL service were healthy, Alembic revision `20260905_0004` was current, and
 `tests/integration/test_durable_ingestion.py` passed against the real database. The gate proved
 duplicate-free concurrent creation, concurrent claim exclusion, stale-lease recovery, ordered
-events, cancellation, retry, and non-retryable terminal behavior. P2.1 is complete; P2.2 is the next
-active packet.
+events, cancellation, retry, and non-retryable terminal behavior. P2.1 is complete.
+
+P2.2 is complete on 2026-09-06. A separate Python worker now polls PostgreSQL with a unique bounded
+lease, drives source resolution, metadata, caption retrieval, persistence, embedding, and cleanup
+from durable checkpoints, and heartbeats around provider operations. `bun run dev` includes this
+worker, while `bun run dev:worker` runs it independently. The real PostgreSQL restart test proves a
+replacement process resumes at metadata after source resolution was checkpointed and does not append
+a duplicate source-completed event. The default backend suite passes 242 tests with three opt-in
+database tests skipped and 100% statement/branch coverage; the two durable-ingestion database tests
+also pass. P2.3 — job API and generated contracts — is the next active packet. The public import API
+remains synchronous until that packet moves it atomically with its FastAPI schemas and generated
+frontend declarations.
 
 ## Step 2 technology requirements
 

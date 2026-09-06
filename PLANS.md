@@ -208,9 +208,15 @@ ordered events, cancellation, retry, and terminal-state rules.
 
 ### P2.2 — Worker and persisted stage runner
 
-- [ ] Add a separate Python worker entry point that shares the modular backend package.
-- [ ] Run deterministic stages from durable checkpoints rather than one long HTTP request.
-- [ ] Heartbeat active leases and recover safely after worker restart.
+- [x] Add a separate Python worker entry point that shares the modular backend package.
+- [x] Run deterministic stages from durable checkpoints rather than one long HTTP request.
+- [x] Heartbeat active leases and recover safely after worker restart.
+
+The local worker now polls PostgreSQL with a unique lease owner, runs the caption-first path through
+persisted source, metadata, caption, persistence, embedding, and cleanup checkpoints, and heartbeats
+around provider operations. The real PostgreSQL restart test proves a replacement worker resumes at
+the last completed stage without duplicating its event. The complete default backend suite passes
+with 242 tests, three opt-in database tests skipped, and 100% statement and branch coverage.
 
 ### P2.3 — Job API and generated contracts
 
@@ -296,3 +302,6 @@ ordered events, cancellation, retry, and terminal-state rules.
   adapter. Stop at manual media-runtime, model, credential, or system-configuration gates.
 - 2026-09-06: Complete P2.1 after applying Alembic revision `20260905_0004` and passing the real
   PostgreSQL durable-ingestion integration gate, including concurrent claim and stale-lease recovery.
+- 2026-09-06: Complete P2.2 with the standalone local worker, caption-first persisted handlers,
+  provider-operation heartbeats, and a real PostgreSQL restart-resume acceptance test. Keep P2.3
+  responsible for replacing the synchronous import contract and exposing job APIs.

@@ -19,11 +19,12 @@ seeks the player from evidence intervals. The live exit gate verified import, tr
 duplicate-free reuse, grounded answering, validated timestamp citations, and citation-to-player
 seeking.
 
-The first Phase 2 packet adds framework-independent ingestion job and event models, PostgreSQL
+The first two Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
 tables and repository operations, lease-safe claims and heartbeats, deterministic idempotency
-fingerprints, cancellation/retry transitions, and a resumable stage runner. It does not yet replace
-the synchronous Phase 1 import API. The migration and real PostgreSQL concurrency/recovery gate pass;
-the separate worker entry point and persisted execution loop are the next Phase 2 packet.
+fingerprints, cancellation/retry transitions, a standalone local worker, and resumable caption-first
+stage handlers. Real PostgreSQL gates prove concurrent claim exclusion, stale-lease recovery, and
+restart from the last completed stage. P2.3 will replace the synchronous Phase 1 import contract with
+the durable job API.
 
 ## Architecture direction
 
@@ -69,7 +70,7 @@ bun run db:migrate
 
 Replace the sample database password in `.env` before starting the service.
 
-Start the Next.js and FastAPI development servers together:
+Start the Next.js, FastAPI, and durable ingestion worker processes together:
 
 ```bash
 bun run dev
@@ -85,9 +86,10 @@ bun run dev
 - Transcript: `GET http://127.0.0.1:8000/v1/videos/{video_id}/transcript`
 - Grounded question: `POST http://127.0.0.1:8000/v1/videos/{video_id}/questions`
 
-Use `Ctrl+C` to stop both processes. Run either process independently with `bun run dev:web` or
-`bun run dev:api`. `FASTAPI_BASE_URL` is read only by the Next.js server; it is never exposed as a
-`NEXT_PUBLIC_` browser variable.
+Use `Ctrl+C` to stop all processes. Run a process independently with `bun run dev:web`,
+`bun run dev:api`, or `bun run dev:worker`. `FASTAPI_BASE_URL` is read only by the Next.js server; it
+is never exposed as a `NEXT_PUBLIC_` browser variable. Until P2.3 lands, the public import endpoint
+remains synchronous and the worker normally waits on an empty durable queue.
 
 ## API contracts
 

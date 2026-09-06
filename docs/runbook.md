@@ -40,11 +40,22 @@ bun run db:migrate
 
 ## Daily development
 
-Start both application processes:
+Start the three application processes (Next.js, FastAPI, and the durable ingestion worker):
 
 ```bash
 bun run dev
 ```
+
+Run the worker independently when diagnosing durable jobs:
+
+```bash
+bun run dev:worker
+```
+
+`INGESTION_LEASE_SECONDS` and `INGESTION_POLL_SECONDS` control the local lease and idle polling
+intervals. Leave `INGESTION_WORKER_ID` unset for a hostname/process-derived identity, or set a unique
+value per process. Until P2.3 changes the import API, the public import remains synchronous and the
+worker normally waits on an empty queue.
 
 Phase 1 uses user-managed Ollama models. Install and start Ollama manually, then provision the exact
 models named in `.env`; these commands download model weights and therefore are never run by Codex:
@@ -118,7 +129,7 @@ RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/inte
 ```
 
 After applying the Phase 2 migration, prove real PostgreSQL idempotency, concurrent claim exclusion,
-stale-lease recovery, ordered events, cancellation, and retry rules:
+stale-lease recovery, persisted-stage restart resume, ordered events, cancellation, and retry rules:
 
 ```bash
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_durable_ingestion.py
