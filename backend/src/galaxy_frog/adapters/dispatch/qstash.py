@@ -57,14 +57,25 @@ class QStashJobDispatcher:
 class QStashSignatureVerifier:
     """Verify QStash JWT signatures with current and next signing keys."""
 
-    def __init__(self, *, current_signing_key: str, next_signing_key: str) -> None:
+    def __init__(
+        self,
+        *,
+        current_signing_key: str,
+        next_signing_key: str,
+        callback_url: str,
+    ) -> None:
         self._receiver = Receiver(
             current_signing_key=current_signing_key,
             next_signing_key=next_signing_key,
         )
+        self._callback_url = callback_url
 
-    def verify(self, *, signature: str, body: str, url: str) -> None:
+    def verify(self, *, signature: str, body: str) -> None:
         try:
-            self._receiver.verify(signature=signature, body=body, url=url)
+            self._receiver.verify(
+                signature=signature,
+                body=body,
+                url=self._callback_url,
+            )
         except SignatureError as exc:
             raise DispatchSignatureError("The QStash signature is invalid.") from exc

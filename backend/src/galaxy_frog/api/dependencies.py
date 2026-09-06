@@ -6,7 +6,7 @@ from typing import cast
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from galaxy_frog.application.ingestion.dispatch import JobDispatcher
+from galaxy_frog.application.ingestion.dispatch import DispatchSignatureVerifier, JobDispatcher
 from galaxy_frog.db.engine import probe_database
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
@@ -18,6 +18,26 @@ def get_job_dispatcher(request: Request) -> JobDispatcher:
     """Return the configured provider-independent dispatch adapter."""
 
     return cast(JobDispatcher, request.app.state.job_dispatcher)
+
+
+def get_dispatch_signature_verifier(request: Request) -> DispatchSignatureVerifier:
+    """Require the configured verifier for an internal authenticated callback."""
+
+    verifier = cast(
+        DispatchSignatureVerifier | None,
+        getattr(request.app.state, "dispatch_signature_verifier", None),
+    )
+    if verifier is None:
+        from galaxy_frog.api.errors import ApiError
+
+        raise ApiError(
+            status_code=503,
+            code="QSTASH_NOT_CONFIGURED",
+            message="The QStash callback is not configured.",
+            retryable=False,
+            suggested_action="Configure the QStash dispatcher and signing keys before delivery.",
+        )
+    return verifier
 
 
 def _database_engine(request: Request) -> AsyncEngine:

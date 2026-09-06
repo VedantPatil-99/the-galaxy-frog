@@ -7,6 +7,8 @@ from httpx import ASGITransport, AsyncClient, Response
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from galaxy_frog.adapters.dispatch.local import LocalJobDispatcher
+from galaxy_frog.adapters.dispatch.qstash import QStashJobDispatcher, QStashSignatureVerifier
 from galaxy_frog.api import app as app_module
 from galaxy_frog.api.app import app, create_app
 from galaxy_frog.config import Settings
@@ -20,6 +22,8 @@ async def test_create_app_uses_validated_settings_without_database() -> None:
     assert application.version == "0.1.0"
     assert application.debug is False
     assert application.state.database_engine is None
+    assert isinstance(application.state.job_dispatcher, LocalJobDispatcher)
+    assert application.state.dispatch_signature_verifier is None
 
     async with application.router.lifespan_context(application):
         assert application.state.database_engine is None
@@ -99,3 +103,18 @@ async def test_docs_and_openapi_are_available() -> None:
     unavailable_schema = cast(dict[str, object], unavailable_json["schema"])
 
     assert unavailable_schema["$ref"] == "#/components/schemas/ErrorResponse"
+
+
+def test_create_app_selects_qstash_only_when_explicitly_configured() -> None:
+    application = create_app(
+        Settings(
+            job_dispatcher="qstash",
+            qstash_token=SecretStr("token"),
+            qstash_callback_url="https://frog.example/internal/qstash/dispatch",
+            qstash_current_signing_key=SecretStr("current"),
+            qstash_next_signing_key=SecretStr("next"),
+        )
+    )
+
+    assert isinstance(application.state.job_dispatcher, QStashJobDispatcher)
+    assert isinstance(application.state.dispatch_signature_verifier, QStashSignatureVerifier)
