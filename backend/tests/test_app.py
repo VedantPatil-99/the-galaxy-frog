@@ -80,6 +80,10 @@ async def test_docs_and_openapi_are_available() -> None:
     assert set(paths) == {
         "/health/live",
         "/health/ready",
+        "/v1/jobs/{job_id}",
+        "/v1/jobs/{job_id}/cancel",
+        "/v1/jobs/{job_id}/events",
+        "/v1/jobs/{job_id}/retry",
         "/v1/videos/import",
         "/v1/videos/{video_id}",
         "/v1/videos/{video_id}/questions",

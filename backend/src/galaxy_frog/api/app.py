@@ -13,6 +13,7 @@ from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.api.errors import register_error_handlers
 from galaxy_frog.api.middleware import correlation_id_middleware
 from galaxy_frog.api.routes.health import router as health_router
+from galaxy_frog.api.routes.jobs import router as jobs_router
 from galaxy_frog.api.routes.videos import router as videos_router
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.middleware("http")(correlation_id_middleware)
     register_error_handlers(application)
     application.include_router(health_router)
+    application.include_router(jobs_router)
     application.include_router(videos_router)
     return application
 
