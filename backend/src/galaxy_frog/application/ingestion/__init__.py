@@ -1,5 +1,6 @@
 """Durable ingestion application contracts."""
 
+from galaxy_frog.application.ingestion.caption_stages import caption_ingestion_handlers
 from galaxy_frog.application.ingestion.create_job import (
     CreateIngestionJob,
     CreateIngestionJobResult,
@@ -26,5 +27,6 @@ __all__ = [
     "IngestionWorker",
     "StageContext",
     "StageResult",
+    "caption_ingestion_handlers",
     "ingestion_input_fingerprint",
 ]
