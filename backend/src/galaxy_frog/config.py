@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _REPOSITORY_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     embedding_model: str = "bge-m3"
     embedding_model_revision: str = "ollama"
     generation_model: str = "qwen3:4b"
+    ingestion_worker_id: str | None = None
+    ingestion_lease_seconds: int = Field(default=120, ge=30)
+    ingestion_poll_seconds: float = Field(default=1.0, gt=0)
 
     @field_validator("database_url")
     @classmethod
@@ -55,3 +58,16 @@ class Settings(BaseSettings):
             msg = "OLLAMA_BASE_URL must not include a path, query, or fragment"
             raise ValueError(msg)
         return value.rstrip("/")
+
+    @field_validator("ingestion_worker_id")
+    @classmethod
+    def validate_ingestion_worker_id(cls, value: str | None) -> str | None:
+        """Normalize an optional operator-supplied durable lease owner."""
+
+        if value is None:
+            return None
+        worker_id = value.strip()
+        if not worker_id:
+            msg = "INGESTION_WORKER_ID must not be blank"
+            raise ValueError(msg)
+        return worker_id
