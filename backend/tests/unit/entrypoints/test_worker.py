@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Coroutine
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.application.ingestion.worker import IngestionWorker
 from galaxy_frog.config import Settings
+from galaxy_frog.domain.media import AudioAcquirer
 from galaxy_frog.entrypoints import worker as worker_entrypoint
 
 
@@ -42,6 +44,24 @@ def test_build_worker_composes_the_caption_pipeline() -> None:
     )
 
     assert isinstance(result, IngestionWorker)
+
+
+def test_build_audio_acquirer_composes_bounded_local_providers(tmp_path: Path) -> None:
+    result = worker_entrypoint.build_audio_acquirer(
+        settings(
+            media_workspace_root=tmp_path,
+            media_max_duration_seconds=60,
+            media_max_download_bytes=1024,
+            media_max_output_bytes=2048,
+            media_timeout_seconds=30,
+            media_max_concurrency=2,
+            media_retain_on_success=True,
+            ffmpeg_executable="C:/Tools/ffmpeg.exe",
+            ffprobe_executable="C:/Tools/ffprobe.exe",
+        )
+    )
+
+    assert isinstance(result, AudioAcquirer)
 
 
 class RecordingEngine:

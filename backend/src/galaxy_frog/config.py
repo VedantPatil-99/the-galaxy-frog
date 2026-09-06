@@ -7,7 +7,8 @@ from urllib.parse import urlsplit
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_REPOSITORY_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+_REPOSITORY_ENV_FILE = _REPOSITORY_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -34,6 +35,15 @@ class Settings(BaseSettings):
     qstash_callback_url: str | None = None
     qstash_current_signing_key: SecretStr | None = None
     qstash_next_signing_key: SecretStr | None = None
+    media_workspace_root: Path = _REPOSITORY_ROOT / "tmp" / "media"
+    media_max_duration_seconds: int = Field(default=7200, ge=1)
+    media_max_download_bytes: int = Field(default=268_435_456, ge=1)
+    media_max_output_bytes: int = Field(default=268_435_456, ge=1)
+    media_timeout_seconds: float = Field(default=600, gt=0)
+    media_max_concurrency: int = Field(default=1, ge=1, le=4)
+    media_retain_on_success: bool = False
+    ffmpeg_executable: str = "ffmpeg"
+    ffprobe_executable: str = "ffprobe"
 
     @field_validator("database_url")
     @classmethod
@@ -92,6 +102,28 @@ class Settings(BaseSettings):
             msg = "QSTASH_CALLBACK_URL must not include a query or fragment"
             raise ValueError(msg)
         return value.rstrip("/")
+
+    @field_validator("media_workspace_root")
+    @classmethod
+    def validate_media_workspace_root(cls, value: Path) -> Path:
+        """Resolve local media beneath an explicit non-filesystem-root directory."""
+
+        resolved = (value if value.is_absolute() else _REPOSITORY_ROOT / value).resolve()
+        if resolved == Path(resolved.anchor):
+            msg = "MEDIA_WORKSPACE_ROOT must not be a filesystem root"
+            raise ValueError(msg)
+        return resolved
+
+    @field_validator("ffmpeg_executable", "ffprobe_executable")
+    @classmethod
+    def validate_media_executable(cls, value: str) -> str:
+        """Reject blank executable configuration while allowing absolute paths."""
+
+        executable = value.strip()
+        if not executable:
+            msg = "media executable paths must not be blank"
+            raise ValueError(msg)
+        return executable
 
     @model_validator(mode="after")
     def validate_qstash_configuration(self) -> Self:
