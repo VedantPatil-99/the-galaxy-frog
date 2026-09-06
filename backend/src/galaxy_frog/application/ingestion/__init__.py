@@ -6,6 +6,12 @@ from galaxy_frog.application.ingestion.create_job import (
     CreateIngestionJobResult,
     ingestion_input_fingerprint,
 )
+from galaxy_frog.application.ingestion.dispatch import (
+    DispatchAction,
+    DispatchMessage,
+    DispatchReceipt,
+    JobDispatcher,
+)
 from galaxy_frog.application.ingestion.ports import IngestionRepository
 from galaxy_frog.application.ingestion.runner import (
     IngestionJobRunner,
@@ -20,11 +26,15 @@ __all__ = [
     "ClaimedJobRunner",
     "CreateIngestionJob",
     "CreateIngestionJobResult",
+    "DispatchAction",
+    "DispatchMessage",
+    "DispatchReceipt",
     "IngestionJobRunner",
     "IngestionRepository",
     "IngestionStageError",
     "IngestionStageHandler",
     "IngestionWorker",
+    "JobDispatcher",
     "StageContext",
     "StageResult",
     "caption_ingestion_handlers",
