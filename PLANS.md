@@ -275,6 +275,8 @@ caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
 
 - [ ] Consume only generated job API types through the thin Next.js proxy.
 - [ ] Render stage progress, recoverable errors, cancellation, and retry controls.
+- [ ] Display the actual ASR provider, model, revision, device, selection reason, fallback reason and
+  measured processing time from FastAPI-owned job data as read-only execution evidence.
 - [ ] Preserve transcript, retrieval, answer, and citation-seeking behavior after completion.
 
 ### P2.9 — Operational hardening
@@ -295,7 +297,9 @@ caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
 
 - PostgreSQL FTS, lexical retrieval, RRF, reranking, and temporal expansion.
 - OCR, scenes, frames, visual embeddings, VLM reasoning, and LangGraph.
-- Chapters, notes, flashcards, quizzes, provider-configuration UI, and AWS deployment.
+- Chapters, notes, flashcards, quizzes, interactive provider/model selection, editable fallback
+  profiles, cloud-consent controls, live pricing configuration, and AWS deployment. P2.8 may display
+  the provider decision that actually ran; Phase 8 owns changing that policy from the UI.
 
 ## Decision log
 
@@ -341,3 +345,7 @@ caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
   source intervals and tool revisions; and clean temporary media after successful processing by
   default. Keep the runtime unwired until P2.7 and stop before P2.6's faster-whisper/CTranslate2
   compatibility and model/device setup gate.
+- 2026-09-07: Keep Phase 2 provider presentation read-only: P2.8 will expose which ASR provider,
+  model, revision and device actually ran plus its selection/fallback reason. Phase 8 owns the
+  interactive automatic/manual policy, editable fallback chains, explicit cloud consent and
+  pricing-aware provider configuration.
