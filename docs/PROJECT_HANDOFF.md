@@ -173,7 +173,7 @@ and output duration/size are both verified; normalized audio is mono 16 kHz `pcm
 artifact retains `[0, duration_ms)` plus acquisition and tool-revision provenance. Failures and
 cancellation clean immediately, while successful artifacts are removed after later processing by
 default. The real FFmpeg 9.0.1 integration gate passed on a generated one-second fixture. The default
-backend suite passes 397 tests with three database and one media opt-in test skipped and 100%
+backend suite passes 400 tests with three database and one media opt-in test skipped and 100%
 statement/branch coverage. P2.6 is next and must stop for explicit faster-whisper/CTranslate2
 compatibility plus model/device setup decisions before any dependency or model installation.
 
