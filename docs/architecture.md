@@ -66,6 +66,46 @@ Provider availability is reported by the import/question operation that requires
 database readiness. A missing embedder or generator produces a stable, correlated API failure; it
 does not silently change the model or answer quality.
 
+## Planned Phase 8 provider policy boundary
+
+Phase 8 adds product-facing provider configuration without moving provider policy into Next.js.
+FastAPI will expose capability, health and versioned profile schemas through OpenAPI; the frontend
+will consume the generated types, select a profile and render the resulting decision. Provider SDK
+clients, credentials, availability probes, compatibility rules, quota state, fallback resolution
+and cost calculations remain Python responsibilities.
+
+The policy supports three explicit modes:
+
+1. `automatic_local_only` is the default and considers only healthy, compatible local providers.
+2. `automatic_cloud_permitted` may consider cloud providers only when the request includes current,
+   explicit cloud-processing consent.
+3. `manual` pins a provider/model and either disables fallback or supplies an ordered compatible
+   fallback chain.
+
+Cloud consent is independent from the selected mode, defaults to denied and cannot be inferred from
+configured credentials. Losing a local provider, exhausting a quota or timing out never authorizes
+uploading source media or evidence. Strict manual selection returns a recoverable error rather than
+substituting a provider silently. Evaluation profiles pin the complete provider configuration and
+disable automatic fallback.
+
+Every provider run produces a durable decision record containing the requested mode/profile/model,
+the resolved provider/model/revision/device, language and capability requirements, the selection
+reason, ordered fallback attempts and reasons, input duration, processing time, estimated or actual
+cost when reported, and pricing provenance (`source_url`, billing unit, currency and `verified_at`).
+Pricing metadata is explanatory and can be marked stale; the provider's bill remains authoritative.
+
+The UI presents model capabilities and the durable decision record. Provider cards show local or
+cloud execution, language and code-switching coverage, privacy implications, expected quality,
+measured speed, hardware needs, timestamp/confidence/diarization support and current availability.
+Job details distinguish requested from actual execution and explain every fallback. None of these
+presentation paths may discard or rewrite the original half-open timestamp intervals, source IDs,
+cue links or evidence provenance.
+
+Phase 2 prepares only the execution evidence needed by this later policy: its progress UI may show
+the actual ASR provider, model, revision, device, timing and fallback reason as read-only data. The
+interactive selector, editable profiles, cloud-consent controls and pricing presentation remain
+Phase 8 work.
+
 ## Phase 1 transcript path
 
 1. FastAPI canonicalizes an allowlisted YouTube URL and retrieves safe metadata and captions only.
