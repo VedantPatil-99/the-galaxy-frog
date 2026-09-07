@@ -261,9 +261,21 @@ caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
 
 ### P2.6 — Faster-whisper provider
 
-- [ ] Prove faster-whisper and CTranslate2 compatibility with Python 3.14.7 before locking packages.
-- [ ] Add a provider-independent transcription protocol and faster-whisper adapter.
-- [ ] Support explicit CPU/GPU configuration and store model, revision, language, and confidence.
+- [x] Prove faster-whisper and CTranslate2 compatibility with Python 3.14.7 before locking packages.
+- [x] Add a provider-independent transcription protocol and faster-whisper adapter.
+- [x] Support explicit CPU/GPU configuration and store model, revision, language, and confidence.
+
+Python 3.14.7 imports and executes faster-whisper 1.2.1 with CTranslate2 4.8.2. The local provider
+loads lazily, limits concurrency, enables multilingual detection and word timestamps, converts
+provider intervals outward to bounded integer milliseconds, records per-cue mean word confidence,
+and returns the exact provider/model revision, requested device/compute mode, detected language,
+language confidence, source lineage, fallback reason, and processing time. The multilingual
+`small` model is pinned to Hugging Face commit `536b0662742c02347bc0e980a01041f333bce120`.
+
+The opt-in live probe transcribed the 11-second JFK fixture on CPU `int8` into two timestamped cues
+in 4.88 seconds. The RTX 2050 CUDA path intentionally failed as `ASR_DEVICE_UNAVAILABLE` instead of
+silently falling back because Windows cannot yet load `cublas64_12.dll`. P2.7 waits for the manual
+CUDA 12 cuBLAS and cuDNN 9 runtime gate documented in the runbook.
 
 ### P2.7 — Resumable caption-to-ASR fallback
 
@@ -353,3 +365,7 @@ caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
   recurring-free cloud ASR candidate to benchmark in Phase 8. Reverify its quota and pricing at
   implementation time, require explicit cloud-processing consent, and keep it out of the local
   Phase 2 faster-whisper path.
+- 2026-09-07: Complete the P2.6 provider implementation with faster-whisper 1.2.1, CTranslate2
+  4.8.2, an immutable multilingual `small` model revision, bounded GPU/CPU configuration, and
+  timestamp/confidence provenance. The CPU `int8` live probe passes; keep GPU primary and stop
+  before P2.7 until the user-managed CUDA 12 cuBLAS and cuDNN 9 runtime passes locally.
