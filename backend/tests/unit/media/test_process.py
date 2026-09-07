@@ -9,6 +9,39 @@ import pytest
 from galaxy_frog.adapters.media.process import AsyncSubprocessRunner, CommandTimedOut
 
 
+class WaitingProcess:
+    def __init__(self) -> None:
+        self.stdout = asyncio.StreamReader()
+        self.stderr = asyncio.StreamReader()
+        self.stdout.feed_eof()
+        self.stderr.feed_eof()
+        self.returncode: int | None = None
+        self.killed = False
+        self.waiting = asyncio.Event()
+        self.finished = asyncio.Event()
+
+    async def wait(self) -> int:
+        self.waiting.set()
+        await self.finished.wait()
+        assert self.returncode is not None
+        return self.returncode
+
+    def kill(self) -> None:
+        self.killed = True
+        self.returncode = -9
+        self.finished.set()
+
+
+def install_waiting_process(
+    monkeypatch: pytest.MonkeyPatch,
+    process: WaitingProcess,
+) -> None:
+    async def create_subprocess_exec(*_arguments: str, **_options: object) -> object:
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", create_subprocess_exec)
+
+
 @pytest.mark.asyncio
 async def test_runner_returns_exit_status_and_bounded_output(tmp_path: Path) -> None:
     runner = AsyncSubprocessRunner(max_output_bytes=4)
@@ -49,30 +82,44 @@ async def test_runner_returns_nonzero_process_status(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_runner_kills_a_process_at_its_deadline(tmp_path: Path) -> None:
-    with pytest.raises(CommandTimedOut, match=Path(sys.executable).name):
+async def test_runner_kills_a_process_at_its_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = WaitingProcess()
+    install_waiting_process(monkeypatch, process)
+
+    with pytest.raises(CommandTimedOut, match="ffmpeg"):
         await AsyncSubprocessRunner().run(
-            (sys.executable, "-c", "import time; time.sleep(10)"),
+            ("ffmpeg", "-version"),
             cwd=tmp_path,
-            timeout_seconds=0.05,
+            timeout_seconds=0.01,
         )
+
+    assert process.killed is True
 
 
 @pytest.mark.asyncio
-async def test_runner_kills_a_process_when_the_caller_is_cancelled(tmp_path: Path) -> None:
+async def test_runner_kills_a_process_when_the_caller_is_cancelled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = WaitingProcess()
+    install_waiting_process(monkeypatch, process)
     task = asyncio.create_task(
         AsyncSubprocessRunner().run(
-            (sys.executable, "-c", "import time; time.sleep(10)"),
+            ("ffmpeg", "-version"),
             cwd=tmp_path,
             timeout_seconds=5,
         )
     )
-    await asyncio.sleep(0.05)
+    await process.waiting.wait()
 
     task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
         await task
+    assert process.killed is True
 
 
 @pytest.mark.parametrize(
