@@ -349,3 +349,7 @@ caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
   model, revision and device actually ran plus its selection/fallback reason. Phase 8 owns the
   interactive automatic/manual policy, editable fallback chains, explicit cloud consent and
   pricing-aware provider configuration.
+- 2026-09-07: Select Cloudflare Workers AI `@cf/openai/whisper-large-v3-turbo` as the first
+  recurring-free cloud ASR candidate to benchmark in Phase 8. Reverify its quota and pricing at
+  implementation time, require explicit cloud-processing consent, and keep it out of the local
+  Phase 2 faster-whisper path.
