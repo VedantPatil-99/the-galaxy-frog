@@ -177,6 +177,14 @@ backend suite passes 400 tests with three database and one media opt-in test ski
 statement/branch coverage. P2.6 is next and must stop for explicit faster-whisper/CTranslate2
 compatibility plus model/device setup decisions before any dependency or model installation.
 
+Provider presentation remains intentionally split across phases. P2.8 may show read-only execution
+evidence from FastAPI—actual ASR provider, model, revision, device, selection/fallback reason and
+processing time—but Phase 2 does not add an interactive provider selector. Phase 8 owns the complete
+automatic-local, automatic-cloud-permitted and manual selection modes, editable fallback chains,
+explicit cloud-processing consent, capability/health/pricing presentation and the durable provider
+decision trail. Cloud consent defaults to denied, a strict manual choice never falls back silently,
+and every provider path must retain the original timestamp intervals and evidence provenance.
+
 ## Step 2 technology requirements
 
 Frontend:
