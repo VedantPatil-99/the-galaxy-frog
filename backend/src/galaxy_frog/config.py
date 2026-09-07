@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     media_retain_on_success: bool = False
     ffmpeg_executable: str = "ffmpeg"
     ffprobe_executable: str = "ffprobe"
+    asr_provider: Literal["faster-whisper"] = "faster-whisper"
+    asr_model: str = "small"
+    asr_model_revision: str = "Systran/faster-whisper-small"
+    asr_device: Literal["cpu", "cuda"] = "cuda"
+    asr_compute_type: Literal["int8", "int8_float16", "float16", "float32"] = "int8_float16"
+    asr_max_concurrency: int = Field(default=1, ge=1, le=4)
 
     @field_validator("database_url")
     @classmethod
@@ -125,6 +131,17 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return executable
 
+    @field_validator("asr_model", "asr_model_revision")
+    @classmethod
+    def validate_asr_model_identity(cls, value: str) -> str:
+        """Require explicit non-empty model identity and provenance."""
+
+        identity = value.strip()
+        if not identity:
+            msg = "ASR model identity must not be blank"
+            raise ValueError(msg)
+        return identity
+
     @model_validator(mode="after")
     def validate_qstash_configuration(self) -> Self:
         """Keep hosted dispatch optional but complete when explicitly selected."""
@@ -140,5 +157,14 @@ class Settings(BaseSettings):
         missing = [name for name, value in required.items() if value is None]
         if missing:
             msg = f"QStash dispatch requires: {', '.join(missing)}"
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def validate_asr_device_compute_pair(self) -> Self:
+        """Reject CTranslate2 compute modes that are invalid on the selected device."""
+
+        if self.asr_device == "cpu" and self.asr_compute_type in {"float16", "int8_float16"}:
+            msg = "CPU ASR does not support float16 compute; use int8 or float32"
             raise ValueError(msg)
         return self
