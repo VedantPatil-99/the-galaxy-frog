@@ -27,6 +27,17 @@ async def test_runner_returns_exit_status_and_bounded_output(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_runner_drains_output_after_the_retained_limit(tmp_path: Path) -> None:
+    result = await AsyncSubprocessRunner(max_output_bytes=4).run(
+        (sys.executable, "-c", "print('x' * 100000, end='')"),
+        cwd=tmp_path,
+        timeout_seconds=5,
+    )
+
+    assert result.stdout == "xxxx"
+
+
+@pytest.mark.asyncio
 async def test_runner_returns_nonzero_process_status(tmp_path: Path) -> None:
     result = await AsyncSubprocessRunner().run(
         (sys.executable, "-c", "raise SystemExit(7)"),

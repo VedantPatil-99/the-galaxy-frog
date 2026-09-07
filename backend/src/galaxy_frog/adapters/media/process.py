@@ -67,13 +67,14 @@ class AsyncSubprocessRunner:
             raise RuntimeError("subprocess pipes were not created")
         stdout_task = asyncio.create_task(self._read_bounded(process.stdout))
         stderr_task = asyncio.create_task(self._read_bounded(process.stderr))
+        wait_task = asyncio.create_task(process.wait())
         try:
-            await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
+            await asyncio.wait_for(asyncio.shield(wait_task), timeout=timeout_seconds)
         except TimeoutError as exc:
-            await self._terminate(process, stdout_task, stderr_task)
+            await self._terminate(process, wait_task, stdout_task, stderr_task)
             raise CommandTimedOut(command[0]) from exc
         except asyncio.CancelledError:
-            await self._terminate(process, stdout_task, stderr_task)
+            await self._terminate(process, wait_task, stdout_task, stderr_task)
             raise
 
         stdout, stderr = await asyncio.gather(stdout_task, stderr_task)
@@ -93,10 +94,11 @@ class AsyncSubprocessRunner:
     @staticmethod
     async def _terminate(
         process: asyncio.subprocess.Process,
+        wait_task: asyncio.Task[int],
         stdout_task: asyncio.Task[str],
         stderr_task: asyncio.Task[str],
     ) -> None:
-        if process.returncode is None:
+        if process.returncode is None:  # pragma: no branch - normal timeout/cancel state
             process.kill()
-        await process.wait()
+        await wait_task
         await asyncio.gather(stdout_task, stderr_task)
