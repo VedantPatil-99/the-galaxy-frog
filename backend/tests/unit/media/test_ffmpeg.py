@@ -59,6 +59,7 @@ class MediaRunner:
             (), 0, "ffmpeg version 9.0.1-full_build Copyright\n", ""
         )
         self.normalize_result = CommandResult((), 0, "", "")
+        self.probe_return_code = 0
         self.failure_for: str | None = None
         self.failure: BaseException | None = None
         self.output_bytes = b"normalized"
@@ -79,7 +80,7 @@ class MediaRunner:
             document = (
                 self.output_probe if Path(command[-1]).name == "audio.wav" else self.source_probe
             )
-            return CommandResult(command, 0, document, "")
+            return CommandResult(command, self.probe_return_code, document, "probe failed")
         if command[1:] == ("-version",):
             return replace(self.version_result, arguments=command)
         await asyncio.to_thread(Path(command[-1]).write_bytes, self.output_bytes)
@@ -231,6 +232,21 @@ async def test_normalize_rejects_unsuccessful_tool_results(
     assert captured.value.code is code
 
 
+@pytest.mark.asyncio
+async def test_normalize_rejects_a_nonzero_probe_result(tmp_path: Path) -> None:
+    runner = MediaRunner()
+    runner.probe_return_code = 1
+
+    with pytest.raises(AudioAcquisitionError) as captured:
+        await FfmpegAudioNormalizer(runner=runner).normalize(
+            source(tmp_path),
+            tmp_path / "audio.wav",
+            LIMITS,
+        )
+
+    assert captured.value.code is AudioAcquisitionErrorCode.PROBE_FAILED
+
+
 @pytest.mark.parametrize(
     ("output_bytes", "max_output_bytes", "code"),
     [
@@ -334,6 +350,7 @@ async def test_normalize_rechecks_the_output_duration(tmp_path: Path) -> None:
     [
         "not json",
         "[]",
+        json.dumps({"format": {}}),
         json.dumps({"streams": [], "format": {}}),
         json.dumps({"streams": ["invalid"], "format": {}}),
         probe_payload(duration="nan"),

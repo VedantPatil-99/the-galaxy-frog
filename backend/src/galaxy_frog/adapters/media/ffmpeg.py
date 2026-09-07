@@ -187,11 +187,6 @@ class FfmpegAudioNormalizer:
                 "The local audio normalizer version could not be identified.",
             )
         revision = first_line.removeprefix(prefix).split(maxsplit=1)[0]
-        if not revision:
-            raise AudioAcquisitionError(
-                AudioAcquisitionErrorCode.NORMALIZATION_FAILED,
-                "The local audio normalizer version could not be identified.",
-            )
         return revision
 
     async def _run(

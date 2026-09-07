@@ -91,6 +91,29 @@ def test_prepare_translates_filesystem_failures_to_a_safe_error(tmp_path: Path) 
     assert captured.value.code is AudioAcquisitionErrorCode.WORKSPACE_ERROR
 
 
+def test_prepare_preserves_a_safe_error_from_stale_workspace_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = IsolatedMediaWorkspace(tmp_path / "media")
+    job_id = uuid4()
+    manager.path_for(job_id, 1).mkdir(parents=True)
+    failure = AudioAcquisitionError(
+        AudioAcquisitionErrorCode.WORKSPACE_ERROR,
+        "Cleanup failed.",
+    )
+
+    def fail(_workspace: Path) -> bool:
+        raise failure
+
+    monkeypatch.setattr(manager, "remove", fail)
+
+    with pytest.raises(AudioAcquisitionError) as captured:
+        manager.prepare(job_id, 1)
+
+    assert captured.value is failure
+
+
 def test_remove_translates_filesystem_failures_to_a_safe_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -76,6 +76,7 @@ class FixtureDownloader:
 class FixtureNormalizer:
     def __init__(self) -> None:
         self.outside_path: Path | None = None
+        self.reuse_source_path = False
 
     async def normalize(
         self,
@@ -83,8 +84,8 @@ class FixtureNormalizer:
         output_path: Path,
         limits: AudioAcquisitionLimits,
     ) -> NormalizedAudio:
-        del source, limits
-        path = self.outside_path or output_path
+        del limits
+        path = source.path if self.reuse_source_path else self.outside_path or output_path
         await asyncio.to_thread(path.write_bytes, b"normalized")
         return NormalizedAudio(
             path=path.resolve(),
@@ -146,6 +147,19 @@ async def test_cleanup_retains_successful_audio_when_configured(tmp_path: Path) 
     artifact = await service.acquire(request())
 
     assert await service.cleanup(artifact) is False
+    assert artifact.path.exists()
+
+
+@pytest.mark.asyncio
+async def test_acquire_keeps_a_normalizer_output_that_reuses_the_source_path(
+    tmp_path: Path,
+) -> None:
+    normalizer = FixtureNormalizer()
+    normalizer.reuse_source_path = True
+
+    artifact = await acquirer(tmp_path, normalizer=normalizer).acquire(request())
+
+    assert artifact.path.name == "source.webm"
     assert artifact.path.exists()
 
 
@@ -275,3 +289,23 @@ async def test_cleanup_failure_does_not_hide_the_provider_failure(
         await service.acquire(request())
 
     assert captured.value is downloader.failure
+
+
+@pytest.mark.asyncio
+async def test_acquire_translates_a_source_cleanup_filesystem_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_unlink = Path.unlink
+
+    def fail_source_unlink(path: Path, *, missing_ok: bool = False) -> None:
+        if path.name == "source.webm":
+            raise OSError("locked")
+        original_unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", fail_source_unlink)
+
+    with pytest.raises(AudioAcquisitionError) as captured:
+        await acquirer(tmp_path).acquire(request())
+
+    assert captured.value.code is AudioAcquisitionErrorCode.WORKSPACE_ERROR
