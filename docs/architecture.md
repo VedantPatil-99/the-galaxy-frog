@@ -10,7 +10,8 @@ flowchart TD
     API --> CORE["Python domain modules"]
     CORE --> DATA["PostgreSQL + pgvector"]
     CORE --> PROVIDERS["Replaceable provider adapters"]
-    PROVIDERS --> YOUTUBE["YouTube metadata + captions<br>no media download"]
+    PROVIDERS --> YOUTUBE["YouTube metadata + captions"]
+    PROVIDERS --> MEDIA["Bounded yt-dlp + FFmpeg audio"]
     PROVIDERS --> OLLAMA["User-managed Ollama<br>BGE-M3 + Qwen3 4B"]
 ```
 
@@ -107,3 +108,28 @@ The durable stage vocabulary is deliberately limited to Phase 2 ingestion work. 
 identity and will preserve every transcript cue's half-open millisecond interval and source
 provenance when caption-to-ASR fallback is added; it does not introduce OCR, visual retrieval,
 hybrid retrieval, reranking, or LangGraph.
+
+## Phase 2 bounded audio foundation
+
+P2.5 adds the local media boundary without activating transcription or changing the HTTP contract:
+
+1. An audio request cannot exist without a durable job/attempt, canonical source, expected duration,
+   and an explicit `captions_unavailable` or `captions_unusable` fallback reason.
+2. A local acquirer caps the complete operation, including concurrency wait, download, inspection,
+   and normalization, with one deadline and one shared semaphore.
+3. Every attempt owns only `tmp/media/{job_id}/attempt-{attempt}`. Cleanup validates this exact shape
+   beneath the configured root before recursive deletion and never accepts a provider-returned path
+   outside the attempt directory.
+4. yt-dlp receives an argument array, single-video mode, duration filter, source-size ceiling,
+   bounded retries/socket timeout, and an output template controlled by the worker.
+5. ffprobe checks source duration and size before FFmpeg emits one mono 16 kHz `pcm_s16le` WAV;
+   ffprobe then verifies codec, sample rate, channels, duration, and size again.
+6. The resulting artifact preserves canonical source identity, fallback reason, the half-open
+   `[0, duration_ms)` interval, acquisition time, and yt-dlp/FFmpeg revisions.
+7. Failed or cancelled attempts clean their workspace immediately. After later transcription
+   succeeds, cleanup removes the successful artifact unless explicit retention is configured.
+
+The worker can compose this provider-neutral `AudioAcquirer`, but the current caption handler does
+not call it. P2.6 owns the transcription protocol/provider, and P2.7 owns the persisted
+caption-to-audio-to-ASR transition. Next.js remains presentation-only and receives no media paths or
+provider configuration.
