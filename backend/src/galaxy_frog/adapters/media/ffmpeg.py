@@ -132,6 +132,11 @@ class FfmpegAudioNormalizer:
                 AudioAcquisitionErrorCode.DURATION_LIMIT_EXCEEDED,
                 "The normalized audio duration exceeds the configured limit.",
             )
+        if abs(output_probe.duration_ms - source_probe.duration_ms) > 1000:
+            raise AudioAcquisitionError(
+                AudioAcquisitionErrorCode.NORMALIZATION_FAILED,
+                "The normalized audio duration does not match the source interval.",
+            )
         return NormalizedAudio(
             path=resolved_output,
             duration_ms=output_probe.duration_ms,

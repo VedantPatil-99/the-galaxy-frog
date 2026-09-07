@@ -114,7 +114,9 @@ class LocalAudioAcquirer:
 
         if self._retain_on_success:
             return False
-        return await asyncio.to_thread(self._workspaces.remove, artifact.path.parent)
+        workspace = self._workspaces.path_for(artifact.job_id, artifact.attempt)
+        self._require_direct_child(artifact.path, workspace)
+        return await asyncio.to_thread(self._workspaces.remove, workspace)
 
     async def _cleanup_failure(self, workspace: Path) -> None:
         with suppress(AudioAcquisitionError):

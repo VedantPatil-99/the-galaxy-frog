@@ -1,6 +1,7 @@
 """Behavior coverage for bounded local audio acquisition orchestration."""
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -148,6 +149,20 @@ async def test_cleanup_retains_successful_audio_when_configured(tmp_path: Path) 
 
     assert await service.cleanup(artifact) is False
     assert artifact.path.exists()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_rejects_an_artifact_path_owned_by_a_different_job(tmp_path: Path) -> None:
+    service = acquirer(tmp_path)
+    artifact = await service.acquire(request())
+    mismatched = replace(artifact, job_id=uuid4())
+
+    with pytest.raises(AudioAcquisitionError) as captured:
+        await service.cleanup(mismatched)
+
+    assert captured.value.code is AudioAcquisitionErrorCode.WORKSPACE_ERROR
+    assert artifact.path.exists()
+    assert await service.cleanup(artifact) is True
 
 
 @pytest.mark.asyncio

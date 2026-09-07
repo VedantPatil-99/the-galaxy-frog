@@ -345,6 +345,21 @@ async def test_normalize_rechecks_the_output_duration(tmp_path: Path) -> None:
     assert captured.value.code is AudioAcquisitionErrorCode.DURATION_LIMIT_EXCEEDED
 
 
+@pytest.mark.asyncio
+async def test_normalize_rejects_a_materially_changed_source_interval(tmp_path: Path) -> None:
+    runner = MediaRunner()
+    runner.output_probe = probe_payload(duration="3")
+
+    with pytest.raises(AudioAcquisitionError) as captured:
+        await FfmpegAudioNormalizer(runner=runner).normalize(
+            source(tmp_path),
+            tmp_path / "audio.wav",
+            LIMITS,
+        )
+
+    assert captured.value.code is AudioAcquisitionErrorCode.NORMALIZATION_FAILED
+
+
 @pytest.mark.parametrize(
     "document",
     [

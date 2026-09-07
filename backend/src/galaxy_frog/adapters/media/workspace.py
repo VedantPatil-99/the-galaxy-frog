@@ -31,6 +31,8 @@ class IsolatedMediaWorkspace:
         workspace = self.path_for(job_id, attempt)
         try:
             self._root.mkdir(parents=True, exist_ok=True)
+            if not self._is_owned_attempt(workspace.resolve()):
+                raise self._workspace_error()
             if workspace.exists() or workspace.is_symlink():
                 self.remove(workspace)
             workspace.mkdir(parents=True, exist_ok=False)

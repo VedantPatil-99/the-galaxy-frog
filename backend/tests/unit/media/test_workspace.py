@@ -114,6 +114,25 @@ def test_prepare_preserves_a_safe_error_from_stale_workspace_cleanup(
     assert captured.value is failure
 
 
+def test_prepare_rejects_a_workspace_that_resolves_outside_its_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = IsolatedMediaWorkspace(tmp_path / "media")
+    marker = tmp_path / "outside" / "marker.txt"
+
+    def reject(_path: Path) -> bool:
+        return False
+
+    monkeypatch.setattr(manager, "_is_owned_attempt", reject)
+
+    with pytest.raises(AudioAcquisitionError) as captured:
+        manager.prepare(uuid4(), 1)
+
+    assert captured.value.code is AudioAcquisitionErrorCode.WORKSPACE_ERROR
+    assert not marker.parent.exists()
+
+
 def test_remove_translates_filesystem_failures_to_a_safe_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
