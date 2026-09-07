@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     ffprobe_executable: str = "ffprobe"
     asr_provider: Literal["faster-whisper"] = "faster-whisper"
     asr_model: str = "small"
-    asr_model_revision: str = "Systran/faster-whisper-small"
+    asr_model_revision: str = "536b0662742c02347bc0e980a01041f333bce120"
     asr_device: Literal["cpu", "cuda"] = "cuda"
     asr_compute_type: Literal["int8", "int8_float16", "float16", "float32"] = "int8_float16"
     asr_max_concurrency: int = Field(default=1, ge=1, le=4)

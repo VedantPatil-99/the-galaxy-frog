@@ -31,7 +31,7 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("FFMPEG_EXECUTABLE", " C:/Tools/ffmpeg.exe ")
     monkeypatch.setenv("FFPROBE_EXECUTABLE", " C:/Tools/ffprobe.exe ")
     monkeypatch.setenv("ASR_MODEL", " small ")
-    monkeypatch.setenv("ASR_MODEL_REVISION", " Systran/faster-whisper-small ")
+    monkeypatch.setenv("ASR_MODEL_REVISION", " 536b0662742c02347bc0e980a01041f333bce120 ")
     monkeypatch.setenv("ASR_DEVICE", "cpu")
     monkeypatch.setenv("ASR_COMPUTE_TYPE", "int8")
     monkeypatch.setenv("ASR_MAX_CONCURRENCY", "1")
@@ -60,7 +60,7 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.ffprobe_executable == "C:/Tools/ffprobe.exe"
     assert settings.asr_provider == "faster-whisper"
     assert settings.asr_model == "small"
-    assert settings.asr_model_revision == "Systran/faster-whisper-small"
+    assert settings.asr_model_revision == "536b0662742c02347bc0e980a01041f333bce120"
     assert settings.asr_device == "cpu"
     assert settings.asr_compute_type == "int8"
     assert settings.asr_max_concurrency == 1
