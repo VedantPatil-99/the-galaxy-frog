@@ -1,5 +1,9 @@
 """Durable ingestion application contracts."""
 
+from galaxy_frog.application.ingestion.artifact_ports import (
+    AudioAssetRepository,
+    TranscriptionCheckpointRepository,
+)
 from galaxy_frog.application.ingestion.caption_stages import caption_ingestion_handlers
 from galaxy_frog.application.ingestion.create_job import (
     CreateIngestionJob,
@@ -25,6 +29,7 @@ from galaxy_frog.application.ingestion.runner import (
 from galaxy_frog.application.ingestion.worker import ClaimedJobRunner, IngestionWorker
 
 __all__ = [
+    "AudioAssetRepository",
     "ClaimedJobRunner",
     "CreateIngestionJob",
     "CreateIngestionJobResult",
@@ -41,6 +46,7 @@ __all__ = [
     "JobDispatcher",
     "StageContext",
     "StageResult",
+    "TranscriptionCheckpointRepository",
     "caption_ingestion_handlers",
     "ingestion_input_fingerprint",
 ]
