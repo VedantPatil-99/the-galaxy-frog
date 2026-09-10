@@ -1,5 +1,6 @@
 """Behavior coverage for the deterministic durable ingestion runner."""
 
+import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -243,6 +244,32 @@ async def test_stage_context_heartbeats_and_reads_cancellation() -> None:
     repo.job = None
     with pytest.raises(IngestionStageError, match="no longer exists"):
         await context.cancellation_requested()
+
+
+@pytest.mark.asyncio
+async def test_stage_context_keeps_long_operations_leased_and_cancels_on_lease_loss() -> None:
+    job = running_job()
+    repo = FakeRepository(job)
+    context = StageContext(repo, job.job_id, "worker-1", timedelta(milliseconds=15))
+
+    assert await context.run_with_heartbeats(asyncio.sleep(0.025, result="done")) == "done"
+    assert [call for call in repo.calls if call[0] == "heartbeat"]
+
+    completed = asyncio.get_running_loop().create_future()
+    completed.set_result("already done")
+    assert await context.run_with_heartbeats(completed) == "already done"
+
+    async def lose_lease(
+        _job_id: object,
+        _worker_id: str,
+        _lease_duration: timedelta,
+        **_kwargs: object,
+    ) -> IngestionJob:
+        raise RuntimeError("lease lost")
+
+    repo.heartbeat = lose_lease  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="lease lost"):
+        await context.run_with_heartbeats(asyncio.sleep(1))
 
 
 @pytest.mark.asyncio
