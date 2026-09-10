@@ -49,7 +49,10 @@ class MemoryRepository:
         metadata: SafeVideoMetadata,
         cues: tuple[TranscriptCue, ...],
         units: tuple[RetrievalUnit, ...],
+        *,
+        transcription_run_id: UUID | None = None,
     ) -> VideoRecord:
+        del transcription_run_id
         self.record = VideoRecord(uuid4(), metadata)
         self.transcript = TranscriptRecord(self.record, cues, units)
         return self.record

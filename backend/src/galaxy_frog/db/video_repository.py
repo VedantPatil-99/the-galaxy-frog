@@ -7,8 +7,15 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from galaxy_frog.db.models import RetrievalUnitCueRow, RetrievalUnitRow, TranscriptCueRow, VideoRow
-from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
+from galaxy_frog.db.ingestion_artifacts import PostgresTranscriptionCheckpointRepository
+from galaxy_frog.db.models import (
+    RetrievalUnitCueRow,
+    RetrievalUnitRow,
+    TranscriptCueRow,
+    TranscriptionRunRow,
+    VideoRow,
+)
+from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue, TranscriptOrigin
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
     SafeVideoMetadata,
@@ -44,10 +51,15 @@ class SqlAlchemyVideoRepository:
         metadata: SafeVideoMetadata,
         cues: tuple[TranscriptCue, ...],
         units: tuple[RetrievalUnit, ...],
+        *,
+        transcription_run_id: UUID | None = None,
     ) -> VideoRecord:
         existing = await self.find_by_source(metadata.reference)
         if existing is not None:
             return existing
+        cue_run_ids = {cue.transcription_run_id for cue in cues if cue.transcription_run_id}
+        if cue_run_ids != ({transcription_run_id} if transcription_run_id else set()):
+            raise ValueError("transcript cues and transcription run must have matching provenance")
         now = datetime.now(UTC)
         row = VideoRow(
             id=uuid4(),
@@ -67,9 +79,13 @@ class SqlAlchemyVideoRepository:
             TranscriptCueRow(
                 id=cue.cue_id,
                 video_id=row.id,
+                origin=cue.origin,
                 track_id=cue.track_id,
                 language_code=cue.language_code,
                 caption_kind=cue.caption_kind,
+                transcription_run_id=cue.transcription_run_id,
+                confidence=cue.confidence,
+                confidence_method=cue.confidence_method,
                 source_order=cue.source_order,
                 start_ms=cue.start_ms,
                 end_ms=cue.end_ms,
@@ -146,13 +162,17 @@ class SqlAlchemyVideoRepository:
             TranscriptCue(
                 cue_id=row.id,
                 source=video.metadata.reference,
-                track_id=row.track_id,
                 language_code=row.language_code,
-                caption_kind=CaptionKind(row.caption_kind),
                 source_order=row.source_order,
                 start_ms=row.start_ms,
                 end_ms=row.end_ms,
                 text=row.text,
+                origin=TranscriptOrigin(row.origin),
+                track_id=row.track_id,
+                caption_kind=(CaptionKind(row.caption_kind) if row.caption_kind else None),
+                transcription_run_id=row.transcription_run_id,
+                confidence=row.confidence,
+                confidence_method=row.confidence_method,
             )
             for row in cue_rows
         )
@@ -166,7 +186,28 @@ class SqlAlchemyVideoRepository:
             )
             for row in unit_rows
         )
-        return TranscriptRecord(video=video, cues=cues, units=units)
+        transcription_run_ids = {
+            cue.transcription_run_id for cue in cues if cue.transcription_run_id is not None
+        }
+        if len(transcription_run_ids) > 1:
+            raise ValueError("one persisted transcript cannot mix transcription runs")
+        transcription = None
+        if transcription_run_ids:
+            run_id = next(iter(transcription_run_ids))
+            run_row = await self._session.get(TranscriptionRunRow, run_id)
+            if run_row is None:
+                raise ValueError("the transcript references a missing transcription run")
+            transcription = await PostgresTranscriptionCheckpointRepository(self._session).get(
+                run_row.job_id
+            )
+            if transcription is None or transcription.run_id != run_id:
+                raise ValueError("the transcript transcription run could not be restored")
+        return TranscriptRecord(
+            video=video,
+            cues=cues,
+            units=units,
+            transcription=transcription,
+        )
 
     @staticmethod
     def _video_record(row: VideoRow) -> VideoRecord:

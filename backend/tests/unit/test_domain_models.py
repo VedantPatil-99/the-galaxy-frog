@@ -56,6 +56,7 @@ def test_retrieved_evidence_rejects_invalid_scores(score: float) -> None:
         {"start_ms": -1},
         {"start_ms": 1, "end_ms": 1},
         {"text": ""},
+        {"language_code": " "},
     ],
 )
 def test_transcript_cue_rejects_broken_provenance(arguments: dict[str, object]) -> None:
@@ -136,6 +137,7 @@ def test_transcript_cue_normalizes_asr_evidence_without_claiming_caption_provena
         {"confidence": float("nan")},
         {"confidence": 0.5, "confidence_method": None},
         {"confidence": None, "confidence_method": "unknown"},
+        {"origin": "unknown"},
     ],
 )
 def test_transcript_cue_rejects_mixed_or_invalid_origin_provenance(
