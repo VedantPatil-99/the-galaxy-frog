@@ -190,9 +190,10 @@ export ASR_COMPUTE_TYPE=int8_float16
 uv run --directory backend pytest tests/integration/test_asr_provider.py --no-cov -s
 ```
 
-The same test passed on CPU `int8` with two exact timestamped cues in 4.88 seconds. The first GPU
-attempt returned stable `ASR_DEVICE_UNAVAILABLE` because `cublas64_12.dll` was absent. Do not add an
-automatic CPU fallback here: P2.7 owns the durable, observable fallback policy.
+The same test passed on CPU `int8` with two exact timestamped cues in 4.88 seconds. After CUDA 12.8.2
+and cuDNN 9.26 were installed, it passed on the RTX 2050 using CUDA `int8_float16` with one bounded
+cue in 31.72 seconds. Do not add an implicit CPU fallback: P2.7 owns the durable, observable fallback
+policy.
 
 ## API contract workflow
 

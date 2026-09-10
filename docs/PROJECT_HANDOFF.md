@@ -31,7 +31,7 @@ evidence and produce timestamp-grounded answers.
 - P2.3 — Job API and generated contracts: complete
 - P2.4 — Local and optional QStash dispatch adapters: complete
 - P2.5 — Bounded local audio acquisition: complete
-- P2.6 — Faster-whisper provider: implementation complete; GPU runtime verification pending
+- P2.6 — Faster-whisper provider: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -75,8 +75,8 @@ evidence and produce timestamp-grounded answers.
 - Multilingual `small` model: Hugging Face revision
   `536b0662742c02347bc0e980a01041f333bce120` (download and SHA-256 verified 2026-09-07)
 - CPU ASR: `int8`, 11-second speech fixture produced two timestamped cues in 4.88 seconds
-- GPU ASR: pending user-managed CUDA 12 cuBLAS and cuDNN 9; current failure is missing
-  `cublas64_12.dll`
+- GPU ASR: CUDA 12.8.2 and cuDNN 9.26, `int8_float16`; 11-second speech fixture produced one
+  timestamped cue in 31.72 seconds on the RTX 2050
 - Preferred command shell: Git Bash
 
 Docker was not required for Step 2. Step 3A uses Docker Desktop with the WSL 2 backend for local
@@ -190,11 +190,10 @@ caption-fallback reason, provider/model revision, explicit device/compute mode, 
 language confidence, cue confidence method, and processing time. The adapter loads the immutable
 multilingual `small` model lazily, limits concurrency, enables VAD and word timestamps, and never
 silently changes devices. Its opt-in live test passed on CPU `int8` with two timestamped cues from an
-11-second speech fixture in 4.88 seconds. CUDA `int8_float16` reached the RTX 2050 but correctly
-returned `ASR_DEVICE_UNAVAILABLE` because `cublas64_12.dll` is not installed or visible on `PATH`.
+11-second speech fixture in 4.88 seconds. On 2026-09-10, the user installed CUDA 12.8.2 and cuDNN
+9.26 and the CUDA `int8_float16` probe passed on the RTX 2050 with one bounded cue in 31.72 seconds.
 The default backend suite passes 466 tests with five opt-in integrations skipped and 100% statement
-and branch coverage. P2.7 must not start until the user installs CUDA 12 cuBLAS and cuDNN 9 and the
-same live probe passes on the GPU.
+and branch coverage. P2.6 is complete and P2.7 is next.
 
 Provider presentation remains intentionally split across phases. P2.8 may show read-only execution
 evidence from FastAPI—actual ASR provider, model, revision, device, selection/fallback reason and

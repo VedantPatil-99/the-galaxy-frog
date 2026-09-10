@@ -273,9 +273,9 @@ language confidence, source lineage, fallback reason, and processing time. The m
 `small` model is pinned to Hugging Face commit `536b0662742c02347bc0e980a01041f333bce120`.
 
 The opt-in live probe transcribed the 11-second JFK fixture on CPU `int8` into two timestamped cues
-in 4.88 seconds. The RTX 2050 CUDA path intentionally failed as `ASR_DEVICE_UNAVAILABLE` instead of
-silently falling back because Windows cannot yet load `cublas64_12.dll`. P2.7 waits for the manual
-CUDA 12 cuBLAS and cuDNN 9 runtime gate documented in the runbook.
+in 4.88 seconds. After the user installed CUDA 12.8.2 and cuDNN 9.26, the same pinned multilingual
+model passed on the RTX 2050 with CUDA `int8_float16`, producing one bounded cue in 31.72 seconds.
+The local GPU runtime gate is complete and P2.7 may begin.
 
 ### P2.7 — Resumable caption-to-ASR fallback
 
@@ -365,7 +365,7 @@ CUDA 12 cuBLAS and cuDNN 9 runtime gate documented in the runbook.
   recurring-free cloud ASR candidate to benchmark in Phase 8. Reverify its quota and pricing at
   implementation time, require explicit cloud-processing consent, and keep it out of the local
   Phase 2 faster-whisper path.
-- 2026-09-07: Complete the P2.6 provider implementation with faster-whisper 1.2.1, CTranslate2
+- 2026-09-10: Complete P2.6 with faster-whisper 1.2.1, CTranslate2
   4.8.2, an immutable multilingual `small` model revision, bounded GPU/CPU configuration, and
-  timestamp/confidence provenance. The CPU `int8` live probe passes; keep GPU primary and stop
-  before P2.7 until the user-managed CUDA 12 cuBLAS and cuDNN 9 runtime passes locally.
+  timestamp/confidence provenance. CPU `int8` and RTX 2050 CUDA `int8_float16` live probes pass
+  after the user-managed CUDA 12.8.2 and cuDNN 9.26 installation. Keep GPU primary for P2.7.
