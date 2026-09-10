@@ -112,7 +112,10 @@ class MemoryVideoRepository:
         metadata: SafeVideoMetadata,
         cues: tuple[TranscriptCue, ...],
         units: tuple[RetrievalUnit, ...],
+        *,
+        transcription_run_id: UUID | None = None,
     ) -> VideoRecord:
+        del transcription_run_id
         self.video = VideoRecord(uuid4(), metadata)
         self.transcript = TranscriptRecord(self.video, cues, units)
         return self.video
@@ -217,9 +220,11 @@ async def test_caption_stages_checkpoint_and_complete_with_provenance() -> None:
     captions = await stages[job.stage].execute(job, stage_context)
     assert captions.next_stage is IngestionStage.PERSISTENCE
     assert captions.details == {
+        "transcript_origin": "caption",
         "track_id": "manual:en",
         "language_code": "en",
         "caption_kind": "manual",
+        "cue_count": 3,
     }
 
     job = replace(job, stage=captions.next_stage)
@@ -244,7 +249,7 @@ async def test_caption_stages_checkpoint_and_complete_with_provenance() -> None:
     assert completed.video_id == videos.video.video_id
     assert completed.details is not None
     assert completed.details["temporary_media_present"] is False
-    assert heartbeat_repository.heartbeats == 8
+    assert heartbeat_repository.heartbeats == 0
 
 
 @pytest.mark.asyncio
@@ -273,7 +278,7 @@ async def test_existing_import_skips_provider_work_and_resumes_at_embedding() ->
     )
     assert result.details is not None
     assert result.details["reused"] is True
-    assert repository.heartbeats == 2
+    assert repository.heartbeats == 0
 
 
 @pytest.mark.asyncio
@@ -337,12 +342,15 @@ async def test_caption_and_persisted_video_failures_remain_stage_specific() -> N
     stages = handlers(source, videos, search)
     caption_job = running_job(IngestionStage.CAPTION_RETRIEVAL)
     caption_context, _repository = context(caption_job)
-    with pytest.raises(IngestionStageError) as no_captions:
-        await stages[IngestionStage.CAPTION_RETRIEVAL].execute(
-            caption_job,
-            caption_context,
-        )
-    assert no_captions.value.code == VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE
+    no_captions = await stages[IngestionStage.CAPTION_RETRIEVAL].execute(
+        caption_job,
+        caption_context,
+    )
+    assert no_captions.next_stage is IngestionStage.AUDIO_ACQUISITION
+    assert no_captions.details == {
+        "transcript_origin": "asr",
+        "fallback_reason": "captions_unavailable",
+    }
 
     source.tracks = (CaptionTrack("manual:en", "en", CaptionKind.MANUAL),)
     source.failure = VideoSourceError(

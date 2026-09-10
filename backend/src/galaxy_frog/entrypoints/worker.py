@@ -17,6 +17,7 @@ from galaxy_frog.adapters.media import (
     LocalAudioAcquirer,
     YtDlpAudioDownloader,
 )
+from galaxy_frog.adapters.transcription import FasterWhisperTranscriptionProvider
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.application.ingestion import (
     IngestionJobRunner,
@@ -25,16 +26,25 @@ from galaxy_frog.application.ingestion import (
 )
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
+from galaxy_frog.db.ingestion_artifacts import (
+    PostgresAudioAssetRepository,
+    PostgresTranscriptionCheckpointRepository,
+)
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.media import AudioAcquirer, AudioAcquisitionLimits
+from galaxy_frog.domain.transcription import (
+    TranscriptionComputeType,
+    TranscriptionDevice,
+    TranscriptionProvider,
+)
 
 EngineFactory = Callable[[Settings], AsyncEngine]
 
 
 def build_audio_acquirer(settings: Settings) -> AudioAcquirer:
-    """Compose bounded local media providers without activating later ASR stages."""
+    """Compose bounded local media providers for explicit caption fallback."""
 
     runner = AsyncSubprocessRunner()
     limits = AudioAcquisitionLimits(
@@ -57,6 +67,18 @@ def build_audio_acquirer(settings: Settings) -> AudioAcquirer:
     )
 
 
+def build_transcription_provider(settings: Settings) -> TranscriptionProvider:
+    """Compose the exact configured local multilingual ASR provider."""
+
+    return FasterWhisperTranscriptionProvider(
+        model=settings.asr_model,
+        model_revision=settings.asr_model_revision,
+        device=TranscriptionDevice(settings.asr_device),
+        compute_type=TranscriptionComputeType(settings.asr_compute_type),
+        max_concurrency=settings.asr_max_concurrency,
+    )
+
+
 def resolve_worker_id(settings: Settings) -> str:
     """Return a stable explicit id or a unique local process identity."""
 
@@ -72,6 +94,8 @@ def build_worker(
     """Compose one worker session without exposing providers to domain code."""
 
     ingestion = PostgresIngestionRepository(session)
+    audio_assets = PostgresAudioAssetRepository(session)
+    transcription_checkpoints = PostgresTranscriptionCheckpointRepository(session)
     videos = SqlAlchemyVideoRepository(session)
     transcript_search = PgVectorTranscriptSearch(
         session=session,
@@ -89,6 +113,10 @@ def build_worker(
             sources=(YouTubeSource(),),
             videos=videos,
             transcript_search=transcript_search,
+            audio_acquirer=build_audio_acquirer(settings),
+            audio_assets=audio_assets,
+            transcription_checkpoints=transcription_checkpoints,
+            transcription_provider=build_transcription_provider(settings),
         ),
         worker_id=worker_id,
         lease_duration=lease_duration,

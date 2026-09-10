@@ -11,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from galaxy_frog.application.ingestion.worker import IngestionWorker
 from galaxy_frog.config import Settings
 from galaxy_frog.domain.media import AudioAcquirer
+from galaxy_frog.domain.transcription import (
+    TranscriptionComputeType,
+    TranscriptionDevice,
+    TranscriptionProvider,
+)
 from galaxy_frog.entrypoints import worker as worker_entrypoint
 
 
@@ -62,6 +67,24 @@ def test_build_audio_acquirer_composes_bounded_local_providers(tmp_path: Path) -
     )
 
     assert isinstance(result, AudioAcquirer)
+
+
+def test_build_transcription_provider_uses_the_explicit_model_and_device() -> None:
+    result = worker_entrypoint.build_transcription_provider(
+        settings(
+            asr_model="small",
+            asr_model_revision="immutable-revision",
+            asr_device="cuda",
+            asr_compute_type="int8_float16",
+            asr_max_concurrency=1,
+        )
+    )
+
+    assert isinstance(result, TranscriptionProvider)
+    assert result.spec.model == "small"
+    assert result.spec.model_revision == "immutable-revision"
+    assert result.spec.device is TranscriptionDevice.CUDA
+    assert result.spec.compute_type is TranscriptionComputeType.INT8_FLOAT16
 
 
 class RecordingEngine:
