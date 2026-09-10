@@ -9,6 +9,7 @@ export type IngestionJobResponse = components["schemas"]["IngestionJobResponse"]
 export type ReadinessResponse = components["schemas"]["ReadinessResponse"]
 export type TranscriptCueResponse = components["schemas"]["TranscriptCueResponse"]
 export type TranscriptResponse = components["schemas"]["TranscriptResponse"]
+export type TranscriptionRunResponse = components["schemas"]["TranscriptionRunResponse"]
 export type VideoResponse = components["schemas"]["VideoResponse"]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -159,15 +160,76 @@ export function isIngestionEventsResponse(
 }
 
 function isTranscriptCue(value: unknown): value is TranscriptCueResponse {
+  if (
+    !(
+      isRecord(value) &&
+      typeof value.cue_id === "string" &&
+      typeof value.source_order === "number" &&
+      typeof value.start_ms === "number" &&
+      typeof value.end_ms === "number" &&
+      typeof value.text === "string" &&
+      typeof value.language_code === "string" &&
+      (value.origin === "caption" || value.origin === "asr") &&
+      (value.track_id === null || typeof value.track_id === "string") &&
+      (value.caption_kind === null ||
+        value.caption_kind === "manual" ||
+        value.caption_kind === "automatic") &&
+      (value.transcription_run_id === null ||
+        typeof value.transcription_run_id === "string") &&
+      (value.confidence === null || typeof value.confidence === "number") &&
+      (value.confidence_method === null ||
+        typeof value.confidence_method === "string")
+    )
+  ) {
+    return false
+  }
+  const sourceMatches =
+    value.origin === "caption"
+      ? typeof value.track_id === "string" &&
+        (value.caption_kind === "manual" ||
+          value.caption_kind === "automatic") &&
+        value.transcription_run_id === null
+      : value.track_id === null &&
+        value.caption_kind === null &&
+        typeof value.transcription_run_id === "string"
+  const confidenceMatches =
+    value.confidence === null
+      ? value.confidence_method === null
+      : typeof value.confidence_method === "string"
+  return sourceMatches && confidenceMatches
+}
+
+function isTranscriptionRun(
+  value: unknown,
+): value is TranscriptionRunResponse {
   return (
     isRecord(value) &&
-    typeof value.cue_id === "string" &&
-    typeof value.source_order === "number" &&
-    typeof value.start_ms === "number" &&
-    typeof value.end_ms === "number" &&
-    typeof value.text === "string" &&
+    typeof value.run_id === "string" &&
+    typeof value.job_id === "string" &&
+    typeof value.audio_asset_id === "string" &&
+    typeof value.audio_attempt === "number" &&
+    (value.fallback_reason === "captions_unavailable" ||
+      value.fallback_reason === "captions_unusable") &&
+    typeof value.audio_start_ms === "number" &&
+    typeof value.audio_end_ms === "number" &&
+    typeof value.provider === "string" &&
+    typeof value.provider_revision === "string" &&
+    typeof value.model === "string" &&
+    typeof value.model_revision === "string" &&
+    (value.device === "cpu" || value.device === "cuda") &&
+    ["int8", "int8_float16", "float16", "float32"].includes(
+      String(value.compute_type),
+    ) &&
     typeof value.language_code === "string" &&
-    (value.caption_kind === "manual" || value.caption_kind === "automatic")
+    (value.language_confidence === null ||
+      typeof value.language_confidence === "number") &&
+    (value.language_confidence_method === null ||
+      typeof value.language_confidence_method === "string") &&
+    (value.language_confidence === null
+      ? value.language_confidence_method === null
+      : typeof value.language_confidence_method === "string") &&
+    typeof value.processing_seconds === "number" &&
+    typeof value.transcribed_at === "string"
   )
 }
 
@@ -196,7 +258,8 @@ export function isTranscriptResponse(value: unknown): value is TranscriptRespons
         typeof unit.end_ms === "number" &&
         typeof unit.text === "string" &&
         isStringArray(unit.cue_ids),
-    )
+    ) &&
+    (value.transcription === null || isTranscriptionRun(value.transcription))
   )
 }
 

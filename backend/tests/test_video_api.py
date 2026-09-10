@@ -3,6 +3,7 @@
 # pyright: reportPrivateUsage=false
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -24,7 +25,16 @@ from galaxy_frog.domain.generation.models import (
     GenerationCitation,
     GenerationDraft,
 )
+from galaxy_frog.domain.media import AudioFallbackReason
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
+from galaxy_frog.domain.transcription import (
+    TranscriptionCheckpoint,
+    TranscriptionComputeType,
+    TranscriptionCue,
+    TranscriptionDevice,
+    TranscriptionProviderSpec,
+    TranscriptionResult,
+)
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
@@ -169,9 +179,74 @@ async def test_import_read_question_and_reimport_flow(
         )
 
     assert detail.json()["index_ready"] is True
-    assert transcript.json()["cues"][0]["start_ms"] == 1000
+    transcript_body = transcript.json()
+    assert transcript_body["cues"][0]["start_ms"] == 1000
+    assert transcript_body["cues"][0]["origin"] == "caption"
+    assert transcript_body["cues"][0]["track_id"] == "manual:en"
+    assert transcript_body["transcription"] is None
     assert answer.json()["evidence"][0]["cue_ids"]
     assert answer.json()["evidence"][0]["modality"] == "transcript"
+
+
+def test_asr_transcript_response_exposes_safe_execution_provenance() -> None:
+    source = SourceReference(
+        VideoSourceKind.YOUTUBE,
+        "dQw4w9WgXcQ",
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    )
+    provider_cue = TranscriptionCue(
+        0,
+        0,
+        4000,
+        "नमस्ते।",
+        0.91,
+        "mean_word_probability",
+    )
+    result = TranscriptionResult(
+        job_id=uuid4(),
+        attempt=1,
+        source=source,
+        fallback_reason=AudioFallbackReason.CAPTIONS_UNAVAILABLE,
+        audio_start_ms=0,
+        audio_end_ms=4000,
+        spec=TranscriptionProviderSpec(
+            "faster-whisper",
+            "1.2.1",
+            "small",
+            "model-revision",
+            TranscriptionDevice.CUDA,
+            TranscriptionComputeType.INT8_FLOAT16,
+        ),
+        language_code="hi",
+        language_confidence=0.88,
+        language_confidence_method="provider_language_probability",
+        cues=(provider_cue,),
+        processing_seconds=1.25,
+        transcribed_at=datetime(2026, 9, 10, 12, tzinfo=UTC),
+    )
+    run_id = uuid4()
+    cue = TranscriptCue.from_transcription(run_id=run_id, result=result, cue=provider_cue)
+    unit = RetrievalUnit("e" * 64, 0, 4000, cue.text, (cue.cue_id,))
+    video = VideoRecord(uuid4(), SafeVideoMetadata(source, "ASR video", 4000))
+    checkpoint = TranscriptionCheckpoint(run_id, uuid4(), result)
+
+    response = video_routes._transcript_response(
+        TranscriptRecord(video, (cue,), (unit,), checkpoint),
+        index_ready=True,
+    )
+
+    assert response.cues[0].origin == "asr"
+    assert response.cues[0].caption_kind is None
+    assert response.cues[0].confidence == 0.91
+    assert response.transcription is not None
+    assert response.transcription.model == "small"
+    assert response.transcription.device == "cuda"
+    assert response.transcription.language_code == "hi"
+    assert response.transcription.fallback_reason == "captions_unavailable"
+    assert (response.transcription.audio_start_ms, response.transcription.audio_end_ms) == (
+        0,
+        4000,
+    )
 
 
 @pytest.mark.asyncio
