@@ -158,3 +158,28 @@ class AcquiredAudio:
         if self.acquired_at.tzinfo is None or self.acquired_at.utcoffset() is None:
             msg = "acquired_at must be timezone-aware"
             raise ValueError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class AudioAsset:
+    """Durable identity and lifecycle state for one acquired audio artifact."""
+
+    asset_id: UUID
+    audio: AcquiredAudio
+    deleted_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if self.deleted_at is not None and (
+            self.deleted_at.tzinfo is None or self.deleted_at.utcoffset() is None
+        ):
+            msg = "deleted_at must be timezone-aware"
+            raise ValueError(msg)
+        if self.deleted_at is not None and self.deleted_at < self.audio.acquired_at:
+            msg = "deleted_at must not precede acquired_at"
+            raise ValueError(msg)
+
+    @property
+    def is_available(self) -> bool:
+        """Return whether the durable record still points to retained local media."""
+
+        return self.deleted_at is None

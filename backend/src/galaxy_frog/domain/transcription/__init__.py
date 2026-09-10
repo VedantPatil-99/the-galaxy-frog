@@ -1,6 +1,7 @@
 """Provider-independent transcription contracts and provenance values."""
 
 from galaxy_frog.domain.transcription.models import (
+    TranscriptionCheckpoint,
     TranscriptionComputeType,
     TranscriptionCue,
     TranscriptionDevice,
@@ -13,6 +14,7 @@ from galaxy_frog.domain.transcription.models import (
 from galaxy_frog.domain.transcription.ports import TranscriptionProvider
 
 __all__ = [
+    "TranscriptionCheckpoint",
     "TranscriptionComputeType",
     "TranscriptionCue",
     "TranscriptionDevice",

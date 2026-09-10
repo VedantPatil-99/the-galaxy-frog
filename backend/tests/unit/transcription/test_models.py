@@ -10,6 +10,7 @@ import pytest
 
 from galaxy_frog.domain.media import AcquiredAudio, AudioFallbackReason
 from galaxy_frog.domain.transcription import (
+    TranscriptionCheckpoint,
     TranscriptionComputeType,
     TranscriptionCue,
     TranscriptionDevice,
@@ -128,6 +129,9 @@ def test_result_preserves_temporal_model_language_and_confidence_provenance() ->
         (0, 2000),
         (2000, 4000),
     ]
+
+    checkpoint = TranscriptionCheckpoint(uuid4(), uuid4(), transcription)
+    assert checkpoint.result is transcription
 
 
 @pytest.mark.parametrize("field", ["provider", "provider_revision", "model", "model_revision"])

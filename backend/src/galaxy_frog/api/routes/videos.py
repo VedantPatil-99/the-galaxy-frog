@@ -95,7 +95,9 @@ def _transcript_response(record: TranscriptRecord, *, index_ready: bool) -> Tran
                 end_ms=cue.end_ms,
                 text=cue.text,
                 language_code=cue.language_code,
-                caption_kind=cue.caption_kind.value,
+                caption_kind=(
+                    cue.caption_kind.value if cue.caption_kind is not None else "automatic"
+                ),
             )
             for cue in record.cues
         ],
