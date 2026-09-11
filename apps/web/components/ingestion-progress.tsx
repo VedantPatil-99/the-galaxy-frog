@@ -3,6 +3,7 @@ import type {
   IngestionJobResponse,
 } from "@/lib/api/contracts"
 import {
+  ingestionEventDecision,
   ingestionEventLabel,
   ingestionStatusLabel,
   presentStage,
@@ -144,10 +145,17 @@ export function IngestionProgress({
             {recentEvents.map((event) => (
               <li
                 key={event.event_id}
-                className="grid grid-cols-[2.25rem_1fr_auto] items-baseline gap-2 text-sm"
+                className="grid grid-cols-[2.25rem_1fr_auto] items-start gap-2 text-sm"
               >
                 <span className="font-mono text-xs text-muted-foreground">#{event.sequence}</span>
-                <span>{ingestionEventLabel(event)}</span>
+                <div>
+                  <span>{ingestionEventLabel(event)}</span>
+                  {ingestionEventDecision(event) ? (
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                      {ingestionEventDecision(event)}
+                    </p>
+                  ) : null}
+                </div>
                 <time
                   dateTime={event.occurred_at}
                   className="font-mono text-[0.68rem] text-muted-foreground"
