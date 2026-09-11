@@ -1,5 +1,6 @@
 """HTTP behavior tests for durable ingestion job projections and actions."""
 
+import logging
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -180,8 +181,10 @@ async def test_job_detail_and_ordered_events_preserve_provenance(
 @pytest.mark.asyncio
 async def test_import_returns_promptly_and_reuses_the_durable_job(
     job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     application, repository, dispatcher = job_api
+    caplog.set_level(logging.INFO, logger="galaxy_frog.api.dispatching")
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         first = await client.post(
@@ -206,11 +209,25 @@ async def test_import_returns_promptly_and_reuses_the_durable_job(
         repository.job.job_id,
         repository.job.job_id,
     ]
+    dispatch_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "ingestion_dispatch_accepted"
+    ]
+    assert len(dispatch_records) == 2
+    assert {getattr(record, "dispatcher", None) for record in dispatch_records} == {"recording"}
+    assert {getattr(record, "job_id", None) for record in dispatch_records} == {
+        str(repository.job.job_id)
+    }
+    assert {
+        getattr(record, "external_message_id_present", None) for record in dispatch_records
+    } == {False}
 
 
 @pytest.mark.asyncio
 async def test_import_preserves_queued_job_when_dispatch_is_unavailable(
     job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     application, repository, dispatcher = job_api
     dispatcher.error = JobDispatchError("private provider detail")
@@ -228,6 +245,15 @@ async def test_import_preserves_queued_job_when_dispatch_is_unavailable(
     assert "private provider detail" not in response.text
     assert repository.job.status is IngestionJobStatus.QUEUED
     assert dispatcher.messages[0].job_id == repository.job.job_id
+    dispatch_record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "ingestion_dispatch_failed"
+    )
+    assert getattr(dispatch_record, "job_id", None) == str(repository.job.job_id)
+    assert getattr(dispatch_record, "error_code", None) == "JOB_DISPATCH_UNAVAILABLE"
+    assert getattr(dispatch_record, "retryable", None) is True
+    assert "private provider detail" not in dispatch_record.getMessage()
 
 
 @pytest.mark.asyncio
