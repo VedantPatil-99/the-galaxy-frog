@@ -32,6 +32,7 @@ evidence and produce timestamp-grounded answers.
 - P2.4 — Local and optional QStash dispatch adapters: complete
 - P2.5 — Bounded local audio acquisition: complete
 - P2.6 — Faster-whisper provider: complete
+- P2.7 — Resumable caption-to-ASR fallback: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -48,14 +49,16 @@ evidence and produce timestamp-grounded answers.
 - Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
   operations, deterministic idempotency, a standalone local worker, and caption-first persisted
   stage handlers are implemented
-- No caption-to-ASR routing, ASR persistence, progress UI, OCR, visual retrieval, reranking, or
-  later-phase orchestration work has started
+- Caption-to-ASR routing and durable ASR persistence are active; progress UI, OCR, visual retrieval,
+  reranking, and later-phase orchestration have not started
 - Provider-neutral dispatch uses PostgreSQL polling by default; optional QStash messages contain
   only a job identifier/action and terminate at a URL-bound signature-verified internal callback
 - FastAPI now exposes prompt durable import, job detail/events/retry/cancel, video detail,
   transcript, and grounded-question contracts
 - YouTube metadata/captions remain download-free; transcript cues and retrieval units retain exact
   millisecond intervals and ordered cue provenance
+- Caption-insufficient jobs checkpoint bounded audio and one complete ASR run in PostgreSQL; final
+  cues retain the run/model/device/confidence lineage after temporary media cleanup
 - Versioned 1,024-dimensional BGE-M3 collections and video-scoped pgvector cosine retrieval are
   implemented behind provider-independent ports
 - The presentation-only UI imports a video, renders its transcript, asks grounded questions, and
@@ -68,8 +71,8 @@ evidence and produce timestamp-grounded answers.
 - Python: `3.14.7`
 - uv: `0.12.7 (61291a8ca 2026-08-27 x86_64-pc-windows-msvc)`
 - WSL: `2.7.12.0`, kernel `6.18.33.2-2`
-- Docker Engine: `29.7.2` (verified 2026-09-06)
-- Docker Compose: `v5.5.0` (verified 2026-09-06)
+- Docker Engine: `29.7.2` (verified 2026-09-11)
+- Docker Compose: `v5.5.0` (verified 2026-09-11)
 - FFmpeg and ffprobe: `9.0.1-full_build-www.gyan.dev` (verified 2026-09-07)
 - faster-whisper: `1.2.1` with CTranslate2 `4.8.2` on Python `3.14.7`
 - Multilingual `small` model: Hugging Face revision
@@ -192,8 +195,31 @@ multilingual `small` model lazily, limits concurrency, enables VAD and word time
 silently changes devices. Its opt-in live test passed on CPU `int8` with two timestamped cues from an
 11-second speech fixture in 4.88 seconds. On 2026-09-10, the user installed CUDA 12.8.2 and cuDNN
 9.26 and the CUDA `int8_float16` probe passed on the RTX 2050 with one bounded cue in 31.72 seconds.
-The default backend suite passes 466 tests with five opt-in integrations skipped and 100% statement
-and branch coverage. P2.6 is complete and P2.7 is next.
+The default backend suite passed 466 tests with five opt-in integrations skipped and 100% statement
+and branch coverage at the P2.6 checkpoint.
+
+P2.7 is complete on 2026-09-11 on `feat/resumable-caption-asr-fallback`. Caption retrieval now
+validates the selected track's actual cues before recording `captions_unavailable` or
+`captions_unusable`; only those decisions can advance into bounded audio and local ASR. Alembic
+revision `20260910_0005` adds `media_assets`, `transcription_runs`, and
+`transcription_run_cues`. The durable run records source/audio interval, fallback reason,
+provider/model revisions, requested CUDA/compute configuration, language/confidence, processing
+time, and ordered cue intervals/confidence. Final transcript cues link back to that run, while local
+paths stay out of job events and FastAPI responses.
+
+Restart behavior is proven at the actual failure boundary: a first-attempt inference failure leaves
+the job at `transcription` with its audio checkpoint available; a replacement worker session reuses
+that attempt-one audio, creates exactly one transcription run and final cue set, completes indexing,
+then removes the file while retaining its database lineage. Canonical duplicate import remains
+read-only and cannot create another output. Revision `20260910_0005` applied successfully to the
+configured PostgreSQL service, and all three durable-ingestion integration tests pass. The complete
+default backend gate passed 506 tests with five opt-in integrations skipped at 100% coverage before
+the new database-only case was added. Current Ruff and Pyright checks, all three real PostgreSQL
+durability tests, 17 frontend tests, the production build, and generated contract checks pass. A
+Codex-host full-suite rerun is blocked during collection by Windows Application Control rejecting
+NumPy's unsigned `_umath_linalg` binary; the same installed environment passed the user-run CUDA ASR
+probe from Git Bash. Re-run `bun run check` from a fresh user Git Bash session before the P2.10 exit
+gate. P2.8 progress and recovery UI is next.
 
 Provider presentation remains intentionally split across phases. P2.8 may show read-only execution
 evidence from FastAPI—actual ASR provider, model, revision, device, selection/fallback reason and
