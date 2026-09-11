@@ -1,6 +1,7 @@
 """Behavior coverage for the durable ingestion polling loop."""
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import uuid4
@@ -104,8 +105,11 @@ def test_worker_configuration_rejects_invalid_values() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_once_returns_idle_or_runs_the_claimed_job() -> None:
+async def test_run_once_returns_idle_or_runs_the_claimed_job(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     job = claimed_job()
+    caplog.set_level(logging.INFO, logger="galaxy_frog.application.ingestion.worker")
     repository = QueueRepository([None, job])
     runner = RecordingRunner()
     service = worker(repository, runner)
@@ -114,6 +118,15 @@ async def test_run_once_returns_idle_or_runs_the_claimed_job() -> None:
     assert await service.run_once() is job
     assert repository.claims == [("worker-1", LEASE), ("worker-1", LEASE)]
     assert runner.jobs == [job]
+    records = {
+        getattr(record, "event_name", ""): record
+        for record in caplog.records
+        if getattr(record, "event_name", None)
+    }
+    assert getattr(records["ingestion_job_claimed"], "job_id", None) == str(job.job_id)
+    stopped = records["ingestion_job_stopped"]
+    assert getattr(stopped, "status", None) == "running"
+    assert getattr(stopped, "worker_id", None) == "worker-1"
 
 
 @pytest.mark.asyncio

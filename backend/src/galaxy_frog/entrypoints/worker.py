@@ -1,6 +1,7 @@
 """Process wiring for the durable local ingestion worker."""
 
 import asyncio
+import logging
 import os
 import socket
 from collections.abc import Callable
@@ -41,6 +42,7 @@ from galaxy_frog.domain.transcription import (
 )
 
 EngineFactory = Callable[[Settings], AsyncEngine]
+logger = logging.getLogger(__name__)
 
 
 def build_audio_acquirer(settings: Settings) -> AudioAcquirer:
@@ -140,22 +142,55 @@ async def run_worker(
     """Run the worker until cancellation while always releasing database resources."""
 
     resolved_settings = settings or Settings()
+    worker_id = resolve_worker_id(resolved_settings)
     engine = engine_factory(resolved_settings)
     sessions = session_factory or async_sessionmaker(
         engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
+    processed_jobs: int | None = None
+    logger.info(
+        "Ingestion worker starting",
+        extra={
+            "event_name": "ingestion_worker_started",
+            "worker_id": worker_id,
+            "dispatcher": resolved_settings.job_dispatcher,
+            "lease_seconds": resolved_settings.ingestion_lease_seconds,
+            "poll_seconds": resolved_settings.ingestion_poll_seconds,
+            "asr_provider": resolved_settings.asr_provider,
+            "asr_model": resolved_settings.asr_model,
+            "asr_model_revision": resolved_settings.asr_model_revision,
+            "asr_device": resolved_settings.asr_device,
+            "asr_compute_type": resolved_settings.asr_compute_type,
+            "asr_max_concurrency": resolved_settings.asr_max_concurrency,
+            "media_max_duration_seconds": resolved_settings.media_max_duration_seconds,
+            "media_max_download_bytes": resolved_settings.media_max_download_bytes,
+            "media_max_output_bytes": resolved_settings.media_max_output_bytes,
+            "media_timeout_seconds": resolved_settings.media_timeout_seconds,
+            "media_max_concurrency": resolved_settings.media_max_concurrency,
+            "media_retain_on_success": resolved_settings.media_retain_on_success,
+        },
+    )
     try:
         async with sessions() as session:
             worker = build_worker(
                 settings=resolved_settings,
                 session=session,
-                worker_id=resolve_worker_id(resolved_settings),
+                worker_id=worker_id,
             )
-            return await worker.run_until_stopped(stop_event or asyncio.Event())
+            processed_jobs = await worker.run_until_stopped(stop_event or asyncio.Event())
+            return processed_jobs
     finally:
         await engine.dispose()
+        logger.info(
+            "Ingestion worker stopped",
+            extra={
+                "event_name": "ingestion_worker_stopped",
+                "worker_id": worker_id,
+                "processed_jobs": processed_jobs,
+            },
+        )
 
 
 def main() -> None:
