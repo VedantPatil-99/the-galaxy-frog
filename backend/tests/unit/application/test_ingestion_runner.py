@@ -1,6 +1,7 @@
 """Behavior coverage for the deterministic durable ingestion runner."""
 
 import asyncio
+import logging
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -273,8 +274,11 @@ async def test_stage_context_keeps_long_operations_leased_and_cancels_on_lease_l
 
 
 @pytest.mark.asyncio
-async def test_runner_advances_multiple_stages_and_succeeds() -> None:
+async def test_runner_advances_multiple_stages_and_succeeds(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     job = running_job()
+    caplog.set_level(logging.INFO, logger="galaxy_frog.application.ingestion.runner")
     repo = FakeRepository(job)
     source = Handler(
         IngestionStage.SOURCE_RESOLUTION,
@@ -292,6 +296,17 @@ async def test_runner_advances_multiple_stages_and_succeeds() -> None:
     assert [name for name, _value in repo.calls].count("heartbeat") == 1
     assert ("complete", IngestionStage.METADATA) not in repo.calls
     assert repo.calls[-1] == ("succeed", VIDEO_ID)
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "ingestion_stage_completed"
+    ]
+    assert [getattr(record, "stage", None) for record in records] == [
+        "source_resolution",
+        "metadata",
+    ]
+    assert getattr(records[0], "decisions", None) == {}
+    assert getattr(records[1], "decisions", None) == {"video_id": str(VIDEO_ID)}
 
 
 @pytest.mark.asyncio
@@ -343,7 +358,10 @@ async def test_runner_honors_cancellation_before_and_after_a_stage() -> None:
     ],
 )
 async def test_runner_persists_safe_failures(
-    handler: Handler | None, expected_code: str, retryable: bool
+    handler: Handler | None,
+    expected_code: str,
+    retryable: bool,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     job = running_job()
     repo = FakeRepository(job)
@@ -354,6 +372,13 @@ async def test_runner_persists_safe_failures(
     assert failed.last_error_retryable is retryable
     if expected_code == "PROCESSING_FAILED":
         assert failed.last_error_message == "The ingestion stage failed unexpectedly."
+    failure_record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event_name", None) == "ingestion_stage_failed"
+    )
+    assert getattr(failure_record, "error_code", None) == expected_code
+    assert getattr(failure_record, "retryable", None) is retryable
 
 
 @pytest.mark.asyncio

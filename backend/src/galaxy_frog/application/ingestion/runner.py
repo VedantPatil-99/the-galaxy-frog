@@ -1,6 +1,7 @@
 """Deterministic stage execution for one lease-owned ingestion job."""
 
 import asyncio
+import logging
 from collections.abc import Awaitable
 from contextlib import suppress
 from dataclasses import dataclass
@@ -12,6 +13,42 @@ from galaxy_frog.application.ingestion.ports import IngestionRepository
 from galaxy_frog.domain.ingestion.models import IngestionJob, IngestionStage
 
 _ResultT = TypeVar("_ResultT")
+logger = logging.getLogger(__name__)
+
+_OBSERVABLE_DECISION_KEYS = frozenset(
+    {
+        "audio_asset_id",
+        "audio_end_ms",
+        "audio_start_ms",
+        "caption_kind",
+        "compute_type",
+        "cue_count",
+        "device",
+        "downloader",
+        "downloader_revision",
+        "embedding_collection_id",
+        "end_ms",
+        "fallback_reason",
+        "language_code",
+        "language_confidence",
+        "language_confidence_method",
+        "model",
+        "model_revision",
+        "normalizer",
+        "normalizer_revision",
+        "processing_seconds",
+        "provider",
+        "provider_revision",
+        "reused",
+        "size_bytes",
+        "start_ms",
+        "temporary_media_present",
+        "track_id",
+        "transcript_origin",
+        "transcription_run_id",
+        "video_id",
+    }
+)
 
 
 class IngestionStageError(RuntimeError):
@@ -161,12 +198,15 @@ class IngestionJobRunner:
                     return await self._repository.cancel(current.job_id, self._worker_id)
                 if result.next_stage is IngestionStage.COMPLETED:
                     assert result.video_id is not None
-                    return await self._repository.succeed(
+                    succeeded = await self._repository.succeed(
                         current.job_id,
                         self._worker_id,
                         video_id=result.video_id,
                         details=result.details,
                     )
+                    self._log_stage_completed(current, result)
+                    return succeeded
+                completed_stage = current
                 current = await self._repository.complete_stage(
                     current.job_id,
                     self._worker_id,
@@ -174,24 +214,62 @@ class IngestionJobRunner:
                     result.next_stage,
                     details=result.details,
                 )
+                self._log_stage_completed(completed_stage, result)
                 current = await self._repository.heartbeat(
                     current.job_id,
                     self._worker_id,
                     self._lease_duration,
                 )
             except IngestionStageError as exc:
-                return await self._repository.fail(
+                failed = await self._repository.fail(
                     current.job_id,
                     self._worker_id,
                     error_code=exc.code,
                     message=exc.message,
                     retryable=exc.retryable,
                 )
+                self._log_stage_failed(current, exc.code, exc.retryable)
+                return failed
             except Exception:
-                return await self._repository.fail(
+                failed = await self._repository.fail(
                     current.job_id,
                     self._worker_id,
                     error_code="PROCESSING_FAILED",
                     message="The ingestion stage failed unexpectedly.",
                     retryable=True,
                 )
+                self._log_stage_failed(current, "PROCESSING_FAILED", True)
+                return failed
+
+    @staticmethod
+    def _log_stage_completed(job: IngestionJob, result: StageResult) -> None:
+        decisions = {
+            key: value
+            for key, value in (result.details or {}).items()
+            if key in _OBSERVABLE_DECISION_KEYS
+        }
+        logger.info(
+            "Ingestion stage completed",
+            extra={
+                "event_name": "ingestion_stage_completed",
+                "job_id": str(job.job_id),
+                "attempt": job.attempt,
+                "stage": job.stage.value,
+                "next_stage": result.next_stage.value,
+                "decisions": decisions,
+            },
+        )
+
+    @staticmethod
+    def _log_stage_failed(job: IngestionJob, error_code: str, retryable: bool) -> None:
+        logger.warning(
+            "Ingestion stage failed",
+            extra={
+                "event_name": "ingestion_stage_failed",
+                "job_id": str(job.job_id),
+                "attempt": job.attempt,
+                "stage": job.stage.value,
+                "error_code": error_code,
+                "retryable": retryable,
+            },
+        )
