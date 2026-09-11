@@ -10,9 +10,10 @@ from uuid import UUID, uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from galaxy_frog.application.ingestion import caption_ingestion_handlers
 from galaxy_frog.application.ingestion.runner import (
     IngestionJobRunner,
     IngestionStageError,
@@ -22,18 +23,52 @@ from galaxy_frog.application.ingestion.runner import (
 from galaxy_frog.application.ingestion.worker import IngestionWorker
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
+from galaxy_frog.db.ingestion_artifacts import (
+    PostgresAudioAssetRepository,
+    PostgresTranscriptionCheckpointRepository,
+)
 from galaxy_frog.db.ingestion_repository import (
     IngestionRepositoryError,
     PostgresIngestionRepository,
 )
-from galaxy_frog.db.models import IngestionJobRow
+from galaxy_frog.db.models import (
+    IngestionJobRow,
+    MediaAssetRow,
+    TranscriptCueRow,
+    TranscriptionRunCueRow,
+    TranscriptionRunRow,
+    VideoRow,
+)
+from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.ingestion.models import (
     IngestionEventType,
     IngestionJob,
     IngestionJobStatus,
     IngestionStage,
 )
-from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
+from galaxy_frog.domain.media import (
+    AcquiredAudio,
+    AudioAcquisitionRequest,
+    AudioFallbackReason,
+)
+from galaxy_frog.domain.retrieval.models import RetrievedEvidence
+from galaxy_frog.domain.transcription import (
+    TranscriptionComputeType,
+    TranscriptionCue,
+    TranscriptionDevice,
+    TranscriptionError,
+    TranscriptionErrorCode,
+    TranscriptionProviderSpec,
+    TranscriptionRequest,
+    TranscriptionResult,
+)
+from galaxy_frog.domain.videos.models import (
+    CaptionTrack,
+    SafeVideoMetadata,
+    SourceCaptionCue,
+    SourceReference,
+    VideoSourceKind,
+)
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_DATABASE_INTEGRATION") != "1",
@@ -278,4 +313,306 @@ async def test_worker_restart_resumes_the_last_completed_stage() -> None:
             async with sessions() as session:
                 await session.execute(delete(IngestionJobRow).where(IngestionJobRow.id == job_id))
                 await session.commit()
+        await engine.dispose()
+
+
+class CaptionlessSource:
+    """Deterministic source that authorizes ASR by returning no caption tracks."""
+
+    source_kind = VideoSourceKind.YOUTUBE
+
+    def __init__(self, reference: SourceReference) -> None:
+        self.reference = reference
+
+    def canonicalize(self, locator: str) -> SourceReference:
+        assert locator == self.reference.canonical_url
+        return self.reference
+
+    async def fetch_metadata(self, reference: SourceReference) -> SafeVideoMetadata:
+        assert reference == self.reference
+        return SafeVideoMetadata(reference, "ASR restart integration", 30_000)
+
+    async def list_caption_tracks(
+        self,
+        reference: SourceReference,
+    ) -> tuple[CaptionTrack, ...]:
+        assert reference == self.reference
+        return ()
+
+    async def fetch_caption_cues(
+        self,
+        reference: SourceReference,
+        track: CaptionTrack,
+    ) -> tuple[SourceCaptionCue, ...]:
+        del reference, track
+        raise AssertionError("caption cues must not be requested without a track")
+
+
+class CountingAudioAcquirer:
+    """Create one bounded local artifact and record whether restart repeats work."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path.resolve()
+        self.acquire_calls = 0
+        self.cleanup_calls = 0
+
+    async def acquire(self, request: AudioAcquisitionRequest) -> AcquiredAudio:
+        self.acquire_calls += 1
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_bytes(b"integration-audio")
+        return AcquiredAudio(
+            job_id=request.job_id,
+            attempt=request.attempt,
+            source=request.source,
+            fallback_reason=request.fallback_reason,
+            path=self.path,
+            start_ms=0,
+            end_ms=request.expected_duration_ms,
+            size_bytes=self.path.stat().st_size,
+            media_type="audio/wav",
+            codec="pcm_s16le",
+            sample_rate_hz=16_000,
+            channels=1,
+            downloader="integration-downloader",
+            downloader_revision="1.0.0",
+            normalizer="integration-normalizer",
+            normalizer_revision="1.0.0",
+            acquired_at=datetime.now(UTC),
+        )
+
+    async def cleanup(self, artifact: AcquiredAudio) -> bool:
+        self.cleanup_calls += 1
+        artifact.path.unlink(missing_ok=True)
+        return True
+
+
+class FailOnceTranscriptionProvider:
+    """Fail one inference, then return stable multilingual temporal evidence."""
+
+    spec = TranscriptionProviderSpec(
+        provider="integration-asr",
+        provider_revision="1.0.0",
+        model="small",
+        model_revision="integration-revision",
+        device=TranscriptionDevice.CUDA,
+        compute_type=TranscriptionComputeType.INT8_FLOAT16,
+    )
+
+    def __init__(self) -> None:
+        self.requests: list[TranscriptionRequest] = []
+
+    async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
+        self.requests.append(request)
+        if len(self.requests) == 1:
+            raise TranscriptionError(
+                TranscriptionErrorCode.EXECUTION_FAILED,
+                "The integration provider failed before producing output.",
+                retryable=True,
+            )
+        return TranscriptionResult(
+            job_id=request.audio_job_id,
+            attempt=request.attempt,
+            source=request.source,
+            fallback_reason=request.fallback_reason,
+            audio_start_ms=request.audio_start_ms,
+            audio_end_ms=request.audio_end_ms,
+            spec=self.spec,
+            language_code="hi",
+            language_confidence=0.87,
+            language_confidence_method="provider_language_probability",
+            cues=(
+                TranscriptionCue(
+                    0,
+                    0,
+                    12_500,
+                    "नमस्ते Galaxy Frog.",
+                    0.93,
+                    "mean_word_probability",
+                ),
+                TranscriptionCue(
+                    1,
+                    12_500,
+                    30_000,
+                    "Temporal evidence remains exact.",
+                    0.89,
+                    "mean_word_probability",
+                ),
+            ),
+            processing_seconds=2.5,
+            transcribed_at=datetime.now(UTC),
+        )
+
+
+class RecordingTranscriptSearch:
+    """Finish the pipeline without requiring an external embedding service."""
+
+    def __init__(self) -> None:
+        self.collection_id = uuid4()
+        self.indexed: list[UUID] = []
+
+    async def ensure_indexed(self, video_id: UUID) -> UUID:
+        self.indexed.append(video_id)
+        return self.collection_id
+
+    async def search(
+        self,
+        video_id: UUID,
+        query: str,
+        *,
+        limit: int,
+    ) -> tuple[RetrievedEvidence, ...]:
+        del video_id, query, limit
+        return ()
+
+
+@pytest.mark.asyncio
+async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chain(
+    tmp_path: Path,
+) -> None:
+    """Prove P2.7 restart and idempotency against the migrated PostgreSQL schema."""
+
+    engine = create_database_engine(Settings(app_env="test"))
+    sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    external_id = uuid4().hex[:11]
+    source_reference = SourceReference(
+        VideoSourceKind.YOUTUBE,
+        external_id,
+        f"https://www.youtube.com/watch?v={external_id}",
+    )
+    source = CaptionlessSource(source_reference)
+    fingerprint = sha256(f"asr-restart:{external_id}".encode()).hexdigest()
+    acquirer = CountingAudioAcquirer(tmp_path / external_id / "audio.wav")
+    provider = FailOnceTranscriptionProvider()
+    search = RecordingTranscriptSearch()
+    lease_duration = timedelta(minutes=2)
+    worker_id = "asr-restart-integration-worker"
+    job_id: UUID | None = None
+    video_id: UUID | None = None
+
+    def build_worker(session: AsyncSession) -> IngestionWorker:
+        ingestion = PostgresIngestionRepository(session)
+        videos = SqlAlchemyVideoRepository(session)
+        runner = IngestionJobRunner(
+            repository=ingestion,
+            handlers=caption_ingestion_handlers(
+                sources=(source,),
+                videos=videos,
+                transcript_search=search,
+                audio_acquirer=acquirer,
+                audio_assets=PostgresAudioAssetRepository(session),
+                transcription_checkpoints=PostgresTranscriptionCheckpointRepository(session),
+                transcription_provider=provider,
+            ),
+            worker_id=worker_id,
+            lease_duration=lease_duration,
+        )
+        return IngestionWorker(
+            repository=ingestion,
+            runner=runner,
+            worker_id=worker_id,
+            lease_duration=lease_duration,
+            poll_interval=timedelta(milliseconds=1),
+        )
+
+    try:
+        async with sessions() as session:
+            ingestion = PostgresIngestionRepository(session)
+            created, was_created = await ingestion.create_or_get(source_reference, fingerprint)
+            assert was_created is True
+            job_id = created.job_id
+
+            failed = await build_worker(session).run_once()
+
+            assert failed is not None
+            assert failed.job_id == job_id
+            assert failed.status is IngestionJobStatus.FAILED
+            assert failed.stage is IngestionStage.TRANSCRIPTION
+            assert failed.attempt == 1
+            assert failed.last_error_code == TranscriptionErrorCode.EXECUTION_FAILED
+            assert failed.last_error_retryable is True
+            assert acquirer.acquire_calls == 1
+            assert acquirer.path.is_file()
+            assert len(provider.requests) == 1
+            await ingestion.retry(job_id)
+
+        async with sessions() as restarted_session:
+            completed = await build_worker(restarted_session).run_once()
+
+            assert completed is not None
+            assert completed.job_id == job_id
+            assert completed.status is IngestionJobStatus.SUCCEEDED
+            assert completed.attempt == 2
+            assert completed.video_id is not None
+            video_id = completed.video_id
+            assert acquirer.acquire_calls == 1
+            assert acquirer.cleanup_calls == 1
+            assert not acquirer.path.exists()
+            assert len(provider.requests) == 2
+            assert provider.requests[1].attempt == 1
+            assert search.indexed == [video_id]
+
+            transcript = await SqlAlchemyVideoRepository(restarted_session).get_transcript(video_id)
+            assert transcript is not None
+            assert transcript.transcription is not None
+            checkpoint = transcript.transcription
+            assert checkpoint.result.spec == provider.spec
+            assert checkpoint.result.fallback_reason is AudioFallbackReason.CAPTIONS_UNAVAILABLE
+            assert checkpoint.result.language_code == "hi"
+            assert checkpoint.result.audio_start_ms == 0
+            assert checkpoint.result.audio_end_ms == 30_000
+            assert [(cue.start_ms, cue.end_ms) for cue in transcript.cues] == [
+                (0, 12_500),
+                (12_500, 30_000),
+            ]
+            assert {cue.transcription_run_id for cue in transcript.cues} == {checkpoint.run_id}
+
+            duplicate, duplicate_created = await PostgresIngestionRepository(
+                restarted_session
+            ).create_or_get(source_reference, fingerprint)
+            assert duplicate_created is False
+            assert duplicate.job_id == job_id
+            assert await build_worker(restarted_session).run_once() is None
+
+        async with sessions() as verification_session:
+            assert (
+                await verification_session.scalar(
+                    select(func.count())
+                    .select_from(TranscriptionRunRow)
+                    .where(TranscriptionRunRow.job_id == job_id)
+                )
+                == 1
+            )
+            assert (
+                await verification_session.scalar(
+                    select(func.count())
+                    .select_from(TranscriptionRunCueRow)
+                    .join(TranscriptionRunRow)
+                    .where(TranscriptionRunRow.job_id == job_id)
+                )
+                == 2
+            )
+            assert (
+                await verification_session.scalar(
+                    select(func.count())
+                    .select_from(TranscriptCueRow)
+                    .where(TranscriptCueRow.video_id == video_id)
+                )
+                == 2
+            )
+            asset = await verification_session.scalar(
+                select(MediaAssetRow).where(MediaAssetRow.job_id == job_id)
+            )
+            assert asset is not None
+            assert asset.deleted_at is not None
+    finally:
+        async with sessions() as session:
+            if video_id is not None:
+                await session.execute(
+                    delete(TranscriptCueRow).where(TranscriptCueRow.video_id == video_id)
+                )
+            if job_id is not None:
+                await session.execute(delete(IngestionJobRow).where(IngestionJobRow.id == job_id))
+            if video_id is not None:
+                await session.execute(delete(VideoRow).where(VideoRow.id == video_id))
+            await session.commit()
         await engine.dispose()
