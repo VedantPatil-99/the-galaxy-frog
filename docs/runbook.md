@@ -1,8 +1,8 @@
 # Galaxy Frog local runbook
 
 This runbook covers the local Next.js, FastAPI, PostgreSQL/pgvector, Phase 1 transcript-first stack,
-and the Phase 2 durable-ingestion and bounded-audio foundations. Run commands from the repository
-root in Git Bash unless a section says otherwise.
+and the Phase 2 durable-ingestion, bounded-audio, and multilingual-ASR path. Run commands from the
+repository root in Git Bash unless a section says otherwise.
 
 ## Prerequisites
 
@@ -142,13 +142,11 @@ ffprobe and FFmpeg to verify and normalize it to mono 16 kHz PCM WAV. The defaul
 - `MEDIA_RETAIN_ON_SUCCESS=false`
 
 Every attempt is isolated under `tmp/media/{job_id}/attempt-{attempt}`. Failed and cancelled
-attempts clean that directory immediately. Successful audio remains available for processing and is
-removed when the later transcription path calls cleanup; set retention to `true` only for deliberate
-local diagnosis. The provider records the canonical source, unavailable/unusable-caption reason,
-the half-open `[0, duration_ms)` interval, acquisition time, and yt-dlp/FFmpeg revisions.
-
-P2.5 does not yet send caption failures into audio or ASR. No media process needs to stay active;
-P2.6 provides transcription and P2.7 activates the durable fallback transition.
+acquisition attempts clean that directory immediately. After P2.7, successful audio remains
+available across a transcription failure and is removed only after transcript persistence and
+indexing; set retention to `true` only for deliberate local diagnosis. The database continues to
+record the canonical source, unavailable/unusable-caption reason, the half-open `[0, duration_ms)`
+interval, acquisition time, lifecycle state, and yt-dlp/FFmpeg revisions after the file is gone.
 
 ## Local multilingual ASR
 
@@ -192,8 +190,27 @@ uv run --directory backend pytest tests/integration/test_asr_provider.py --no-co
 
 The same test passed on CPU `int8` with two exact timestamped cues in 4.88 seconds. After CUDA 12.8.2
 and cuDNN 9.26 were installed, it passed on the RTX 2050 using CUDA `int8_float16` with one bounded
-cue in 31.72 seconds. Do not add an implicit CPU fallback: P2.7 owns the durable, observable fallback
-policy.
+cue in 31.72 seconds. The worker uses the configured device and compute type without an implicit CPU
+fallback. P2.7 persists the requested device, provider/model revisions, timing, language/confidence,
+caption-fallback reason, and exact cue intervals for every completed ASR run.
+
+For a complete captionless import, keep Docker Desktop/PostgreSQL and the user-managed Ollama service
+running, then start FastAPI and the worker. Next.js is required only for the browser UI; QStash is not
+required for local operation:
+
+```bash
+bun run infra:up
+bun run db:migrate
+bun run dev:api
+# In a second Git Bash terminal:
+bun run dev:worker
+```
+
+The worker checks captions first. A viable caption path never creates an audio or transcription
+checkpoint. A captionless or unusable-caption path reuses retained audio after retry, stores exactly
+one transcription run, links final ASR cues to it, and removes successful temporary media only after
+indexing. If Ollama is stopped, transcription evidence remains durable and the retry resumes at the
+later embedding stage rather than running ASR again.
 
 ## API contract workflow
 
@@ -240,11 +257,17 @@ RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/inte
 ```
 
 After applying the Phase 2 migration, prove real PostgreSQL idempotency, concurrent claim exclusion,
-stale-lease recovery, persisted-stage restart resume, ordered events, cancellation, and retry rules:
+stale-lease recovery, persisted-stage restart resume, ordered events, cancellation, retry rules, and
+the P2.7 fail/restart/complete ASR path:
 
 ```bash
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_durable_ingestion.py
 ```
+
+The P2.7 case intentionally fails the first transcription attempt, starts a replacement worker
+session, verifies that audio acquisition ran once, completes with one transcription run and one final
+cue set, checks exact intervals plus provider/model/device/fallback provenance, and confirms the
+temporary file was removed while its database lifecycle record remains.
 
 Prove the installed local FFmpeg toolchain without network access or a running application:
 

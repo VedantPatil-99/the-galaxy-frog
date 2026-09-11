@@ -6,7 +6,7 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 Phase 0 — Foundation and contracts — and Phase 1 — Transcript-first vertical slice — are complete.
 Phase 2 — Durable ingestion and ASR fallback — is in progress on
-`feat/bounded-audio-acquisition`.
+`feat/resumable-caption-asr-fallback`.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
@@ -19,7 +19,7 @@ seeks the player from evidence intervals. The live exit gate verified import, tr
 duplicate-free reuse, grounded answering, validated timestamp citations, and citation-to-player
 seeking.
 
-The first four Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
+The first seven Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
 tables and repository operations, lease-safe claims and heartbeats, deterministic idempotency
 fingerprints, cancellation/retry transitions, a standalone local worker, and resumable caption-first
 stage handlers. Real PostgreSQL gates prove concurrent claim exclusion, stale-lease recovery, and
@@ -29,11 +29,13 @@ Provider-neutral wake-up hints use local PostgreSQL polling by default; the opti
 sends identifier-only messages to a signature-verified internal callback that is neither exported in
 OpenAPI nor reachable through the browser proxy.
 
-P2.5 adds a provider-neutral audio contract that requires an explicit unavailable/unusable-caption
-reason, isolated job-attempt workspaces, bounded shell-free yt-dlp execution, verified FFmpeg
-normalization to mono 16 kHz PCM, exact whole-source millisecond intervals, tool-revision
-provenance, and configured post-processing cleanup. Caption-to-audio routing and ASR remain inactive
-until P2.7 and P2.6 respectively.
+P2.5–P2.7 add bounded audio acquisition and local multilingual faster-whisper behind Python
+interfaces, then activate ASR only after the selected caption track is unavailable or unusable.
+PostgreSQL checkpoints the media identity, one complete transcription run, and its ordered exact
+millisecond cues before final transcript persistence. Restart reuses durable outputs without
+duplicating work; successful cleanup removes the temporary file while preserving database lineage.
+FastAPI exposes safe provider/model/revision/device/language/confidence/timing/fallback evidence
+through generated frontend declarations and never exposes the local media path.
 
 ## Architecture direction
 
@@ -49,6 +51,8 @@ until P2.7 and P2.6 respectively.
   evidence data and never becomes a second source of truth.
 - Audio acquisition is local, bounded by typed duration/size/deadline/concurrency settings, and
   retains every artifact's source interval plus yt-dlp/FFmpeg revision provenance.
+- Local ASR uses an immutable multilingual `small` model and persists its exact execution and cue
+  provenance before final transcript indexing.
 - Provider-specific integrations stay behind Python interfaces and configuration.
 
 See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-scope.md), and [PLANS.md](PLANS.md).
