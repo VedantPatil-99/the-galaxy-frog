@@ -214,6 +214,46 @@ describe("API client", () => {
     ).rejects.toBeInstanceOf(ApiClientError)
   })
 
+  test("reports every durable job projection while polling", async () => {
+    const updates: string[] = []
+    const running = {
+      ...job,
+      status: "running" as const,
+      stage: "transcription" as const,
+      attempt: 1,
+      started_at: "2026-09-06T15:00:01Z",
+      updated_at: "2026-09-06T15:00:02Z",
+    }
+    const succeeded = {
+      ...running,
+      status: "succeeded" as const,
+      stage: "completed" as const,
+      video_id: video.video_id,
+      completed_at: "2026-09-06T15:00:03Z",
+      updated_at: "2026-09-06T15:00:03Z",
+    }
+    const responses = [running, succeeded]
+
+    const result = await waitForIngestionJob(
+      job,
+      async () => jsonResponse(responses.shift()),
+      {
+        pollIntervalMs: 0,
+        maxPolls: 2,
+        onUpdate: (update) => {
+          updates.push(`${update.status}:${update.stage}`)
+        },
+      },
+    )
+
+    expect(result).toEqual(succeeded)
+    expect(updates).toEqual([
+      "queued:source_resolution",
+      "running:transcription",
+      "succeeded:completed",
+    ])
+  })
+
   test("returns timestamped answer evidence", async () => {
     const fetcher = async (_input: URL | RequestInfo, init?: RequestInit) => {
       expect(init?.method).toBe("POST")
