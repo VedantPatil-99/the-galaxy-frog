@@ -26,6 +26,11 @@ job state or transports media, transcripts, prompts, or other large payloads.
 The Phase 2 stage vocabulary stops at transcript indexing and cleanup. OCR, visual, and artifact
 stages are added only in their own phases.
 
+Reusable stage outputs are committed separately from progress events: `media_assets` records bounded
+audio lifecycle and tool provenance, while `transcription_runs` plus `transcription_run_cues` record
+one complete provider result per job. Final ASR transcript cues link to that run. Restart can reuse a
+completed output without treating an event payload or a local file path as the source of truth.
+
 ## Consequences
 
 - Worker restart and duplicate delivery can recover from durable state.
@@ -33,5 +38,5 @@ stages are added only in their own phases.
 - A running job has one lease owner and expiry; terminal jobs have no active lease.
 - The API can return quickly and expose progress without running media work in FastAPI.
 - QStash is not required for the local Phase 2 path and cannot become a second source of truth.
-- Later worker adapters must keep timestamp intervals and output provenance attached to persisted
-  stage results.
+- Worker adapters must keep timestamp intervals and output provenance attached to persisted stage
+  results, even after temporary media is removed.
