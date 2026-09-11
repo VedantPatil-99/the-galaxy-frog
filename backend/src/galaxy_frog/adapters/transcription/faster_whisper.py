@@ -8,8 +8,6 @@ from math import ceil, floor, fsum, isfinite
 from time import perf_counter
 from typing import Protocol, cast
 
-from faster_whisper import WhisperModel  # pyright: ignore[reportMissingTypeStubs]
-
 from galaxy_frog.domain.transcription import (
     TranscriptionComputeType,
     TranscriptionCue,
@@ -76,6 +74,14 @@ class _ModelFactory(Protocol):
     ) -> _Model: ...
 
 
+def _load_model_factory() -> _ModelFactory:
+    """Import the optional native runtime only when a transcription actually starts."""
+
+    from faster_whisper import WhisperModel  # pyright: ignore[reportMissingTypeStubs]
+
+    return cast(_ModelFactory, WhisperModel)
+
+
 def _default_model_factory(
     model: str,
     *,
@@ -84,15 +90,13 @@ def _default_model_factory(
     revision: str,
     num_workers: int,
 ) -> _Model:
-    return cast(
-        _Model,
-        WhisperModel(
-            model,
-            device=device,
-            compute_type=compute_type,
-            revision=revision,
-            num_workers=num_workers,
-        ),
+    model_factory = _load_model_factory()
+    return model_factory(
+        model,
+        device=device,
+        compute_type=compute_type,
+        revision=revision,
+        num_workers=num_workers,
     )
 
 

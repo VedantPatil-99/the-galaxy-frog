@@ -369,7 +369,7 @@ def test_default_factory_forwards_explicit_runtime_configuration(
             captured["model"] = model
             captured.update(kwargs)
 
-    monkeypatch.setattr(adapter_module, "WhisperModel", Model)
+    monkeypatch.setattr(adapter_module, "_load_model_factory", lambda: Model)
     created = adapter_module._default_model_factory(
         "small",
         device="cuda",
