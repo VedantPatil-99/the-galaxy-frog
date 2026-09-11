@@ -33,6 +33,7 @@ evidence and produce timestamp-grounded answers.
 - P2.5 — Bounded local audio acquisition: complete
 - P2.6 — Faster-whisper provider: complete
 - P2.7 — Resumable caption-to-ASR fallback: complete
+- P2.8 — Progress and recovery UI: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -49,8 +50,8 @@ evidence and produce timestamp-grounded answers.
 - Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
   operations, deterministic idempotency, a standalone local worker, and caption-first persisted
   stage handlers are implemented
-- Caption-to-ASR routing and durable ASR persistence are active; progress UI, OCR, visual retrieval,
-  reranking, and later-phase orchestration have not started
+- Caption-to-ASR routing, durable ASR persistence, and generated-contract progress/recovery UI are
+  active; OCR, visual retrieval, reranking, and later-phase orchestration have not started
 - Provider-neutral dispatch uses PostgreSQL polling by default; optional QStash messages contain
   only a job identifier/action and terminate at a URL-bound signature-verified internal callback
 - FastAPI now exposes prompt durable import, job detail/events/retry/cancel, video detail,
@@ -219,9 +220,21 @@ durability tests, 17 frontend tests, the production build, and generated contrac
 Codex-host full-suite rerun is blocked during collection by Windows Application Control rejecting
 NumPy's unsigned `_umath_linalg` binary; the same installed environment passed the user-run CUDA ASR
 probe from Git Bash. Re-run `bun run check` from a fresh user Git Bash session before the P2.10 exit
-gate. P2.8 progress and recovery UI is next.
+gate.
 
-Provider presentation remains intentionally split across phases. P2.8 may show read-only execution
+P2.8 is complete on 2026-09-11 on `feat/ingestion-progress-recovery-ui`. The client observes every
+generated job projection while polling and refreshes the append-only event trail through the thin
+proxy. The workspace now renders stage/attempt progress, recent ordered events, cancellation-pending
+state, safe failure details, cancel while queued/running, and retry only for a FastAPI-declared
+retryable failure. After success, the existing player, transcript, grounded question, evidence, and
+citation-seeking behavior remains. A caption-backed transcript explains that ASR was skipped; an
+ASR-backed transcript displays the actual provider/model revisions, device/compute mode,
+selection/fallback reason, language confidence, measured time, exact source interval, run identity,
+and cue confidence. The packet passes 25 frontend tests, ESLint, strict TypeScript, the production
+build, generated contract checks, and local browser layout inspection. P2.9 operational hardening is
+next.
+
+Provider presentation remains intentionally split across phases. P2.8 shows read-only execution
 evidence from FastAPI—actual ASR provider, model, revision, device, selection/fallback reason and
 processing time—but Phase 2 does not add an interactive provider selector. Phase 8 owns the complete
 automatic-local, automatic-cloud-permitted and manual selection modes, editable fallback chains,
