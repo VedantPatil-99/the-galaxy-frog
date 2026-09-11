@@ -212,6 +212,13 @@ one transcription run, links final ASR cues to it, and removes successful tempor
 indexing. If Ollama is stopped, transcription evidence remains durable and the retry resumes at the
 later embedding stage rather than running ASR again.
 
+The P2.8 browser follows the returned job without inventing local stage state. It displays current
+stage/attempt, the latest ordered events, safe failure metadata, cancellation state, and a retry
+button only when FastAPI reports the failure as retryable. After success, caption-backed transcripts
+say ASR was skipped; ASR-backed transcripts display the exact provider/model revisions,
+device/compute type, selection reason, language confidence, processing time, source interval, and cue
+confidence. These values are read-only execution evidence, not provider controls.
+
 ## API contract workflow
 
 FastAPI is the source of truth for HTTP schemas. After an intentional API schema change, regenerate
