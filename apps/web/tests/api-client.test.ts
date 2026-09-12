@@ -120,7 +120,12 @@ describe("API client", () => {
             end_ms: 2000,
             text: "Exact transcript.",
             language_code: "en",
+            origin: "caption",
+            track_id: "manual:en",
             caption_kind: "manual",
+            transcription_run_id: null,
+            confidence: null,
+            confidence_method: null,
           },
         ],
         retrieval_units: [
@@ -132,6 +137,7 @@ describe("API client", () => {
             cue_ids: ["a".repeat(64)],
           },
         ],
+        transcription: null,
       })
     }
 

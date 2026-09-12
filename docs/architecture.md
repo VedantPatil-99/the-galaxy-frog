@@ -12,6 +12,7 @@ flowchart TD
     CORE --> PROVIDERS["Replaceable provider adapters"]
     PROVIDERS --> YOUTUBE["YouTube metadata + captions"]
     PROVIDERS --> MEDIA["Bounded yt-dlp + FFmpeg audio"]
+    PROVIDERS --> ASR["Local faster-whisper<br>multilingual ASR"]
     PROVIDERS --> OLLAMA["User-managed Ollama<br>BGE-M3 + Qwen3 4B"]
 ```
 
@@ -133,8 +134,8 @@ monolith:
    per-job sequence of `job_events`.
 3. Workers claim jobs through row locking with bounded leases, heartbeat while running, and may
    reclaim only expired work.
-4. Every stage transition is committed as a checkpoint before the worker proceeds, so restart
-   recovery does not depend on process memory.
+4. Every stage transition and reusable media/transcription output is committed as a checkpoint
+   before the worker proceeds, so restart recovery does not depend on process memory.
 5. Cancellation, retryability, safe error codes, attempt count, worker ownership, and lease expiry
    are explicit persisted state rather than implicit queue behavior.
 
@@ -145,13 +146,13 @@ Phase 2 import API queues or reuses a durable job and returns immediately; the f
 for that asynchronous contract are generated from FastAPI OpenAPI.
 
 The durable stage vocabulary is deliberately limited to Phase 2 ingestion work. It preserves video
-identity and will preserve every transcript cue's half-open millisecond interval and source
-provenance when caption-to-ASR fallback is added; it does not introduce OCR, visual retrieval,
-hybrid retrieval, reranking, or LangGraph.
+identity and every caption or ASR cue's half-open millisecond interval and source provenance; it does
+not introduce OCR, visual retrieval, hybrid retrieval, reranking, or LangGraph.
 
 ## Phase 2 bounded audio foundation
 
-P2.5 adds the local media boundary without activating transcription or changing the HTTP contract:
+P2.5 introduced the local media boundary before P2.7 activated it, without moving media work into
+the HTTP request:
 
 1. An audio request cannot exist without a durable job/attempt, canonical source, expected duration,
    and an explicit `captions_unavailable` or `captions_unusable` fallback reason.
@@ -166,10 +167,29 @@ P2.5 adds the local media boundary without activating transcription or changing 
    ffprobe then verifies codec, sample rate, channels, duration, and size again.
 6. The resulting artifact preserves canonical source identity, fallback reason, the half-open
    `[0, duration_ms)` interval, acquisition time, and yt-dlp/FFmpeg revisions.
-7. Failed or cancelled attempts clean their workspace immediately. After later transcription
-   succeeds, cleanup removes the successful artifact unless explicit retention is configured.
+7. Failed or cancelled attempts clean their workspace immediately. After transcription,
+   persistence, and indexing succeed, cleanup removes the artifact unless retention is configured.
 
-The worker can compose this provider-neutral `AudioAcquirer`, but the current caption handler does
-not call it. P2.6 owns the transcription protocol/provider, and P2.7 owns the persisted
-caption-to-audio-to-ASR transition. Next.js remains presentation-only and receives no media paths or
-provider configuration.
+## Phase 2 resumable caption-to-ASR path
+
+P2.7 connects the provider-neutral media and transcription boundaries through durable evidence:
+
+1. Caption retrieval selects and validates a track first. Only an unavailable or unusable transcript
+   records an explicit fallback reason and advances to audio acquisition.
+2. `media_assets` stores the attempt, exact source interval, local lifecycle state, and
+   downloader/normalizer revisions. Filesystem paths remain internal and never enter job events or
+   HTTP responses.
+3. `transcription_runs` stores one result per job with its media identity, provider/model revisions,
+   device/compute type, language evidence, processing time, and fallback reason.
+4. `transcription_run_cues` stores the provider's ordered integer-millisecond intervals and optional
+   confidence method before final video persistence.
+5. Final `transcript_cues` identify their caption origin or link to exactly one transcription run;
+   retrieval units retain the ordered cue IDs and reconstructed interval as before.
+6. A failure before inference output resumes at transcription using retained audio. A failure after
+   the transcription checkpoint reuses that run. Unique constraints prevent a second run or cue set.
+7. Successful cleanup marks the media record deleted only after the transcript is persisted and
+   indexed, preserving the database lineage after the local file is gone.
+
+FastAPI owns the safe transcript execution schema and generated browser declarations. Next.js may
+display the actual provider, model, revision, device, timing, confidence, and fallback reason, but it
+receives no local media path and cannot select or execute a provider during Phase 2.

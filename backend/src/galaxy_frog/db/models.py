@@ -8,7 +8,9 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -40,13 +42,37 @@ class VideoRow(Base):
 
 class TranscriptCueRow(Base):
     __tablename__ = "transcript_cues"
-    __table_args__ = (UniqueConstraint("video_id", "source_order", name="uq_cues_video_order"),)
+    __table_args__ = (
+        UniqueConstraint("video_id", "source_order", name="uq_cues_video_order"),
+        CheckConstraint(
+            "(origin = 'caption' AND track_id IS NOT NULL AND caption_kind IS NOT NULL "
+            "AND transcription_run_id IS NULL) OR "
+            "(origin = 'asr' AND track_id IS NULL AND caption_kind IS NULL "
+            "AND transcription_run_id IS NOT NULL)",
+            name="ck_transcript_cues_origin",
+        ),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="ck_transcript_cues_confidence",
+        ),
+        CheckConstraint(
+            "(confidence IS NULL AND confidence_method IS NULL) OR "
+            "(confidence IS NOT NULL AND confidence_method IS NOT NULL)",
+            name="ck_transcript_cues_confidence_method",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     video_id: Mapped[UUID] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), index=True)
-    track_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    origin: Mapped[str] = mapped_column(String(32), nullable=False, default="caption")
+    track_id: Mapped[str | None] = mapped_column(String(255))
     language_code: Mapped[str] = mapped_column(String(64), nullable=False)
-    caption_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    caption_kind: Mapped[str | None] = mapped_column(String(32))
+    transcription_run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("transcription_runs.id", ondelete="RESTRICT"), index=True
+    )
+    confidence: Mapped[float | None] = mapped_column(Float)
+    confidence_method: Mapped[str | None] = mapped_column(String(64))
     source_order: Mapped[int] = mapped_column(Integer, nullable=False)
     start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
     end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -155,3 +181,117 @@ class JobEventRow(Base):
     error_code: Mapped[str | None] = mapped_column(String(64))
     retryable: Mapped[bool | None] = mapped_column(Boolean)
     details: Mapped[dict[str, object] | None] = mapped_column(JSON)
+
+
+class MediaAssetRow(Base):
+    __tablename__ = "media_assets"
+    __table_args__ = (
+        UniqueConstraint("job_id", "attempt", "asset_kind", name="uq_media_assets_attempt_kind"),
+        CheckConstraint("attempt > 0", name="ck_media_assets_attempt_positive"),
+        CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_media_assets_interval"),
+        CheckConstraint("size_bytes > 0", name="ck_media_assets_size_positive"),
+        CheckConstraint("sample_rate_hz > 0", name="ck_media_assets_sample_rate_positive"),
+        CheckConstraint("channels > 0", name="ck_media_assets_channels_positive"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    job_id: Mapped[UUID] = mapped_column(
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"), index=True
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    asset_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    fallback_reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    codec: Mapped[str] = mapped_column(String(64), nullable=False)
+    sample_rate_hz: Mapped[int] = mapped_column(Integer, nullable=False)
+    channels: Mapped[int] = mapped_column(Integer, nullable=False)
+    downloader: Mapped[str] = mapped_column(String(64), nullable=False)
+    downloader_revision: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalizer: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalizer_revision: Mapped[str] = mapped_column(String(255), nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TranscriptionRunRow(Base):
+    __tablename__ = "transcription_runs"
+    __table_args__ = (
+        UniqueConstraint("job_id", name="uq_transcription_runs_job"),
+        UniqueConstraint("audio_asset_id", name="uq_transcription_runs_audio_asset"),
+        CheckConstraint("audio_attempt > 0", name="ck_transcription_runs_attempt_positive"),
+        CheckConstraint(
+            "audio_start_ms >= 0 AND audio_end_ms > audio_start_ms",
+            name="ck_transcription_runs_interval",
+        ),
+        CheckConstraint(
+            "language_confidence IS NULL OR "
+            "(language_confidence >= 0 AND language_confidence <= 1)",
+            name="ck_transcription_runs_language_confidence",
+        ),
+        CheckConstraint(
+            "(language_confidence IS NULL AND language_confidence_method IS NULL) OR "
+            "(language_confidence IS NOT NULL AND language_confidence_method IS NOT NULL)",
+            name="ck_transcription_runs_language_confidence_method",
+        ),
+        CheckConstraint(
+            "processing_seconds >= 0", name="ck_transcription_runs_processing_nonnegative"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    job_id: Mapped[UUID] = mapped_column(
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"), index=True
+    )
+    audio_asset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="RESTRICT"), nullable=False
+    )
+    audio_attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    fallback_reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    audio_start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    audio_end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_revision: Mapped[str] = mapped_column(String(255), nullable=False)
+    model: Mapped[str] = mapped_column(String(255), nullable=False)
+    model_revision: Mapped[str] = mapped_column(String(255), nullable=False)
+    device: Mapped[str] = mapped_column(String(32), nullable=False)
+    compute_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    language_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    language_confidence: Mapped[float | None] = mapped_column(Float)
+    language_confidence_method: Mapped[str | None] = mapped_column(String(64))
+    processing_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    transcribed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TranscriptionRunCueRow(Base):
+    __tablename__ = "transcription_run_cues"
+    __table_args__ = (
+        UniqueConstraint("run_id", "source_order", name="uq_transcription_run_cues_order"),
+        CheckConstraint("source_order >= 0", name="ck_transcription_run_cues_order_nonnegative"),
+        CheckConstraint(
+            "start_ms >= 0 AND end_ms > start_ms",
+            name="ck_transcription_run_cues_interval",
+        ),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="ck_transcription_run_cues_confidence",
+        ),
+        CheckConstraint(
+            "(confidence IS NULL AND confidence_method IS NULL) OR "
+            "(confidence IS NOT NULL AND confidence_method IS NOT NULL)",
+            name="ck_transcription_run_cues_confidence_method",
+        ),
+    )
+
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("transcription_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    source_order: Mapped[int] = mapped_column(Integer, primary_key=True)
+    start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float)
+    confidence_method: Mapped[str | None] = mapped_column(String(64))

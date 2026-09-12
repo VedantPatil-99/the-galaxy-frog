@@ -6,6 +6,7 @@ from galaxy_frog.domain.media.models import (
     AudioAcquisitionErrorCode,
     AudioAcquisitionLimits,
     AudioAcquisitionRequest,
+    AudioAsset,
     AudioFallbackReason,
 )
 from galaxy_frog.domain.media.ports import AudioAcquirer
@@ -17,5 +18,6 @@ __all__ = [
     "AudioAcquisitionErrorCode",
     "AudioAcquisitionLimits",
     "AudioAcquisitionRequest",
+    "AudioAsset",
     "AudioFallbackReason",
 ]

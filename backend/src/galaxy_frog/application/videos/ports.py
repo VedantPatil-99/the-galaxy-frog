@@ -18,6 +18,8 @@ class VideoRepository(Protocol):
         metadata: SafeVideoMetadata,
         cues: tuple[TranscriptCue, ...],
         units: tuple[RetrievalUnit, ...],
+        *,
+        transcription_run_id: UUID | None = None,
     ) -> VideoRecord: ...
 
     async def get_video(self, video_id: UUID) -> VideoRecord | None: ...

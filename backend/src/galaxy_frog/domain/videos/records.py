@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from galaxy_frog.domain.transcription import TranscriptionCheckpoint
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import SafeVideoMetadata
 
@@ -22,3 +23,4 @@ class TranscriptRecord:
     video: VideoRecord
     cues: tuple[TranscriptCue, ...]
     units: tuple[RetrievalUnit, ...]
+    transcription: TranscriptionCheckpoint | None = None

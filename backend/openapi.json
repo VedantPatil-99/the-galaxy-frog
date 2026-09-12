@@ -605,15 +605,46 @@
         "type": "object"
       },
       "TranscriptCueResponse": {
-        "description": "One exact normalized caption cue.",
+        "description": "One exact normalized caption or ASR cue.",
         "properties": {
           "caption_kind": {
-            "enum": [
-              "manual",
-              "automatic"
+            "anyOf": [
+              {
+                "enum": [
+                  "manual",
+                  "automatic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Caption Kind",
-            "type": "string"
+            "title": "Caption Kind"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Method"
           },
           "cue_id": {
             "title": "Cue Id",
@@ -626,6 +657,14 @@
           },
           "language_code": {
             "title": "Language Code",
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "caption",
+              "asr"
+            ],
+            "title": "Origin",
             "type": "string"
           },
           "source_order": {
@@ -641,6 +680,29 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "transcription_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcription Run Id"
           }
         },
         "required": [
@@ -650,7 +712,12 @@
           "end_ms",
           "text",
           "language_code",
-          "caption_kind"
+          "origin",
+          "track_id",
+          "caption_kind",
+          "transcription_run_id",
+          "confidence",
+          "confidence_method"
         ],
         "title": "TranscriptCueResponse",
         "type": "object"
@@ -672,6 +739,16 @@
             "title": "Retrieval Units",
             "type": "array"
           },
+          "transcription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscriptionRunResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "video": {
             "$ref": "#/components/schemas/VideoResponse"
           }
@@ -679,9 +756,147 @@
         "required": [
           "video",
           "cues",
-          "retrieval_units"
+          "retrieval_units",
+          "transcription"
         ],
         "title": "TranscriptResponse",
+        "type": "object"
+      },
+      "TranscriptionRunResponse": {
+        "description": "Safe execution evidence for the ASR run that produced this transcript.",
+        "properties": {
+          "audio_asset_id": {
+            "format": "uuid",
+            "title": "Audio Asset Id",
+            "type": "string"
+          },
+          "audio_attempt": {
+            "exclusiveMinimum": 0.0,
+            "title": "Audio Attempt",
+            "type": "integer"
+          },
+          "audio_end_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "Audio End Ms",
+            "type": "integer"
+          },
+          "audio_start_ms": {
+            "minimum": 0.0,
+            "title": "Audio Start Ms",
+            "type": "integer"
+          },
+          "compute_type": {
+            "enum": [
+              "int8",
+              "int8_float16",
+              "float16",
+              "float32"
+            ],
+            "title": "Compute Type",
+            "type": "string"
+          },
+          "device": {
+            "enum": [
+              "cpu",
+              "cuda"
+            ],
+            "title": "Device",
+            "type": "string"
+          },
+          "fallback_reason": {
+            "enum": [
+              "captions_unavailable",
+              "captions_unusable"
+            ],
+            "title": "Fallback Reason",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "language_code": {
+            "title": "Language Code",
+            "type": "string"
+          },
+          "language_confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Confidence"
+          },
+          "language_confidence_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Confidence Method"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_revision": {
+            "title": "Model Revision",
+            "type": "string"
+          },
+          "processing_seconds": {
+            "minimum": 0.0,
+            "title": "Processing Seconds",
+            "type": "number"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_revision": {
+            "title": "Provider Revision",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "transcribed_at": {
+            "format": "date-time",
+            "title": "Transcribed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "job_id",
+          "audio_asset_id",
+          "audio_attempt",
+          "fallback_reason",
+          "audio_start_ms",
+          "audio_end_ms",
+          "provider",
+          "provider_revision",
+          "model",
+          "model_revision",
+          "device",
+          "compute_type",
+          "language_code",
+          "language_confidence",
+          "language_confidence_method",
+          "processing_seconds",
+          "transcribed_at"
+        ],
+        "title": "TranscriptionRunResponse",
         "type": "object"
       },
       "ValidationError": {

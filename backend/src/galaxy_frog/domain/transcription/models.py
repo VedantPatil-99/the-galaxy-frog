@@ -261,3 +261,12 @@ class TranscriptionResult:
                 msg = "transcription cue must remain within the source audio interval"
                 raise ValueError(msg)
             previous_start_ms = cue.start_ms
+
+
+@dataclass(frozen=True, slots=True)
+class TranscriptionCheckpoint:
+    """Durable provider output that can be reused without repeating inference."""
+
+    run_id: UUID
+    audio_asset_id: UUID
+    result: TranscriptionResult

@@ -1,12 +1,17 @@
 """Deterministic stage execution for one lease-owned ingestion job."""
 
+import asyncio
+from collections.abc import Awaitable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Protocol
+from typing import Protocol, TypeVar
 from uuid import UUID
 
 from galaxy_frog.application.ingestion.ports import IngestionRepository
 from galaxy_frog.domain.ingestion.models import IngestionJob, IngestionStage
+
+_ResultT = TypeVar("_ResultT")
 
 
 class IngestionStageError(RuntimeError):
@@ -65,6 +70,24 @@ class StageContext:
                 retryable=False,
             )
         return job.cancel_requested_at is not None
+
+    async def run_with_heartbeats(self, operation: Awaitable[_ResultT]) -> _ResultT:
+        """Keep the durable lease alive while awaiting one long provider operation."""
+
+        task = asyncio.ensure_future(operation)
+        interval = self.lease_duration.total_seconds() / 3
+        try:
+            while not task.done():
+                done, _pending = await asyncio.wait((task,), timeout=interval)
+                if task in done:
+                    break
+                await self.heartbeat()
+            return await task
+        finally:
+            if not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
 
 
 class IngestionStageHandler(Protocol):

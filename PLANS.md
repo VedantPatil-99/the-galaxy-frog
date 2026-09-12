@@ -256,8 +256,8 @@ Local yt-dlp and FFmpeg providers run through shell-free bounded subprocesses in
 job-attempt workspaces. Typed defaults cap duration at two hours, source and normalized files at
 256 MiB each, the complete acquisition at ten minutes, and local concurrency at one. Failed and
 cancelled attempts clean their isolated workspaces; successful media is removed after processing
-unless retention is explicitly enabled. P2.5 defines and proves this boundary without activating
-caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
+unless retention is explicitly enabled. P2.5 defined and proved this boundary before P2.7 activated
+the caption-to-audio transition and durable cleanup lifecycle.
 
 ### P2.6 — Faster-whisper provider
 
@@ -275,13 +275,26 @@ language confidence, source lineage, fallback reason, and processing time. The m
 The opt-in live probe transcribed the 11-second JFK fixture on CPU `int8` into two timestamped cues
 in 4.88 seconds. After the user installed CUDA 12.8.2 and cuDNN 9.26, the same pinned multilingual
 model passed on the RTX 2050 with CUDA `int8_float16`, producing one bounded cue in 31.72 seconds.
-The local GPU runtime gate is complete and P2.7 may begin.
+The local GPU runtime gate completed before P2.7 activated the provider.
 
 ### P2.7 — Resumable caption-to-ASR fallback
 
-- [ ] Prefer captions and invoke audio/ASR only for transcript insufficiency.
-- [ ] Persist ASR cues through the existing integer-millisecond provenance model.
-- [ ] Resume failed transcription from its durable checkpoint without duplicate output.
+- [x] Prefer captions and invoke audio/ASR only for transcript insufficiency.
+- [x] Persist ASR cues through the existing integer-millisecond provenance model.
+- [x] Resume failed transcription from its durable checkpoint without duplicate output.
+
+Caption retrieval now assesses the selected track's actual cue/chunk viability and records an
+explicit `captions_unavailable` or `captions_unusable` decision before audio can run. Alembic revision
+`20260910_0005` adds durable `media_assets`, `transcription_runs`, and
+`transcription_run_cues` checkpoints. ASR output retains the source/audio interval, fallback reason,
+provider/model revisions, requested device/compute type, detected language/confidence, processing
+time, ordered cue confidence, and exact integer-millisecond intervals; final transcript cues link
+back to that run. A restart reuses the audio checkpoint, stays at transcription after an inference
+failure, reuses completed inference output, and cannot create a second run or final cue set. Cleanup
+removes successful temporary media only after persistence/indexing while keeping its database
+lineage. FastAPI exposes the safe execution evidence through regenerated OpenAPI and frontend types
+without leaking a local path. On 2026-09-11, revision `20260910_0005` applied to real PostgreSQL and
+all three durable-ingestion integration tests passed, including the fail/restart/complete ASR path.
 
 ### P2.8 — Progress and recovery UI
 
@@ -369,3 +382,7 @@ The local GPU runtime gate is complete and P2.7 may begin.
   4.8.2, an immutable multilingual `small` model revision, bounded GPU/CPU configuration, and
   timestamp/confidence provenance. CPU `int8` and RTX 2050 CUDA `int8_float16` live probes pass
   after the user-managed CUDA 12.8.2 and cuDNN 9.26 installation. Keep GPU primary for P2.7.
+- 2026-09-11: Complete P2.7 with caption-viability routing, durable audio/transcription checkpoints,
+  exact ASR-to-transcript provenance, safe API execution evidence, post-index cleanup, and a real
+  PostgreSQL fail/restart/complete proof. Keep provider policy fixed and read-only until Phase 8;
+  P2.8 owns only progress/recovery presentation through generated FastAPI contracts.

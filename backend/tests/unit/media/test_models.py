@@ -14,6 +14,7 @@ from galaxy_frog.domain.media import (
     AudioAcquisitionErrorCode,
     AudioAcquisitionLimits,
     AudioAcquisitionRequest,
+    AudioAsset,
     AudioFallbackReason,
 )
 from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
@@ -67,6 +68,20 @@ def test_audio_values_preserve_fallback_interval_and_tool_provenance() -> None:
     assert audio.source == REFERENCE
     assert audio.downloader_revision == "2026.08.19"
     assert audio.normalizer_revision == "9.0.1"
+
+
+def test_audio_asset_preserves_availability_and_deletion_time() -> None:
+    audio = artifact()
+    retained = AudioAsset(uuid4(), audio)
+    deleted_at = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+
+    assert retained.is_available is True
+    assert replace(retained, deleted_at=deleted_at).is_available is False
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        replace(retained, deleted_at=datetime(2026, 9, 7, 12, 1))
+    with pytest.raises(ValueError, match="must not precede"):
+        replace(retained, deleted_at=datetime(2026, 9, 7, 11, 59, tzinfo=UTC))
 
 
 @pytest.mark.parametrize(

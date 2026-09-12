@@ -1,5 +1,6 @@
 """FastAPI-owned contracts for transcript-first video operations."""
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -37,7 +38,7 @@ class ImportVideoResponse(BaseModel):
 
 
 class TranscriptCueResponse(BaseModel):
-    """One exact normalized caption cue."""
+    """One exact normalized caption or ASR cue."""
 
     cue_id: str
     source_order: int = Field(ge=0)
@@ -45,7 +46,35 @@ class TranscriptCueResponse(BaseModel):
     end_ms: int = Field(gt=0)
     text: str
     language_code: str
-    caption_kind: Literal["manual", "automatic"]
+    origin: Literal["caption", "asr"]
+    track_id: str | None
+    caption_kind: Literal["manual", "automatic"] | None
+    transcription_run_id: UUID | None
+    confidence: float | None = Field(ge=0, le=1)
+    confidence_method: str | None
+
+
+class TranscriptionRunResponse(BaseModel):
+    """Safe execution evidence for the ASR run that produced this transcript."""
+
+    run_id: UUID
+    job_id: UUID
+    audio_asset_id: UUID
+    audio_attempt: int = Field(gt=0)
+    fallback_reason: Literal["captions_unavailable", "captions_unusable"]
+    audio_start_ms: int = Field(ge=0)
+    audio_end_ms: int = Field(gt=0)
+    provider: str
+    provider_revision: str
+    model: str
+    model_revision: str
+    device: Literal["cpu", "cuda"]
+    compute_type: Literal["int8", "int8_float16", "float16", "float32"]
+    language_code: str
+    language_confidence: float | None = Field(ge=0, le=1)
+    language_confidence_method: str | None
+    processing_seconds: float = Field(ge=0)
+    transcribed_at: datetime
 
 
 class RetrievalUnitResponse(BaseModel):
@@ -64,6 +93,7 @@ class TranscriptResponse(BaseModel):
     video: VideoResponse
     cues: list[TranscriptCueResponse]
     retrieval_units: list[RetrievalUnitResponse]
+    transcription: TranscriptionRunResponse | None
 
 
 class QuestionRequest(BaseModel):

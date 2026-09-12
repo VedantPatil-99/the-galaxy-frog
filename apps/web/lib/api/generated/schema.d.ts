@@ -475,26 +475,99 @@ export interface components {
         };
         /**
          * TranscriptCueResponse
-         * @description One exact normalized caption cue.
+         * @description One exact normalized caption or ASR cue.
          */
         TranscriptCueResponse: {
-            /**
-             * Caption Kind
-             * @enum {string}
-             */
-            caption_kind: "manual" | "automatic";
+            /** Caption Kind */
+            caption_kind: ("manual" | "automatic") | null;
+            /** Confidence */
+            confidence: number | null;
+            /** Confidence Method */
+            confidence_method: string | null;
             /** Cue Id */
             cue_id: string;
             /** End Ms */
             end_ms: number;
             /** Language Code */
             language_code: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "caption" | "asr";
             /** Source Order */
             source_order: number;
             /** Start Ms */
             start_ms: number;
             /** Text */
             text: string;
+            /** Track Id */
+            track_id: string | null;
+            /** Transcription Run Id */
+            transcription_run_id: string | null;
+        };
+        /**
+         * TranscriptionRunResponse
+         * @description Safe execution evidence for the ASR run that produced this transcript.
+         */
+        TranscriptionRunResponse: {
+            /**
+             * Audio Asset Id
+             * Format: uuid
+             */
+            audio_asset_id: string;
+            /** Audio Attempt */
+            audio_attempt: number;
+            /** Audio End Ms */
+            audio_end_ms: number;
+            /** Audio Start Ms */
+            audio_start_ms: number;
+            /**
+             * Compute Type
+             * @enum {string}
+             */
+            compute_type: "int8" | "int8_float16" | "float16" | "float32";
+            /**
+             * Device
+             * @enum {string}
+             */
+            device: "cpu" | "cuda";
+            /**
+             * Fallback Reason
+             * @enum {string}
+             */
+            fallback_reason: "captions_unavailable" | "captions_unusable";
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** Language Code */
+            language_code: string;
+            /** Language Confidence */
+            language_confidence: number | null;
+            /** Language Confidence Method */
+            language_confidence_method: string | null;
+            /** Model */
+            model: string;
+            /** Model Revision */
+            model_revision: string;
+            /** Processing Seconds */
+            processing_seconds: number;
+            /** Provider */
+            provider: string;
+            /** Provider Revision */
+            provider_revision: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Transcribed At
+             * Format: date-time
+             */
+            transcribed_at: string;
         };
         /**
          * TranscriptResponse
@@ -505,6 +578,7 @@ export interface components {
             cues: components["schemas"]["TranscriptCueResponse"][];
             /** Retrieval Units */
             retrieval_units: components["schemas"]["RetrievalUnitResponse"][];
+            transcription: components["schemas"]["TranscriptionRunResponse"] | null;
             video: components["schemas"]["VideoResponse"];
         };
         /** ValidationError */
