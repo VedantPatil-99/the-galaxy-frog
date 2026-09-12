@@ -4,9 +4,10 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phase 0 — Foundation and contracts — and Phase 1 — Transcript-first vertical slice — are complete.
-Phase 2 — Durable ingestion and ASR fallback — is in progress on
-`feat/ingestion-operational-hardening`; P2.1–P2.9 are complete and P2.10 is the remaining exit gate.
+Phase 0 — Foundation and contracts — Phase 1 — Transcript-first vertical slice — and the complete
+local Phase 2 — Durable ingestion and ASR fallback — exit gate are complete. Phase 2 closeout is on
+`test/phase-2-exit-gate` and still requires the normal pull-request and hosted-CI path before it is
+merged into `main`.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
@@ -49,6 +50,14 @@ claims, stage decisions, retryability, fallback, device/compute mode, cleanup, a
 PostgreSQL events remain the source of truth. The browser summarizes those persisted decisions. A
 real PostgreSQL cleanup-failure test proves retry resumes cleanup alone without duplicating audio,
 ASR, transcript cues, or indexing.
+
+P2.10 proves the complete path with a real captionless public video. yt-dlp uses the locked EJS
+component and the configured local Node runtime for current YouTube challenges. A retained metadata
+failure resumed on attempt two, acquired the exact `[0, 288320)` millisecond source interval,
+produced 59 CUDA ASR cues and 7 retrieval units, removed temporary media, and rendered provider plus
+timestamp evidence in the browser. The live proxy smoke proved the 30-event history and every ASR
+output identity remain unchanged on duplicate re-import; a grounded question returned two validated
+timestamp citations.
 
 ## Architecture direction
 

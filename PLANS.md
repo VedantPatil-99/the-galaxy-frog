@@ -190,8 +190,8 @@ idempotent re-import; the user also confirmed that selecting a citation seeks th
 
 Duration target: 7–10 focused development days.
 
-Status: **in progress**. The approved plan is recorded in the Galaxy Frog Workspace as
-`P2.0 — Phase 2: Durable Ingestion and ASR Fallback`.
+Status: **local exit gate complete; pull request and hosted CI pending**. The approved plan is
+recorded in the Galaxy Frog Workspace as `P2.0 — Phase 2: Durable Ingestion and ASR Fallback`.
 
 ### P2.1 — Durable ingestion foundation
 
@@ -335,11 +335,26 @@ Ruff, Pyright, ESLint, strict TypeScript, and the production build pass.
 
 ### P2.10 — Exit gate
 
-- [ ] Transcribe an approved captionless video and render exact timestamp cues.
-- [ ] Prove worker restart recovery and transcription-stage resume.
-- [ ] Prove duplicate dispatch does not duplicate jobs, events, cues, units, or embeddings.
-- [ ] Verify stage-specific progress, cancellation, retry, and safe errors in the UI.
-- [ ] Run the complete quality, pre-commit, migration, integration, scripted smoke, and manual gates.
+- [x] Transcribe an approved captionless video and render exact timestamp cues.
+- [x] Prove worker restart recovery and transcription-stage resume.
+- [x] Prove duplicate dispatch does not duplicate jobs, events, cues, units, or embeddings.
+- [x] Verify stage-specific progress, cancellation, retry, and safe errors in the UI.
+- [x] Run the complete quality, pre-commit, migration, integration, scripted smoke, and manual gates.
+
+On 2026-09-12, the local exit gate completed on `test/phase-2-exit-gate`. Current YouTube challenge
+handling is explicit and reproducible: the backend locks yt-dlp's default EJS component and both
+metadata and bounded-audio adapters use `YT_DLP_JS_RUNTIME=node`; the installed Node 22.16.0 runtime
+requires no additional machine setup. The previously failed captionless `_TJ61eCWQvQ` job resumed
+from its metadata checkpoint on attempt two, recorded audio interval `[0, 288320)`, transcribed 59
+cues with faster-whisper `small` on CUDA `int8_float16` in 11.01 seconds, created 7 retrieval units,
+and removed temporary audio only after indexing. The browser rendered the 30 ordered events, exact
+ASR execution evidence, cue timestamps/confidence, a grounded answer, and two validated timestamp
+citations. `smoke:phase2` then proved duplicate import leaves the event trail, transcription run,
+cues, and units unchanged; the database-backed test separately proves exactly one pgvector row per
+retrieval unit. The repository-wide quality/build, pre-commit, migration, five PostgreSQL
+integration tests, FFmpeg test, warmed CUDA ASR probe, scripted smoke, and manual UI gates all pass.
+Phase 2 is locally complete but is not represented as merged until its stacked branches pass the
+normal pull-request and GitHub Actions path into `main`.
 
 ## Phase 2 non-goals
 
@@ -416,3 +431,7 @@ Ruff, Pyright, ESLint, strict TypeScript, and the production build pass.
   summaries, truly lazy native ASR loading, documented recovery procedures, and a PostgreSQL cleanup
   failure/retry proof that does not duplicate completed outputs. Keep PostgreSQL events authoritative;
   logs are diagnostic, and P2.10 retains the live captionless-video and full multi-service exit gate.
+- 2026-09-12: Complete the local P2.10 exit gate with the captionless `_TJ61eCWQvQ` source, explicit
+  yt-dlp EJS plus Node 22 challenge execution, CUDA `small` ASR, browser-rendered exact evidence,
+  grounded citations, and duplicate-free live smoke. Keep Phase 2 marked unmerged until the stacked
+  pull-request and GitHub Actions path reaches `main`; no Phase 3 capability is included.

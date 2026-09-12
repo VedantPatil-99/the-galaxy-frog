@@ -25,7 +25,7 @@ evidence and produce timestamp-grounded answers.
 - Phase 1 — Transcript-first vertical slice: complete
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
-- Phase 2 — Durable ingestion and ASR fallback: in progress
+- Phase 2 — Durable ingestion and ASR fallback: local exit gate complete; PR/hosted CI pending
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -35,6 +35,7 @@ evidence and produce timestamp-grounded answers.
 - P2.7 — Resumable caption-to-ASR fallback: complete
 - P2.8 — Progress and recovery UI: complete
 - P2.9 — Operational hardening: complete
+- P2.10 — Quality, integration, live captionless smoke, and manual UI exit gate: complete locally
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -243,6 +244,27 @@ skipped and 100% statement/branch coverage, all four real PostgreSQL durability 
 tests, Ruff, Pyright, ESLint, strict TypeScript, and the Next.js production build. P2.10 is next and
 owns the approved live captionless-video, duplicate-dispatch, multi-service UI, full quality,
 pre-commit, migration, smoke, and manual exit gates.
+
+P2.10 is complete locally on 2026-09-12 on `test/phase-2-exit-gate`. The backend now locks
+`yt-dlp[default]`, including `yt-dlp-ejs`, and uses the typed `YT_DLP_JS_RUNTIME=node` setting for
+both YouTube metadata inspection and bounded audio download. This uses the existing Node 22.16.0
+installation; Bun 1.4.0 is not selected as yt-dlp's JavaScript challenge runtime. The user-supplied
+captionless `_TJ61eCWQvQ` source resumed its pre-fix metadata failure at the retained checkpoint,
+then completed on attempt two with exact audio interval `[0, 288320)`, faster-whisper 1.2.1
+multilingual `small` on CUDA `int8_float16`, 97% detected-language confidence, 59 exact ASR cues,
+7 retrieval units, and successful post-index temporary-media cleanup. The measured transcription
+time was 11.01 seconds.
+
+The live UI rendered stage recovery, the 30-event durable trail, actual provider/model/revision/
+device evidence, interval and per-cue confidence, and safe retry behavior. A grounded question about
+learning from the past returned two validated timestamp citations. `bun run smoke:phase2` reused the
+succeeded job and proved the events, transcription run, cue IDs, and retrieval-unit IDs remain
+unchanged on duplicate import. The repository-wide `bun run check`, `bun run precommit`, Alembic
+head, four durable-ingestion plus one Phase 1 PostgreSQL integration tests, FFmpeg integration, and
+warmed CUDA ASR probe all pass; the default backend result is 508 passed, 7 opt-in skipped, and 100%
+statement/branch coverage, with 26 frontend tests passing. No Phase 3 work is included. Phase 2 must
+still traverse the appropriate stacked pull requests and GitHub Actions before `main` can be called
+complete and merged.
 
 Provider presentation remains intentionally split across phases. P2.8 shows read-only execution
 evidence from FastAPI—actual ASR provider, model, revision, device, selection/fallback reason and
