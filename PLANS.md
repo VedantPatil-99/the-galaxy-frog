@@ -298,11 +298,22 @@ all three durable-ingestion integration tests passed, including the fail/restart
 
 ### P2.8 — Progress and recovery UI
 
-- [ ] Consume only generated job API types through the thin Next.js proxy.
-- [ ] Render stage progress, recoverable errors, cancellation, and retry controls.
-- [ ] Display the actual ASR provider, model, revision, device, selection reason, fallback reason and
+- [x] Consume only generated job API types through the thin Next.js proxy.
+- [x] Render stage progress, recoverable errors, cancellation, and retry controls.
+- [x] Display the actual ASR provider, model, revision, device, selection reason, fallback reason and
   measured processing time from FastAPI-owned job data as read-only execution evidence.
-- [ ] Preserve transcript, retrieval, answer, and citation-seeking behavior after completion.
+- [x] Preserve transcript, retrieval, answer, and citation-seeking behavior after completion.
+
+The client now observes each generated durable job projection while polling and refreshes its ordered
+event history through the thin proxy. A typed presentation model covers every FastAPI stage/status;
+the workspace renders progress, attempt count, recent durable events, cancellation-pending state,
+safe terminal errors, and retry only when `last_error_retryable` permits it. Successful jobs retain
+the Phase 1 player/transcript/question/citation experience. Caption-backed transcripts explicitly
+show that local ASR was skipped; ASR-backed transcripts show the actual provider/model revisions,
+device/compute type, selection/fallback reason, language confidence, measured processing time,
+source interval, run identity, and cue confidence as read-only evidence. The interactive provider
+policy remains out of scope. On 2026-09-11, all 25 frontend tests, ESLint, strict TypeScript, and the
+Next.js production build passed, followed by a local browser layout inspection.
 
 ### P2.9 — Operational hardening
 
@@ -386,3 +397,6 @@ all three durable-ingestion integration tests passed, including the fail/restart
   exact ASR-to-transcript provenance, safe API execution evidence, post-index cleanup, and a real
   PostgreSQL fail/restart/complete proof. Keep provider policy fixed and read-only until Phase 8;
   P2.8 owns only progress/recovery presentation through generated FastAPI contracts.
+- 2026-09-11: Complete P2.8 with observable polling, stage/event progress, safe cancellation/retry
+  controls, and read-only caption/ASR execution evidence. Preserve the completed Phase 1 experience
+  and keep provider selection, fallback editing, cloud consent, and pricing in Phase 8.

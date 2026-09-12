@@ -157,6 +157,7 @@ export async function cancelIngestionJob(
 export interface IngestionWaitOptions {
   pollIntervalMs?: number
   maxPolls?: number
+  onUpdate?: (job: IngestionJobResponse) => void | Promise<void>
 }
 
 const terminalIngestionStatuses = new Set(["succeeded", "failed", "cancelled"])
@@ -170,6 +171,7 @@ export async function waitForIngestionJob(
   const maxPolls = options.maxPolls ?? 300
   let job = initialJob
 
+  await options.onUpdate?.(job)
   for (let poll = 0; poll <= maxPolls; poll += 1) {
     if (terminalIngestionStatuses.has(job.status)) return job
     if (poll === maxPolls) break
@@ -177,6 +179,7 @@ export async function waitForIngestionJob(
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     }
     job = await getIngestionJob(job.job_id, fetcher)
+    await options.onUpdate?.(job)
   }
 
   throw new ApiClientError(

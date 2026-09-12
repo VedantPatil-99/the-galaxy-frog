@@ -193,3 +193,18 @@ P2.7 connects the provider-neutral media and transcription boundaries through du
 FastAPI owns the safe transcript execution schema and generated browser declarations. Next.js may
 display the actual provider, model, revision, device, timing, confidence, and fallback reason, but it
 receives no local media path and cannot select or execute a provider during Phase 2.
+
+## Phase 2 progress and recovery presentation
+
+P2.8 keeps the browser as a generated-contract consumer. The import response supplies the first
+durable job projection; the client polls job detail, refreshes ordered events, and derives labels and
+progress only from FastAPI-owned enum values. Cancellation and retry post to FastAPI through the same
+thin proxy. The UI never mutates a stage locally, and it offers retry only when the returned job marks
+the last failure retryable.
+
+After success, the transcript response remains the evidence source. Caption-backed results state
+that ASR was skipped. ASR-backed results present the actual run/provider/model revisions,
+device/compute type, language confidence, processing time, source interval, caption-fallback reason,
+and cue confidence. These are read-only facts about what ran, not a provider-configuration surface.
+The existing player, grounded-question, retrieval evidence, and citation-seeking paths remain
+unchanged.

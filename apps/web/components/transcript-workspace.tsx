@@ -2,14 +2,24 @@
 
 import { useRef, useState, type FormEvent } from "react"
 
+import { IngestionProgress } from "@/components/ingestion-progress"
+import { TranscriptionEvidence } from "@/components/transcription-evidence"
 import {
   ApiClientError,
   askVideoQuestion,
+  cancelIngestionJob,
+  getIngestionEvents,
   getTranscript,
   importVideo,
+  retryIngestionJob,
   waitForIngestionJob,
 } from "@/lib/api/client"
-import type { AnswerResponse, TranscriptResponse } from "@/lib/api/contracts"
+import type {
+  AnswerResponse,
+  IngestionEventsResponse,
+  IngestionJobResponse,
+  TranscriptResponse,
+} from "@/lib/api/contracts"
 import { seekCommands, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 
 function timestamp(milliseconds: number): string {
@@ -35,9 +45,12 @@ export function TranscriptWorkspace() {
   const [question, setQuestion] = useState("")
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
   const [answer, setAnswer] = useState<AnswerResponse | null>(null)
+  const [job, setJob] = useState<IngestionJobResponse | null>(null)
+  const [events, setEvents] = useState<IngestionEventsResponse["events"]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
+  const [jobActionPending, setJobActionPending] = useState(false)
   const [asking, setAsking] = useState(false)
 
   function seekTo(milliseconds: number) {
@@ -47,32 +60,105 @@ export function TranscriptWorkspace() {
     player.current?.scrollIntoView({ behavior: "smooth", block: "center" })
   }
 
+  async function refreshJobProgress(nextJob: IngestionJobResponse) {
+    setJob(nextJob)
+    const history = await getIngestionEvents(nextJob.job_id)
+    setEvents(history.events)
+  }
+
+  async function monitorIngestion(
+    initialJob: IngestionJobResponse,
+    reused: boolean,
+  ) {
+    const completed = await waitForIngestionJob(initialJob, fetch, {
+      maxPolls: 14_400,
+      onUpdate: refreshJobProgress,
+    })
+    if (completed.status === "failed") {
+      setError(completed.last_error_message ?? "The ingestion job could not continue.")
+      return
+    }
+    if (completed.status === "cancelled") {
+      setNotice("Ingestion cancelled safely. Persisted checkpoints were retained according to policy.")
+      return
+    }
+    if (completed.status !== "succeeded" || completed.video_id == null) {
+      throw new ApiClientError("The ingestion job did not complete.", 409, null)
+    }
+
+    const loaded = await getTranscript(completed.video_id)
+    setTranscript(loaded)
+    if (loaded.transcription !== null) {
+      setNotice(
+        "Local ASR transcript ready — exact cue intervals and execution provenance were retained.",
+      )
+    } else {
+      setNotice(
+        reused
+          ? "Existing durable job reused — no transcript rows were duplicated."
+          : "Caption transcript imported and indexed without invoking local ASR.",
+      )
+    }
+  }
+
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setImporting(true)
     setError(null)
     setNotice(null)
     setAnswer(null)
+    setTranscript(null)
+    setJob(null)
+    setEvents([])
     try {
       const imported = await importVideo(sourceUrl)
-      const completed = await waitForIngestionJob(imported.job)
-      if (completed.status !== "succeeded" || completed.video_id == null) {
-        throw new ApiClientError(
-          completed.last_error_message ?? "The ingestion job did not complete.",
-          409,
-          null,
-        )
-      }
-      const loaded = await getTranscript(completed.video_id)
-      setTranscript(loaded)
       setNotice(
         imported.reused
-          ? "Existing durable job reused — no transcript rows were duplicated."
-          : "Caption transcript imported and indexed.",
+          ? "Following the existing durable job and its persisted event trail."
+          : "Durable job queued. Waiting for a worker to claim it.",
+      )
+      await monitorIngestion(imported.job, imported.reused)
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function handleCancel() {
+    if (job === null) return
+    setJobActionPending(true)
+    setError(null)
+    try {
+      const updated = await cancelIngestionJob(job.job_id)
+      await refreshJobProgress(updated)
+      setNotice(
+        updated.status === "cancelled"
+          ? "The queued job was cancelled."
+          : "Cancellation requested. The worker will stop at a safe checkpoint.",
       )
     } catch (caught) {
       setError(errorMessage(caught))
     } finally {
+      setJobActionPending(false)
+    }
+  }
+
+  async function handleRetry() {
+    if (job === null) return
+    setJobActionPending(true)
+    setImporting(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const retried = await retryIngestionJob(job.job_id)
+      setJobActionPending(false)
+      setNotice(`Retry queued from the ${retried.stage.replaceAll("_", " ")} checkpoint.`)
+      await monitorIngestion(retried, true)
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setJobActionPending(false)
       setImporting(false)
     }
   }
@@ -95,15 +181,15 @@ export function TranscriptWorkspace() {
   return (
     <section aria-labelledby="workspace-title" className="mx-auto w-full max-w-7xl px-5 pb-16 sm:px-7 lg:px-10">
       <div className="mb-7 max-w-3xl">
-        <p className="mb-3 font-mono text-xs tracking-[0.22em] text-primary uppercase">Phase 1 · Transcript-first</p>
+        <p className="mb-3 font-mono text-xs tracking-[0.22em] text-primary uppercase">Phase 2 · Durable ingestion</p>
         <h1 id="workspace-title" className="font-heading text-4xl leading-tight font-semibold tracking-[-0.04em] sm:text-5xl">Ask the video. Keep the receipts.</h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public captioned YouTube video, inspect its exact cues, and seek every answer back to timestamped transcript evidence.</p>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public YouTube video. Galaxy Frog uses viable captions first, falls back to bounded local multilingual ASR only when needed, and keeps every answer linked to exact evidence.</p>
       </div>
 
       <form onSubmit={handleImport} className="rounded-2xl border bg-card p-3 shadow-sm sm:flex sm:items-center sm:gap-3">
         <label htmlFor="source-url" className="sr-only">Public YouTube URL</label>
         <input id="source-url" type="url" required value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=…" className="h-11 w-full rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
-        <button type="submit" disabled={importing} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Processing durable job…" : "Queue video"}</button>
+        <button type="submit" disabled={importing} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Following durable job…" : "Queue video"}</button>
       </form>
 
       <div aria-live="polite" className="min-h-12 py-3 text-sm">
@@ -111,11 +197,21 @@ export function TranscriptWorkspace() {
         {error ? <p role="alert" className="text-destructive">{error}</p> : null}
       </div>
 
+      {job ? (
+        <IngestionProgress
+          job={job}
+          events={events}
+          actionPending={jobActionPending}
+          onCancel={handleCancel}
+          onRetry={handleRetry}
+        />
+      ) : null}
+
       {transcript === null ? (
         <div className="grid min-h-80 place-items-center rounded-3xl border border-dashed bg-muted/30 px-6 text-center">
           <div className="max-w-md">
             <p className="font-heading text-xl font-semibold">Your evidence workspace is ready.</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Only metadata and captions are retrieved. Galaxy Frog does not download audio or video in Phase 1.</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Caption-first by default. When captions cannot produce usable evidence, the worker acquires bounded local audio and records exactly why ASR was selected.</p>
           </div>
         </div>
       ) : (
@@ -136,6 +232,8 @@ export function TranscriptWorkspace() {
                 </div>
               </div>
             </article>
+
+            <TranscriptionEvidence transcription={transcript.transcription} />
 
             <article className="rounded-3xl border bg-card p-5 shadow-sm sm:p-6">
               <div className="mb-4">
@@ -181,7 +279,14 @@ export function TranscriptWorkspace() {
               {transcript.cues.map((cue) => (
                 <button key={cue.cue_id} type="button" onClick={() => seekTo(cue.start_ms)} className="grid w-full grid-cols-[3.5rem_1fr] gap-3 p-4 text-left transition hover:bg-muted/60">
                   <span className="font-mono text-xs font-semibold text-primary">{timestamp(cue.start_ms)}</span>
-                  <span className="text-sm leading-6">{cue.text}</span>
+                  <span>
+                    <span className="block text-sm leading-6">{cue.text}</span>
+                    <span className="mt-1 block text-[0.68rem] text-muted-foreground uppercase">
+                      {cue.origin === "asr"
+                        ? `ASR${cue.confidence === null ? "" : ` · ${Math.round(cue.confidence * 100)}% confidence`}`
+                        : `${cue.caption_kind ?? "source"} caption`}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
