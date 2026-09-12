@@ -6,7 +6,7 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 Phase 0 — Foundation and contracts — and Phase 1 — Transcript-first vertical slice — are complete.
 Phase 2 — Durable ingestion and ASR fallback — is in progress on
-`feat/durable-ingestion-foundation`.
+`feat/bounded-audio-acquisition`.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
@@ -29,6 +29,12 @@ Provider-neutral wake-up hints use local PostgreSQL polling by default; the opti
 sends identifier-only messages to a signature-verified internal callback that is neither exported in
 OpenAPI nor reachable through the browser proxy.
 
+P2.5 adds a provider-neutral audio contract that requires an explicit unavailable/unusable-caption
+reason, isolated job-attempt workspaces, bounded shell-free yt-dlp execution, verified FFmpeg
+normalization to mono 16 kHz PCM, exact whole-source millisecond intervals, tool-revision
+provenance, and configured post-processing cleanup. Caption-to-audio routing and ASR remain inactive
+until P2.7 and P2.6 respectively.
+
 ## Architecture direction
 
 - `apps/web`: presentation-only Next.js/React/TypeScript application.
@@ -41,6 +47,8 @@ OpenAPI nor reachable through the browser proxy.
   workers claim bounded leases and resume only from persisted stage checkpoints.
 - Local dispatch is the default; optional QStash delivery carries no media, transcript, prompt, or
   evidence data and never becomes a second source of truth.
+- Audio acquisition is local, bounded by typed duration/size/deadline/concurrency settings, and
+  retains every artifact's source interval plus yt-dlp/FFmpeg revision provenance.
 - Provider-specific integrations stay behind Python interfaces and configuration.
 
 See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-scope.md), and [PLANS.md](PLANS.md).

@@ -10,6 +10,13 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
+from galaxy_frog.adapters.media import (
+    AsyncSubprocessRunner,
+    FfmpegAudioNormalizer,
+    IsolatedMediaWorkspace,
+    LocalAudioAcquirer,
+    YtDlpAudioDownloader,
+)
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.application.ingestion import (
     IngestionJobRunner,
@@ -21,8 +28,33 @@ from galaxy_frog.db.engine import create_database_engine
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.media import AudioAcquirer, AudioAcquisitionLimits
 
 EngineFactory = Callable[[Settings], AsyncEngine]
+
+
+def build_audio_acquirer(settings: Settings) -> AudioAcquirer:
+    """Compose bounded local media providers without activating later ASR stages."""
+
+    runner = AsyncSubprocessRunner()
+    limits = AudioAcquisitionLimits(
+        max_duration_ms=settings.media_max_duration_seconds * 1000,
+        max_download_bytes=settings.media_max_download_bytes,
+        max_output_bytes=settings.media_max_output_bytes,
+        timeout_seconds=settings.media_timeout_seconds,
+        max_concurrency=settings.media_max_concurrency,
+    )
+    return LocalAudioAcquirer(
+        downloader=YtDlpAudioDownloader(runner=runner),
+        normalizer=FfmpegAudioNormalizer(
+            runner=runner,
+            ffmpeg_executable=settings.ffmpeg_executable,
+            ffprobe_executable=settings.ffprobe_executable,
+        ),
+        workspaces=IsolatedMediaWorkspace(settings.media_workspace_root),
+        limits=limits,
+        retain_on_success=settings.media_retain_on_success,
+    )
 
 
 def resolve_worker_id(settings: Settings) -> str:

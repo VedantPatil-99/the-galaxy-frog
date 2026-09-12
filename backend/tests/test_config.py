@@ -1,5 +1,7 @@
 """Behavior tests for typed application settings."""
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -19,6 +21,15 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("INGESTION_WORKER_ID", " worker-a ")
     monkeypatch.setenv("INGESTION_LEASE_SECONDS", "180")
     monkeypatch.setenv("INGESTION_POLL_SECONDS", "0.5")
+    monkeypatch.setenv("MEDIA_WORKSPACE_ROOT", "tmp/test-media")
+    monkeypatch.setenv("MEDIA_MAX_DURATION_SECONDS", "3600")
+    monkeypatch.setenv("MEDIA_MAX_DOWNLOAD_BYTES", "1024")
+    monkeypatch.setenv("MEDIA_MAX_OUTPUT_BYTES", "2048")
+    monkeypatch.setenv("MEDIA_TIMEOUT_SECONDS", "45")
+    monkeypatch.setenv("MEDIA_MAX_CONCURRENCY", "2")
+    monkeypatch.setenv("MEDIA_RETAIN_ON_SUCCESS", "true")
+    monkeypatch.setenv("FFMPEG_EXECUTABLE", " C:/Tools/ffmpeg.exe ")
+    monkeypatch.setenv("FFPROBE_EXECUTABLE", " C:/Tools/ffprobe.exe ")
 
     settings = Settings()
 
@@ -32,6 +43,16 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.ingestion_worker_id == "worker-a"
     assert settings.ingestion_lease_seconds == 180
     assert settings.ingestion_poll_seconds == 0.5
+    assert settings.media_workspace_root.is_absolute()
+    assert settings.media_workspace_root.parts[-2:] == ("tmp", "test-media")
+    assert settings.media_max_duration_seconds == 3600
+    assert settings.media_max_download_bytes == 1024
+    assert settings.media_max_output_bytes == 2048
+    assert settings.media_timeout_seconds == 45
+    assert settings.media_max_concurrency == 2
+    assert settings.media_retain_on_success is True
+    assert settings.ffmpeg_executable == "C:/Tools/ffmpeg.exe"
+    assert settings.ffprobe_executable == "C:/Tools/ffprobe.exe"
 
 
 def test_settings_reject_an_unknown_environment() -> None:
@@ -70,6 +91,29 @@ def test_settings_reject_invalid_ollama_origins(value: str) -> None:
 def test_settings_reject_invalid_worker_configuration(field: str, value: object) -> None:
     with pytest.raises(ValidationError):
         Settings.model_validate({field: value})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("media_max_duration_seconds", 0),
+        ("media_max_download_bytes", 0),
+        ("media_max_output_bytes", 0),
+        ("media_timeout_seconds", 0),
+        ("media_max_concurrency", 0),
+        ("media_max_concurrency", 5),
+        ("ffmpeg_executable", " "),
+        ("ffprobe_executable", ""),
+    ],
+)
+def test_settings_reject_invalid_media_configuration(field: str, value: object) -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({field: value})
+
+
+def test_settings_reject_a_filesystem_root_as_the_media_workspace() -> None:
+    with pytest.raises(ValidationError, match="MEDIA_WORKSPACE_ROOT"):
+        Settings.model_validate({"media_workspace_root": Path.cwd().anchor})
 
 
 def test_qstash_dispatch_requires_complete_secret_configuration() -> None:

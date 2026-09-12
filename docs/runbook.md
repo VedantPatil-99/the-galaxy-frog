@@ -1,8 +1,8 @@
 # Galaxy Frog local runbook
 
 This runbook covers the local Next.js, FastAPI, PostgreSQL/pgvector, Phase 1 transcript-first stack,
-and the Phase 2 durable-ingestion database foundation. Run commands from the repository root in Git
-Bash unless a section says otherwise.
+and the Phase 2 durable-ingestion and bounded-audio foundations. Run commands from the repository
+root in Git Bash unless a section says otherwise.
 
 ## Prerequisites
 
@@ -10,6 +10,7 @@ Bash unless a section says otherwise.
 - Bun `1.4.0`
 - Python `3.14.7`
 - uv `0.12.7`
+- FFmpeg and ffprobe `9.0.1`
 - WSL 2 and Docker Desktop using the WSL 2 backend
 
 PostgreSQL does not need to be installed directly on Windows. Docker Compose runs the pinned
@@ -114,6 +115,41 @@ and the Next.js proxy returns `404` for every `/internal/*` path. Keep FastAPI a
 worker running; the callback acknowledges the durable pointer quickly while the worker claims from
 PostgreSQL. Never place QStash tokens or signing keys in source control.
 
+The current local workflow intentionally keeps `JOB_DISPATCHER=local`; hosted QStash setup is
+deferred to a later phase and is not required for audio acquisition.
+
+## Bounded local audio tools
+
+FFmpeg and ffprobe are user-managed machine tools. Verify them from Git Bash after installation or
+after opening a new terminal so it receives the updated `PATH`:
+
+```bash
+command -v ffmpeg
+command -v ffprobe
+ffmpeg -version | head -n 1
+ffprobe -version | head -n 1
+```
+
+P2.5 uses the locked Python yt-dlp package to download only a single best-audio stream, then uses
+ffprobe and FFmpeg to verify and normalize it to mono 16 kHz PCM WAV. The default local limits are:
+
+- `MEDIA_WORKSPACE_ROOT=tmp/media`
+- `MEDIA_MAX_DURATION_SECONDS=7200`
+- `MEDIA_MAX_DOWNLOAD_BYTES=268435456`
+- `MEDIA_MAX_OUTPUT_BYTES=268435456`
+- `MEDIA_TIMEOUT_SECONDS=600`
+- `MEDIA_MAX_CONCURRENCY=1`
+- `MEDIA_RETAIN_ON_SUCCESS=false`
+
+Every attempt is isolated under `tmp/media/{job_id}/attempt-{attempt}`. Failed and cancelled
+attempts clean that directory immediately. Successful audio remains available for processing and is
+removed when the later transcription path calls cleanup; set retention to `true` only for deliberate
+local diagnosis. The provider records the canonical source, unavailable/unusable-caption reason,
+the half-open `[0, duration_ms)` interval, acquisition time, and yt-dlp/FFmpeg revisions.
+
+P2.5 does not yet send caption failures into audio or ASR. No media process needs to stay active;
+P2.6 adds the transcription provider and P2.7 activates the durable fallback transition.
+
 ## API contract workflow
 
 FastAPI is the source of truth for HTTP schemas. After an intentional API schema change, regenerate
@@ -164,6 +200,18 @@ stale-lease recovery, persisted-stage restart resume, ordered events, cancellati
 ```bash
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_durable_ingestion.py
 ```
+
+Prove the installed local FFmpeg toolchain without network access or a running application:
+
+```bash
+export RUN_MEDIA_INTEGRATION=1
+export FFMPEG_EXECUTABLE="$(command -v ffmpeg)"
+export FFPROBE_EXECUTABLE="$(command -v ffprobe)"
+uv run --directory backend pytest --no-cov tests/integration/test_media_tools.py
+```
+
+The test generates a one-second stereo/48 kHz fixture in pytest temporary storage, normalizes it
+through the production adapter, re-probes mono/16 kHz PCM output, and verifies the exact duration.
 
 These tests create uniquely identified jobs and delete them when they finish. Do not complete a
 durable-ingestion checkpoint based only on unit tests or an offline migration render.

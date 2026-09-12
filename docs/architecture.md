@@ -10,7 +10,8 @@ flowchart TD
     API --> CORE["Python domain modules"]
     CORE --> DATA["PostgreSQL + pgvector"]
     CORE --> PROVIDERS["Replaceable provider adapters"]
-    PROVIDERS --> YOUTUBE["YouTube metadata + captions<br>no media download"]
+    PROVIDERS --> YOUTUBE["YouTube metadata + captions"]
+    PROVIDERS --> MEDIA["Bounded yt-dlp + FFmpeg audio"]
     PROVIDERS --> OLLAMA["User-managed Ollama<br>BGE-M3 + Qwen3 4B"]
 ```
 
@@ -65,6 +66,46 @@ Provider availability is reported by the import/question operation that requires
 database readiness. A missing embedder or generator produces a stable, correlated API failure; it
 does not silently change the model or answer quality.
 
+## Planned Phase 8 provider policy boundary
+
+Phase 8 adds product-facing provider configuration without moving provider policy into Next.js.
+FastAPI will expose capability, health and versioned profile schemas through OpenAPI; the frontend
+will consume the generated types, select a profile and render the resulting decision. Provider SDK
+clients, credentials, availability probes, compatibility rules, quota state, fallback resolution
+and cost calculations remain Python responsibilities.
+
+The policy supports three explicit modes:
+
+1. `automatic_local_only` is the default and considers only healthy, compatible local providers.
+2. `automatic_cloud_permitted` may consider cloud providers only when the request includes current,
+   explicit cloud-processing consent.
+3. `manual` pins a provider/model and either disables fallback or supplies an ordered compatible
+   fallback chain.
+
+Cloud consent is independent from the selected mode, defaults to denied and cannot be inferred from
+configured credentials. Losing a local provider, exhausting a quota or timing out never authorizes
+uploading source media or evidence. Strict manual selection returns a recoverable error rather than
+substituting a provider silently. Evaluation profiles pin the complete provider configuration and
+disable automatic fallback.
+
+Every provider run produces a durable decision record containing the requested mode/profile/model,
+the resolved provider/model/revision/device, language and capability requirements, the selection
+reason, ordered fallback attempts and reasons, input duration, processing time, estimated or actual
+cost when reported, and pricing provenance (`source_url`, billing unit, currency and `verified_at`).
+Pricing metadata is explanatory and can be marked stale; the provider's bill remains authoritative.
+
+The UI presents model capabilities and the durable decision record. Provider cards show local or
+cloud execution, language and code-switching coverage, privacy implications, expected quality,
+measured speed, hardware needs, timestamp/confidence/diarization support and current availability.
+Job details distinguish requested from actual execution and explain every fallback. None of these
+presentation paths may discard or rewrite the original half-open timestamp intervals, source IDs,
+cue links or evidence provenance.
+
+Phase 2 prepares only the execution evidence needed by this later policy: its progress UI may show
+the actual ASR provider, model, revision, device, timing and fallback reason as read-only data. The
+interactive selector, editable profiles, cloud-consent controls and pricing presentation remain
+Phase 8 work.
+
 ## Phase 1 transcript path
 
 1. FastAPI canonicalizes an allowlisted YouTube URL and retrieves safe metadata and captions only.
@@ -107,3 +148,28 @@ The durable stage vocabulary is deliberately limited to Phase 2 ingestion work. 
 identity and will preserve every transcript cue's half-open millisecond interval and source
 provenance when caption-to-ASR fallback is added; it does not introduce OCR, visual retrieval,
 hybrid retrieval, reranking, or LangGraph.
+
+## Phase 2 bounded audio foundation
+
+P2.5 adds the local media boundary without activating transcription or changing the HTTP contract:
+
+1. An audio request cannot exist without a durable job/attempt, canonical source, expected duration,
+   and an explicit `captions_unavailable` or `captions_unusable` fallback reason.
+2. A local acquirer caps the complete operation, including concurrency wait, download, inspection,
+   and normalization, with one deadline and one shared semaphore.
+3. Every attempt owns only `tmp/media/{job_id}/attempt-{attempt}`. Cleanup validates this exact shape
+   beneath the configured root before recursive deletion and never accepts a provider-returned path
+   outside the attempt directory.
+4. yt-dlp receives an argument array, single-video mode, duration filter, source-size ceiling,
+   bounded retries/socket timeout, and an output template controlled by the worker.
+5. ffprobe checks source duration and size before FFmpeg emits one mono 16 kHz `pcm_s16le` WAV;
+   ffprobe then verifies codec, sample rate, channels, duration, and size again.
+6. The resulting artifact preserves canonical source identity, fallback reason, the half-open
+   `[0, duration_ms)` interval, acquisition time, and yt-dlp/FFmpeg revisions.
+7. Failed or cancelled attempts clean their workspace immediately. After later transcription
+   succeeds, cleanup removes the successful artifact unless explicit retention is configured.
+
+The worker can compose this provider-neutral `AudioAcquirer`, but the current caption handler does
+not call it. P2.6 owns the transcription protocol/provider, and P2.7 owns the persisted
+caption-to-audio-to-ASR transition. Next.js remains presentation-only and receives no media paths or
+provider configuration.

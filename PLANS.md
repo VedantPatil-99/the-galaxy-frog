@@ -246,9 +246,18 @@ only reads and acknowledges the current job projection, so it cannot duplicate e
 
 ### P2.5 — Bounded audio acquisition
 
-- [ ] Acquire audio only after captions are unavailable or unusable.
-- [ ] Enforce duration, file-size, timeout, concurrency, and isolated-workspace limits.
-- [ ] Delete temporary audio after successful processing when configured.
+- [x] Acquire audio only after captions are unavailable or unusable.
+- [x] Enforce duration, file-size, timeout, concurrency, and isolated-workspace limits.
+- [x] Delete temporary audio after successful processing when configured.
+
+Audio requests require an explicit unavailable/unusable-caption reason and return normalized audio
+with the exact whole-source half-open millisecond interval plus downloader/normalizer revisions.
+Local yt-dlp and FFmpeg providers run through shell-free bounded subprocesses in deterministic
+job-attempt workspaces. Typed defaults cap duration at two hours, source and normalized files at
+256 MiB each, the complete acquisition at ten minutes, and local concurrency at one. Failed and
+cancelled attempts clean their isolated workspaces; successful media is removed after processing
+unless retention is explicitly enabled. P2.5 defines and proves this boundary without activating
+caption fallback or transcription, which remain P2.7 and P2.6 responsibilities.
 
 ### P2.6 — Faster-whisper provider
 
@@ -266,6 +275,8 @@ only reads and acknowledges the current job projection, so it cannot duplicate e
 
 - [ ] Consume only generated job API types through the thin Next.js proxy.
 - [ ] Render stage progress, recoverable errors, cancellation, and retry controls.
+- [ ] Display the actual ASR provider, model, revision, device, selection reason, fallback reason and
+  measured processing time from FastAPI-owned job data as read-only execution evidence.
 - [ ] Preserve transcript, retrieval, answer, and citation-seeking behavior after completion.
 
 ### P2.9 — Operational hardening
@@ -286,7 +297,9 @@ only reads and acknowledges the current job projection, so it cannot duplicate e
 
 - PostgreSQL FTS, lexical retrieval, RRF, reranking, and temporal expansion.
 - OCR, scenes, frames, visual embeddings, VLM reasoning, and LangGraph.
-- Chapters, notes, flashcards, quizzes, provider-configuration UI, and AWS deployment.
+- Chapters, notes, flashcards, quizzes, interactive provider/model selection, editable fallback
+  profiles, cloud-consent controls, live pricing configuration, and AWS deployment. P2.8 may display
+  the provider decision that actually ran; Phase 8 owns changing that policy from the UI.
 
 ## Decision log
 
@@ -326,3 +339,13 @@ only reads and acknowledges the current job projection, so it cannot duplicate e
   verification, a private callback outside generated browser contracts, and idempotent duplicate
   delivery acknowledgement. Keep live QStash credentials optional and stop before P2.5's manual
   FFmpeg/media-runtime gate.
+- 2026-09-07: Complete P2.5 after manually installing FFmpeg 9.0.1 and passing a real local
+  normalization probe. Require a caption-fallback reason on every audio request; cap duration,
+  source/output size, total deadline, and concurrency; isolate files by job attempt; retain exact
+  source intervals and tool revisions; and clean temporary media after successful processing by
+  default. Keep the runtime unwired until P2.7 and stop before P2.6's faster-whisper/CTranslate2
+  compatibility and model/device setup gate.
+- 2026-09-07: Keep Phase 2 provider presentation read-only: P2.8 will expose which ASR provider,
+  model, revision and device actually ran plus its selection/fallback reason. Phase 8 owns the
+  interactive automatic/manual policy, editable fallback chains, explicit cloud consent and
+  pricing-aware provider configuration.

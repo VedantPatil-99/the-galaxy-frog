@@ -1022,23 +1022,60 @@ Provider abstractions should exist from Phase 0, but this phase completes the pr
 
 ### Work
 
-- Implement capability registry.
-- Add provider health checks.
-- Add circuit breakers and quota tracking.
-- Add provider profiles.
-- Add local/free/AWS switching UI.
-- Add privacy warnings before cloud processing.
-- Add per-provider timeouts and concurrency controls.
-- Track cost estimates and fallback events.
-- Add compatible embedding-collection selection.
-- Add degraded-mode banners and user actions.
+- Implement a FastAPI-owned capability registry. Each provider/model entry must describe its
+  capability, revision, local or cloud execution location, supported languages and code-switching,
+  timestamp granularity, confidence and diarization support, required hardware, configuration
+  readiness, health, quota state and pricing-source metadata.
+- Add provider health checks, circuit breakers, quota tracking and per-provider timeouts and
+  concurrency controls.
+- Add versioned provider profiles and three explicit selection modes:
+  - **Automatic — local only** is the default and can fall back only among healthy local providers.
+  - **Automatic — cloud permitted** may use an eligible cloud provider only after the user grants
+    separate, explicit permission for the source media or evidence to leave the machine.
+  - **Manual** pins an exact provider/model and lets the user choose either no fallback or an
+    ordered, compatible fallback chain. A strict manual failure is surfaced instead of silently
+    switching providers.
+- Add a local/free/AWS provider-selection UI that renders the FastAPI capability registry through
+  generated OpenAPI types. Model cards must show language coverage, execution location, privacy
+  implications, expected quality, measured speed on known hardware, hardware requirements,
+  timestamp and confidence support, current availability and a concise "why this model" summary.
+- Keep secrets, provider resolution, compatibility checks, fallback ordering, quota handling and
+  cost computation in FastAPI. Next.js may select a profile and present the resulting policy, but
+  must not contain provider SDKs, duplicate capability rules or hard-coded live prices.
+- Keep cloud consent independent from provider mode and disabled by default. Never turn a local
+  request into cloud processing because of an error, quota condition or missing local runtime.
+- Record a provider-decision trail for every run: requested mode/profile/provider/model, resolved
+  provider/model/revision/device, selection reason, fallback attempts and reasons, processing time,
+  input duration, estimated and actual cost when available, and the pricing source plus its
+  verification time.
+- Show that decision trail in job progress and completed-job details, including the requested and
+  actual model, device, fallback reason and measured processing speed. Preserve the original
+  timestamp intervals and evidence provenance regardless of provider or fallback.
+- Make pricing explanatory rather than authoritative: display the provider's pricing URL, billing
+  unit, currency, free-tier or credit note and `verified_at` time, and label stale or unavailable
+  pricing instead of guessing. Provider billing remains the source of truth.
+- Add compatible embedding-collection selection and reject any provider/model change whose output
+  cannot be compared with the stored collection.
+- Add degraded-mode banners and recovery actions that explain unavailable providers, exhausted
+  quota, denied cloud consent and rejected fallbacks without hiding a quality or privacy change.
+- Make evaluation mode pin the complete provider profile and disable automatic fallback so results
+  remain reproducible.
 
 ### Exit gate
 
 - Disabling Gemini does not break local mode.
 - Exhausting a cloud quota produces a recoverable UI state.
 - An incompatible embedding fallback is rejected safely.
-- Provider choice is recorded on every run.
+- Automatic local-only mode never sends media or evidence to a cloud provider.
+- Cloud processing cannot begin without explicit consent, and revoking consent removes cloud
+  providers from the eligible fallback chain.
+- Manual no-fallback mode fails visibly when its selected provider is unavailable.
+- The UI explains why the selected provider/model ran and distinguishes requested from actual
+  provider, model, revision and device.
+- Provider choice, fallback attempts, timing, cost metadata and preserved evidence intervals are
+  recorded on every run.
+- Frontend provider types are generated from FastAPI OpenAPI and contain no duplicated routing or
+  compatibility logic.
 - Evaluation mode disables automatic fallback.
 
 ---
