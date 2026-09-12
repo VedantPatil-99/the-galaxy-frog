@@ -208,3 +208,19 @@ device/compute type, language confidence, processing time, source interval, capt
 and cue confidence. These are read-only facts about what ran, not a provider-configuration surface.
 The existing player, grounded-question, retrieval evidence, and citation-seeking paths remain
 unchanged.
+
+## Phase 2 operational visibility
+
+P2.9 keeps append-only PostgreSQL job events as the authoritative operational history and treats
+process logs as diagnostics. The standalone worker enables INFO output and emits both visible
+key-value messages and structured record fields for its fixed provider/model revision, device and
+compute mode, lease/poll settings, media limits, retention policy, claims, stage transitions,
+retryability, and shutdown. Dispatcher acceptance/failure uses the same safe pattern. Logs exclude
+credentials, raw provider exceptions, source titles, transcript text, and local media paths.
+
+Only an explicit allowlist of stage details can enter diagnostic logs. It includes evidence IDs,
+exact intervals, cue counts, provider/tool revisions, language/confidence methods, fallback reason,
+reuse, measured processing time, and cleanup retention. The browser derives its compact decision
+summaries from the persisted FastAPI event contract rather than process logs. Native faster-whisper
+and its binary dependencies are imported only when a transcription requests the model, so API,
+worker wiring, and non-ASR tests do not initialize CUDA or NumPy.
