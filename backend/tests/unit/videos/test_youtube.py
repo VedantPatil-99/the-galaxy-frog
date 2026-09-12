@@ -297,6 +297,10 @@ def test_default_info_loader_disables_downloads(monkeypatch: pytest.MonkeyPatch)
     assert youtube._default_info_loader("https://example.test/video") == {"id": VIDEO_ID}
     assert observed["skip_download"] is True
     assert observed["noplaylist"] is True
+    assert observed["js_runtimes"] == {"node": {}}
+
+    source = YouTubeSource(js_runtime="deno", info_loader=lambda _url: info_payload())
+    assert source.js_runtime == "deno"
 
 
 def test_default_info_loader_rejects_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:

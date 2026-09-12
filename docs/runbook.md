@@ -10,6 +10,7 @@ repository root in Git Bash unless a section says otherwise.
 - Bun `1.4.0`
 - Python `3.14.7`
 - uv `0.12.7`
+- Node.js `22.16.0` (yt-dlp JavaScript challenge runtime)
 - FFmpeg and ffprobe `9.0.1`
 - WSL 2 and Docker Desktop using the WSL 2 backend
 
@@ -140,6 +141,17 @@ ffprobe and FFmpeg to verify and normalize it to mono 16 kHz PCM WAV. The defaul
 - `MEDIA_TIMEOUT_SECONDS=600`
 - `MEDIA_MAX_CONCURRENCY=1`
 - `MEDIA_RETAIN_ON_SUCCESS=false`
+- `YT_DLP_JS_RUNTIME=node`
+
+The backend installs `yt-dlp[default]`, including its EJS challenge component, and passes the same
+typed JavaScript runtime to metadata inspection and media download. Node 22 is the verified local
+runtime. Keep it on `PATH`; do not point yt-dlp at Bun 1.4.0, which is newer than the runtime range
+currently documented by yt-dlp. Verify Node from Git Bash:
+
+```bash
+node --version
+command -v node
+```
 
 Every attempt is isolated under `tmp/media/{job_id}/attempt-{attempt}`. Failed and cancelled
 acquisition attempts clean that directory immediately. After P2.7, successful audio remains
@@ -190,7 +202,8 @@ uv run --directory backend pytest tests/integration/test_asr_provider.py --no-co
 
 The same test passed on CPU `int8` with two exact timestamped cues in 4.88 seconds. After CUDA 12.8.2
 and cuDNN 9.26 were installed, it passed on the RTX 2050 using CUDA `int8_float16` with one bounded
-cue in 31.72 seconds. The worker uses the configured device and compute type without an implicit CPU
+cue in 31.72 seconds on the first recorded run and 2.95 seconds with the model/runtime warm during
+the P2.10 gate. The worker uses the configured device and compute type without an implicit CPU
 fallback. P2.7 persists the requested device, provider/model revisions, timing, language/confidence,
 caption-fallback reason, and exact cue intervals for every completed ASR run.
 
@@ -346,6 +359,24 @@ The Phase 1 runner requires a non-empty transcript, at least one valid timestamp
 video ownership, ordered cue provenance, and an idempotent second import. Citation-to-player seeking
 is verified by the frontend player-command test and should also be clicked once during the live UI
 smoke.
+
+For the Phase 2 exit smoke, select a user-approved public video that yt-dlp reports with no caption
+tracks and that contains clear speech. Keep Docker/PostgreSQL, Ollama, Next.js, FastAPI, and the
+worker running, then run from Git Bash:
+
+```bash
+export PHASE2_VIDEO_URL='https://www.youtube.com/watch?v=APPROVED_CAPTIONLESS_VIDEO_ID'
+export PHASE2_EXPECTED_DEVICE=cuda
+export PHASE2_TIMEOUT_SECONDS=900
+bun run smoke:phase2
+```
+
+The runner requires one succeeded durable job, contiguous ordered events, explicit caption-fallback
+reason, exact source-audio and cue intervals, complete provider/model/device/confidence provenance,
+valid cue-to-retrieval-unit linkage, and stable event plus output identities after duplicate import.
+The P2.10 reference run used `_TJ61eCWQvQ` and passed with 30 events, 59 ASR cues, 7 retrieval units,
+and one unchanged transcription run. Public-video availability can change, so re-approve a source
+rather than weakening the assertions when this reference is no longer accessible.
 
 ## Troubleshooting
 

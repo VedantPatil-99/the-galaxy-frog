@@ -48,7 +48,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.state.database_engine = None
     application.state.settings = resolved_settings
-    application.state.video_sources = (YouTubeSource(),)
+    application.state.video_sources = (
+        YouTubeSource(js_runtime=resolved_settings.yt_dlp_js_runtime),
+    )
     if resolved_settings.job_dispatcher == "qstash":
         qstash_token = resolved_settings.qstash_token
         callback_url = resolved_settings.qstash_callback_url

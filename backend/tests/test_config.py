@@ -30,6 +30,7 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("MEDIA_RETAIN_ON_SUCCESS", "true")
     monkeypatch.setenv("FFMPEG_EXECUTABLE", " C:/Tools/ffmpeg.exe ")
     monkeypatch.setenv("FFPROBE_EXECUTABLE", " C:/Tools/ffprobe.exe ")
+    monkeypatch.setenv("YT_DLP_JS_RUNTIME", "deno")
     monkeypatch.setenv("ASR_MODEL", " small ")
     monkeypatch.setenv("ASR_MODEL_REVISION", " 536b0662742c02347bc0e980a01041f333bce120 ")
     monkeypatch.setenv("ASR_DEVICE", "cpu")
@@ -58,6 +59,7 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.media_retain_on_success is True
     assert settings.ffmpeg_executable == "C:/Tools/ffmpeg.exe"
     assert settings.ffprobe_executable == "C:/Tools/ffprobe.exe"
+    assert settings.yt_dlp_js_runtime == "deno"
     assert settings.asr_provider == "faster-whisper"
     assert settings.asr_model == "small"
     assert settings.asr_model_revision == "536b0662742c02347bc0e980a01041f333bce120"
@@ -115,6 +117,7 @@ def test_settings_reject_invalid_worker_configuration(field: str, value: object)
         ("media_max_concurrency", 5),
         ("ffmpeg_executable", " "),
         ("ffprobe_executable", ""),
+        ("yt_dlp_js_runtime", "bun"),
     ],
 )
 def test_settings_reject_invalid_media_configuration(field: str, value: object) -> None:

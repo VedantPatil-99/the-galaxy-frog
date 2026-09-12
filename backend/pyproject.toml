@@ -19,7 +19,7 @@ dependencies = [
     "qstash>=3.4,<4",
     "sqlalchemy[asyncio]>=2.0,<3",
     "starlette>=1.6,<2",
-    "yt-dlp>=2026.8,<2027",
+    "yt-dlp[default]>=2026.8,<2027",
 ]
 
 [build-system]

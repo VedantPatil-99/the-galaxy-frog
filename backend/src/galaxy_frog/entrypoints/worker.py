@@ -57,7 +57,10 @@ def build_audio_acquirer(settings: Settings) -> AudioAcquirer:
         max_concurrency=settings.media_max_concurrency,
     )
     return LocalAudioAcquirer(
-        downloader=YtDlpAudioDownloader(runner=runner),
+        downloader=YtDlpAudioDownloader(
+            runner=runner,
+            js_runtime=settings.yt_dlp_js_runtime,
+        ),
         normalizer=FfmpegAudioNormalizer(
             runner=runner,
             ffmpeg_executable=settings.ffmpeg_executable,
@@ -112,7 +115,7 @@ def build_worker(
     runner = IngestionJobRunner(
         repository=ingestion,
         handlers=caption_ingestion_handlers(
-            sources=(YouTubeSource(),),
+            sources=(YouTubeSource(js_runtime=settings.yt_dlp_js_runtime),),
             videos=videos,
             transcript_search=transcript_search,
             audio_acquirer=build_audio_acquirer(settings),
@@ -154,7 +157,8 @@ async def run_worker(
         "Ingestion worker starting worker_id=%s dispatcher=%s lease_seconds=%s poll_seconds=%s "
         "asr=%s/%s@%s device=%s/%s asr_concurrency=%s "
         "media_duration_seconds=%s media_download_bytes=%s media_output_bytes=%s "
-        "media_timeout_seconds=%s media_concurrency=%s media_retain_on_success=%s",
+        "media_timeout_seconds=%s media_concurrency=%s media_retain_on_success=%s "
+        "yt_dlp_js_runtime=%s",
         worker_id,
         resolved_settings.job_dispatcher,
         resolved_settings.ingestion_lease_seconds,
@@ -171,6 +175,7 @@ async def run_worker(
         resolved_settings.media_timeout_seconds,
         resolved_settings.media_max_concurrency,
         resolved_settings.media_retain_on_success,
+        resolved_settings.yt_dlp_js_runtime,
         extra={
             "event_name": "ingestion_worker_started",
             "worker_id": worker_id,
@@ -189,6 +194,7 @@ async def run_worker(
             "media_timeout_seconds": resolved_settings.media_timeout_seconds,
             "media_max_concurrency": resolved_settings.media_max_concurrency,
             "media_retain_on_success": resolved_settings.media_retain_on_success,
+            "yt_dlp_js_runtime": resolved_settings.yt_dlp_js_runtime,
         },
     )
     try:

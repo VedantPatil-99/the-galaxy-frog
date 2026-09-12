@@ -36,6 +36,7 @@
     "build": "bun run --cwd apps/web build",
     "smoke": "bash scripts/smoke-test.sh",
     "smoke:phase1": "bun scripts/phase-1-smoke.ts",
+    "smoke:phase2": "bun scripts/phase-2-smoke.ts",
     "check": "bun run --sequential contracts:check lint format:check typecheck test build",
     "precommit": "uv run --directory backend pre-commit run --all-files"
   },

@@ -4,8 +4,9 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from functools import partial
 from importlib import import_module
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
@@ -45,9 +46,14 @@ class _YoutubeDl(Protocol):
 
 InfoLoader = Callable[[str], Mapping[str, object]]
 CaptionLoader = Callable[[str], Awaitable[str]]
+YtDlpJsRuntime = Literal["node", "deno"]
 
 
-def _default_info_loader(url: str) -> Mapping[str, object]:
+def _default_info_loader(
+    url: str,
+    *,
+    js_runtime: YtDlpJsRuntime = "node",
+) -> Mapping[str, object]:
     """Load metadata with yt-dlp while explicitly disabling media download."""
 
     module = import_module("yt_dlp")
@@ -61,6 +67,7 @@ def _default_info_loader(url: str) -> Mapping[str, object]:
         "skip_download": True,
         "noplaylist": True,
         "extract_flat": False,
+        "js_runtimes": {js_runtime: {}},
     }
     with youtube_dl(options) as client:
         result = client.extract_info(url, download=False)
@@ -95,11 +102,19 @@ class YouTubeSource:
     def __init__(
         self,
         *,
-        info_loader: InfoLoader = _default_info_loader,
+        js_runtime: YtDlpJsRuntime = "node",
+        info_loader: InfoLoader | None = None,
         caption_loader: CaptionLoader = _default_caption_loader,
     ) -> None:
-        self._info_loader = info_loader
+        self._js_runtime: YtDlpJsRuntime = js_runtime
+        self._info_loader = info_loader or partial(_default_info_loader, js_runtime=js_runtime)
         self._caption_loader = caption_loader
+
+    @property
+    def js_runtime(self) -> YtDlpJsRuntime:
+        """Return the configured local runtime used for YouTube challenge scripts."""
+
+        return self._js_runtime
 
     def canonicalize(self, locator: str) -> SourceReference:
         """Canonicalize a supported single-video YouTube URL."""
