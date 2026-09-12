@@ -48,7 +48,11 @@ class IngestionWorker:
         if job is None:
             return None
         logger.info(
-            "Ingestion job claimed",
+            "Ingestion job claimed job_id=%s attempt=%s stage=%s worker_id=%s",
+            str(job.job_id),
+            job.attempt,
+            job.stage.value,
+            self._worker_id,
             extra={
                 "event_name": "ingestion_job_claimed",
                 "job_id": str(job.job_id),
@@ -59,7 +63,15 @@ class IngestionWorker:
         )
         result = await self._runner.run(job)
         logger.info(
-            "Ingestion job processing stopped",
+            "Ingestion job processing stopped job_id=%s attempt=%s stage=%s status=%s "
+            "error_code=%s retryable=%s worker_id=%s",
+            str(result.job_id),
+            result.attempt,
+            result.stage.value,
+            result.status.value,
+            result.last_error_code,
+            result.last_error_retryable,
+            self._worker_id,
             extra={
                 "event_name": "ingestion_job_stopped",
                 "job_id": str(result.job_id),

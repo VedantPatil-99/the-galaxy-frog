@@ -21,7 +21,10 @@ async def dispatch_ingestion_job(dispatcher: JobDispatcher, job_id: UUID) -> Non
         receipt = await dispatcher.dispatch(DispatchMessage(job_id=job_id))
     except JobDispatchError as exc:
         logger.warning(
-            "Ingestion wake-up dispatch failed",
+            "Ingestion wake-up dispatch failed job_id=%s error_code=%s retryable=%s",
+            str(job_id),
+            "JOB_DISPATCH_UNAVAILABLE",
+            True,
             extra={
                 "event_name": "ingestion_dispatch_failed",
                 "job_id": str(job_id),
@@ -37,7 +40,11 @@ async def dispatch_ingestion_job(dispatcher: JobDispatcher, job_id: UUID) -> Non
             suggested_action="Retry the request; the existing durable job will be reused.",
         ) from exc
     logger.info(
-        "Ingestion wake-up dispatch accepted",
+        "Ingestion wake-up dispatch accepted job_id=%s dispatcher=%s "
+        "external_message_id_present=%s",
+        str(job_id),
+        receipt.dispatcher,
+        receipt.external_message_id is not None,
         extra={
             "event_name": "ingestion_dispatch_accepted",
             "job_id": str(job_id),

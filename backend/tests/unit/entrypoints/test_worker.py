@@ -191,6 +191,7 @@ def test_main_runs_the_async_worker_and_allows_keyboard_interrupt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = 0
+    logging_calls: list[dict[str, object]] = []
 
     def run(coroutine: Coroutine[Any, Any, int]) -> int:
         nonlocal calls
@@ -200,9 +201,27 @@ def test_main_runs_the_async_worker_and_allows_keyboard_interrupt(
             raise KeyboardInterrupt
         return 0
 
+    def configure_logging(**options: object) -> None:
+        logging_calls.append(options)
+
     monkeypatch.setattr(worker_entrypoint.asyncio, "run", run)
+    monkeypatch.setattr(
+        worker_entrypoint.logging,
+        "basicConfig",
+        configure_logging,
+    )
 
     worker_entrypoint.main()
     worker_entrypoint.main()
 
     assert calls == 2
+    assert logging_calls == [
+        {
+            "level": logging.INFO,
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+        {
+            "level": logging.INFO,
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    ]

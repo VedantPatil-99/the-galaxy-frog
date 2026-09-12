@@ -151,7 +151,26 @@ async def run_worker(
     )
     processed_jobs: int | None = None
     logger.info(
-        "Ingestion worker starting",
+        "Ingestion worker starting worker_id=%s dispatcher=%s lease_seconds=%s poll_seconds=%s "
+        "asr=%s/%s@%s device=%s/%s asr_concurrency=%s "
+        "media_duration_seconds=%s media_download_bytes=%s media_output_bytes=%s "
+        "media_timeout_seconds=%s media_concurrency=%s media_retain_on_success=%s",
+        worker_id,
+        resolved_settings.job_dispatcher,
+        resolved_settings.ingestion_lease_seconds,
+        resolved_settings.ingestion_poll_seconds,
+        resolved_settings.asr_provider,
+        resolved_settings.asr_model,
+        resolved_settings.asr_model_revision,
+        resolved_settings.asr_device,
+        resolved_settings.asr_compute_type,
+        resolved_settings.asr_max_concurrency,
+        resolved_settings.media_max_duration_seconds,
+        resolved_settings.media_max_download_bytes,
+        resolved_settings.media_max_output_bytes,
+        resolved_settings.media_timeout_seconds,
+        resolved_settings.media_max_concurrency,
+        resolved_settings.media_retain_on_success,
         extra={
             "event_name": "ingestion_worker_started",
             "worker_id": worker_id,
@@ -184,7 +203,9 @@ async def run_worker(
     finally:
         await engine.dispose()
         logger.info(
-            "Ingestion worker stopped",
+            "Ingestion worker stopped worker_id=%s processed_jobs=%s",
+            worker_id,
+            processed_jobs,
             extra={
                 "event_name": "ingestion_worker_stopped",
                 "worker_id": worker_id,
@@ -196,6 +217,10 @@ async def run_worker(
 def main() -> None:
     """Run the worker module as a standalone local process."""
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     with suppress(KeyboardInterrupt):
         asyncio.run(run_worker())
 

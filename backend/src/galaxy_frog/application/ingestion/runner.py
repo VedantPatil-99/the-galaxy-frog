@@ -249,7 +249,12 @@ class IngestionJobRunner:
             if key in _OBSERVABLE_DECISION_KEYS
         }
         logger.info(
-            "Ingestion stage completed",
+            "Ingestion stage completed job_id=%s attempt=%s stage=%s next_stage=%s decisions=%s",
+            str(job.job_id),
+            job.attempt,
+            job.stage.value,
+            result.next_stage.value,
+            decisions,
             extra={
                 "event_name": "ingestion_stage_completed",
                 "job_id": str(job.job_id),
@@ -263,7 +268,12 @@ class IngestionJobRunner:
     @staticmethod
     def _log_stage_failed(job: IngestionJob, error_code: str, retryable: bool) -> None:
         logger.warning(
-            "Ingestion stage failed",
+            "Ingestion stage failed job_id=%s attempt=%s stage=%s error_code=%s retryable=%s",
+            str(job.job_id),
+            job.attempt,
+            job.stage.value,
+            error_code,
+            retryable,
             extra={
                 "event_name": "ingestion_stage_failed",
                 "job_id": str(job.job_id),
