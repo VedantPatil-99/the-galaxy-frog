@@ -1,6 +1,7 @@
 """Behavior coverage for the durable worker process wiring."""
 
 import asyncio
+import logging
 from collections.abc import Coroutine
 from pathlib import Path
 from typing import Any, cast
@@ -107,6 +108,7 @@ class RecordingWorker:
 @pytest.mark.asyncio
 async def test_run_worker_uses_one_session_and_disposes_the_engine(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     engine = RecordingEngine()
     recording_worker = RecordingWorker()
@@ -118,6 +120,7 @@ async def test_run_worker_uses_one_session_and_disposes_the_engine(
         return cast(IngestionWorker, recording_worker)
 
     monkeypatch.setattr(worker_entrypoint, "build_worker", build_worker)
+    caplog.set_level(logging.INFO, logger="galaxy_frog.entrypoints.worker")
 
     result = await worker_entrypoint.run_worker(
         settings(ingestion_worker_id="worker-a"),
@@ -131,6 +134,18 @@ async def test_run_worker_uses_one_session_and_disposes_the_engine(
     assert isinstance(received["session"], AsyncSession)
     assert recording_worker.stop_event is stop_event
     assert engine.disposed is True
+    records = {
+        getattr(record, "event_name", ""): record
+        for record in caplog.records
+        if getattr(record, "event_name", None)
+    }
+    started = records["ingestion_worker_started"]
+    assert getattr(started, "worker_id", None) == "worker-a"
+    assert getattr(started, "dispatcher", None) == "local"
+    assert getattr(started, "asr_device", None) == "cuda"
+    assert getattr(started, "asr_model_revision", None) == settings().asr_model_revision
+    assert getattr(started, "media_retain_on_success", None) is False
+    assert getattr(records["ingestion_worker_stopped"], "processed_jobs", None) == 3
 
 
 @pytest.mark.asyncio
@@ -176,6 +191,7 @@ def test_main_runs_the_async_worker_and_allows_keyboard_interrupt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = 0
+    logging_calls: list[dict[str, object]] = []
 
     def run(coroutine: Coroutine[Any, Any, int]) -> int:
         nonlocal calls
@@ -185,9 +201,27 @@ def test_main_runs_the_async_worker_and_allows_keyboard_interrupt(
             raise KeyboardInterrupt
         return 0
 
+    def configure_logging(**options: object) -> None:
+        logging_calls.append(options)
+
     monkeypatch.setattr(worker_entrypoint.asyncio, "run", run)
+    monkeypatch.setattr(
+        worker_entrypoint.logging,
+        "basicConfig",
+        configure_logging,
+    )
 
     worker_entrypoint.main()
     worker_entrypoint.main()
 
     assert calls == 2
+    assert logging_calls == [
+        {
+            "level": logging.INFO,
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+        {
+            "level": logging.INFO,
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    ]

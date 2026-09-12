@@ -1,11 +1,14 @@
 """Framework-independent polling loop for durable ingestion workers."""
 
 import asyncio
+import logging
 from datetime import timedelta
 from typing import Protocol
 
 from galaxy_frog.application.ingestion.ports import IngestionRepository
 from galaxy_frog.domain.ingestion.models import IngestionJob
+
+logger = logging.getLogger(__name__)
 
 
 class ClaimedJobRunner(Protocol):
@@ -44,7 +47,43 @@ class IngestionWorker:
         job = await self._repository.claim_next(self._worker_id, self._lease_duration)
         if job is None:
             return None
-        return await self._runner.run(job)
+        logger.info(
+            "Ingestion job claimed job_id=%s attempt=%s stage=%s worker_id=%s",
+            str(job.job_id),
+            job.attempt,
+            job.stage.value,
+            self._worker_id,
+            extra={
+                "event_name": "ingestion_job_claimed",
+                "job_id": str(job.job_id),
+                "attempt": job.attempt,
+                "stage": job.stage.value,
+                "worker_id": self._worker_id,
+            },
+        )
+        result = await self._runner.run(job)
+        logger.info(
+            "Ingestion job processing stopped job_id=%s attempt=%s stage=%s status=%s "
+            "error_code=%s retryable=%s worker_id=%s",
+            str(result.job_id),
+            result.attempt,
+            result.stage.value,
+            result.status.value,
+            result.last_error_code,
+            result.last_error_retryable,
+            self._worker_id,
+            extra={
+                "event_name": "ingestion_job_stopped",
+                "job_id": str(result.job_id),
+                "attempt": result.attempt,
+                "stage": result.stage.value,
+                "status": result.status.value,
+                "error_code": result.last_error_code,
+                "retryable": result.last_error_retryable,
+                "worker_id": self._worker_id,
+            },
+        )
+        return result
 
     async def run_until_stopped(self, stop_event: asyncio.Event) -> int:
         """Process jobs until stopped and return the number claimed by this process."""

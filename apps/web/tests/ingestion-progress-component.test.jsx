@@ -32,14 +32,22 @@ test("renders active ASR stage, durable events, and cancellation", () => {
           event_id: "ad42d0bd-32f5-4e67-bffe-f60e41bdc66d",
           job_id: baseJob.job_id,
           sequence: 7,
-          event_type: "stage_started",
+          event_type: "stage_completed",
           stage: "transcription",
           attempt: 1,
           occurred_at: "2026-09-11T09:00:01Z",
           message: null,
           error_code: null,
           retryable: null,
-          details: null,
+          details: {
+            provider: "faster-whisper",
+            model: "small",
+            device: "cuda",
+            compute_type: "int8_float16",
+            cue_count: 1,
+            processing_seconds: 31.72,
+            reused: false,
+          },
         },
       ]}
       actionPending={false}
@@ -49,9 +57,10 @@ test("renders active ASR stage, durable events, and cancellation", () => {
   )
 
   expect(markup).toContain("Transcribing locally")
-  expect(markup).toContain("Stage started: Transcribing locally")
+  expect(markup).toContain("Stage completed: Transcribing locally")
   expect(markup).toContain("Cancel job")
   expect(markup).toContain("Attempt 1")
+  expect(markup).toContain("cuda/int8_float16")
 })
 
 test("renders safe retry guidance for a recoverable failure", () => {

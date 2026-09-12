@@ -109,6 +109,88 @@ export function ingestionEventLabel(event: IngestionEvent): string {
   return base
 }
 
+function stringDetail(event: IngestionEvent, key: string): string | null {
+  const value = event.details?.[key]
+  return typeof value === "string" && value.length > 0 ? value : null
+}
+
+function numberDetail(event: IngestionEvent, key: string): number | null {
+  const value = event.details?.[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function booleanDetail(event: IngestionEvent, key: string): boolean | null {
+  const value = event.details?.[key]
+  return typeof value === "boolean" ? value : null
+}
+
+function countLabel(value: number, noun: string): string {
+  return `${value} ${noun}${value === 1 ? "" : "s"}`
+}
+
+export function ingestionEventDecision(event: IngestionEvent): string | null {
+  if (event.event_type === "failed") {
+    const retry = event.retryable ? "Retry allowed from checkpoint" : "Retry blocked"
+    return event.error_code ? `${retry} · ${event.error_code}` : retry
+  }
+  if (event.event_type === "retry_requested") {
+    return "Queued from the last completed checkpoint"
+  }
+  if (event.event_type !== "stage_completed") return null
+
+  if (event.stage === "caption_retrieval") {
+    const origin = stringDetail(event, "transcript_origin")
+    const fallback = stringDetail(event, "fallback_reason")
+    if (
+      origin === "asr" &&
+      (fallback === "captions_unavailable" || fallback === "captions_unusable")
+    ) {
+      return `Local ASR selected · ${fallbackReasonLabel(fallback)}`
+    }
+    const language = stringDetail(event, "language_code")
+    const cueCount = numberDetail(event, "cue_count")
+    if (origin === "caption" && language && cueCount !== null) {
+      return `Captions selected · ${language} · ${countLabel(cueCount, "cue")}`
+    }
+  }
+
+  if (event.stage === "audio_acquisition") {
+    const startMs = numberDetail(event, "start_ms")
+    const endMs = numberDetail(event, "end_ms")
+    const reused = booleanDetail(event, "reused")
+    if (startMs !== null && endMs !== null) {
+      return `${reused ? "Reused" : "Created"} normalized audio · ${startMs}–${endMs} ms`
+    }
+  }
+
+  if (event.stage === "transcription") {
+    const provider = stringDetail(event, "provider")
+    const model = stringDetail(event, "model")
+    const device = stringDetail(event, "device")
+    const computeType = stringDetail(event, "compute_type")
+    const cueCount = numberDetail(event, "cue_count")
+    const processingSeconds = numberDetail(event, "processing_seconds")
+    const parts = [
+      provider && model ? `${provider} ${model}` : provider,
+      device && computeType ? `${device}/${computeType}` : device,
+      cueCount === null ? null : countLabel(cueCount, "cue"),
+      processingSeconds === null ? null : formatProcessingTime(processingSeconds),
+      booleanDetail(event, "reused") ? "reused checkpoint" : null,
+    ].filter((part): part is string => part !== null)
+    return parts.length > 0 ? parts.join(" · ") : null
+  }
+
+  if (event.stage === "cleanup") {
+    const audioAssetId = stringDetail(event, "audio_asset_id")
+    const temporaryMediaPresent = booleanDetail(event, "temporary_media_present")
+    if (!audioAssetId) return "No temporary audio was created"
+    if (temporaryMediaPresent === false) return "Temporary audio removed; database lineage retained"
+    if (temporaryMediaPresent === true) return "Temporary audio retained by configuration"
+  }
+
+  return null
+}
+
 export function fallbackReasonLabel(
   reason: TranscriptionRunResponse["fallback_reason"],
 ): string {

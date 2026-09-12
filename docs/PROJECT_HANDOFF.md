@@ -34,6 +34,7 @@ evidence and produce timestamp-grounded answers.
 - P2.6 — Faster-whisper provider: complete
 - P2.7 — Resumable caption-to-ASR fallback: complete
 - P2.8 — Progress and recovery UI: complete
+- P2.9 — Operational hardening: complete
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -214,13 +215,9 @@ that attempt-one audio, creates exactly one transcription run and final cue set,
 then removes the file while retaining its database lineage. Canonical duplicate import remains
 read-only and cannot create another output. Revision `20260910_0005` applied successfully to the
 configured PostgreSQL service, and all three durable-ingestion integration tests pass. The complete
-default backend gate passed 506 tests with five opt-in integrations skipped at 100% coverage before
-the new database-only case was added. Current Ruff and Pyright checks, all three real PostgreSQL
-durability tests, 17 frontend tests, the production build, and generated contract checks pass. A
-Codex-host full-suite rerun is blocked during collection by Windows Application Control rejecting
-NumPy's unsigned `_umath_linalg` binary; the same installed environment passed the user-run CUDA ASR
-probe from Git Bash. Re-run `bun run check` from a fresh user Git Bash session before the P2.10 exit
-gate.
+default backend gate passed 506 tests with five opt-in integrations skipped at 100% coverage at the
+P2.7 checkpoint. The later P2.9 lazy native-runtime boundary removes the Codex-host collection
+failure that Windows Application Control caused before actual ASR execution.
 
 P2.8 is complete on 2026-09-11 on `feat/ingestion-progress-recovery-ui`. The client observes every
 generated job projection while polling and refreshes the append-only event trail through the thin
@@ -231,8 +228,21 @@ citation-seeking behavior remains. A caption-backed transcript explains that ASR
 ASR-backed transcript displays the actual provider/model revisions, device/compute mode,
 selection/fallback reason, language confidence, measured time, exact source interval, run identity,
 and cue confidence. The packet passes 25 frontend tests, ESLint, strict TypeScript, the production
-build, generated contract checks, and local browser layout inspection. P2.9 operational hardening is
-next.
+build, generated contract checks, and local browser layout inspection.
+
+P2.9 is complete on 2026-09-12 on `feat/ingestion-operational-hardening`. Native faster-whisper and
+its NumPy/CUDA dependencies are imported only when a transcription actually starts. The standalone
+worker enables INFO output and emits visible safe key-value records plus structured fields for fixed
+provider/model/device settings, operational limits, claims, stage decisions, retryability, cleanup,
+dispatcher outcomes, and shutdown. PostgreSQL events remain authoritative; the browser now
+summarizes their persisted fallback, interval, reuse, device/compute, retry, and cleanup decisions.
+The fourth durable-ingestion database test fails cleanup after persistence/indexing, proves the file
+and lineage remain retryable, then resumes cleanup alone without repeating audio acquisition, ASR,
+cue persistence, or indexing. Current gates pass: 507 default backend tests with seven opt-in tests
+skipped and 100% statement/branch coverage, all four real PostgreSQL durability tests, 26 frontend
+tests, Ruff, Pyright, ESLint, strict TypeScript, and the Next.js production build. P2.10 is next and
+owns the approved live captionless-video, duplicate-dispatch, multi-service UI, full quality,
+pre-commit, migration, smoke, and manual exit gates.
 
 Provider presentation remains intentionally split across phases. P2.8 shows read-only execution
 evidence from FastAPI—actual ASR provider, model, revision, device, selection/fallback reason and

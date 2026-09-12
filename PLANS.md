@@ -317,9 +317,21 @@ Next.js production build passed, followed by a local browser layout inspection.
 
 ### P2.9 — Operational hardening
 
-- [ ] Document worker startup, recovery, cleanup, limits, and manual provider setup.
-- [ ] Make retry, fallback, dispatcher, device, and cleanup decisions observable.
-- [ ] Add complete automated and database-backed failure-path coverage.
+- [x] Document worker startup, recovery, cleanup, limits, and manual provider setup.
+- [x] Make retry, fallback, dispatcher, device, and cleanup decisions observable.
+- [x] Add complete automated and database-backed failure-path coverage.
+
+The standalone worker now enables INFO-level key-value logs and publishes safe structured fields for
+its configured lease/poll limits, media ceilings, retention policy, fixed ASR provider/model revision,
+device/compute mode, claims, completed-stage decisions, safe failures, retryability, and shutdown.
+Dispatch success/failure is observable without logging credentials, raw provider errors, source
+titles, or local media paths. The UI summarizes persisted fallback, device, retry, interval, reuse,
+and cleanup decisions from FastAPI event data. Native faster-whisper imports only when transcription
+actually starts. A fourth real PostgreSQL test proves a retryable cleanup failure retains its file
+and database lineage, then resumes cleanup alone with one acquisition, transcription, cue set, and
+index operation. On 2026-09-12, 507 default backend tests pass with seven opt-in integrations skipped
+and 100% statement/branch coverage; all four durable-ingestion database tests, 26 frontend tests,
+Ruff, Pyright, ESLint, strict TypeScript, and the production build pass.
 
 ### P2.10 — Exit gate
 
@@ -400,3 +412,7 @@ Next.js production build passed, followed by a local browser layout inspection.
 - 2026-09-11: Complete P2.8 with observable polling, stage/event progress, safe cancellation/retry
   controls, and read-only caption/ASR execution evidence. Preserve the completed Phase 1 experience
   and keep provider selection, fallback editing, cloud consent, and pricing in Phase 8.
+- 2026-09-12: Complete P2.9 with visible safe worker/dispatcher/stage records, durable-event decision
+  summaries, truly lazy native ASR loading, documented recovery procedures, and a PostgreSQL cleanup
+  failure/retry proof that does not duplicate completed outputs. Keep PostgreSQL events authoritative;
+  logs are diagnostic, and P2.10 retains the live captionless-video and full multi-service exit gate.

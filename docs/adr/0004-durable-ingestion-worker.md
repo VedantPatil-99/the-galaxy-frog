@@ -40,3 +40,6 @@ completed output without treating an event payload or a local file path as the s
 - QStash is not required for the local Phase 2 path and cannot become a second source of truth.
 - Worker adapters must keep timestamp intervals and output provenance attached to persisted stage
   results, even after temporary media is removed.
+- Append-only PostgreSQL events remain the operational source of truth. Safe allowlisted worker and
+  dispatcher logs are diagnostic projections and must not contain secrets, raw provider failures,
+  transcript text, source titles, or local media paths.

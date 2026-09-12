@@ -2,10 +2,12 @@
 
 # pyright: reportPrivateUsage=false
 
+import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 from typing import cast
 from uuid import uuid4
 
@@ -369,7 +371,7 @@ def test_default_factory_forwards_explicit_runtime_configuration(
             captured["model"] = model
             captured.update(kwargs)
 
-    monkeypatch.setattr(adapter_module, "WhisperModel", Model)
+    monkeypatch.setattr(adapter_module, "_load_model_factory", lambda: Model)
     created = adapter_module._default_model_factory(
         "small",
         device="cuda",
@@ -386,3 +388,17 @@ def test_default_factory_forwards_explicit_runtime_configuration(
         "revision": "revision",
         "num_workers": 1,
     }
+
+
+def test_model_factory_resolves_the_native_runtime_only_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = ModuleType("faster_whisper")
+
+    class Model:
+        pass
+
+    runtime.__dict__["WhisperModel"] = Model
+    monkeypatch.setitem(sys.modules, "faster_whisper", runtime)
+
+    assert adapter_module._load_model_factory() is Model

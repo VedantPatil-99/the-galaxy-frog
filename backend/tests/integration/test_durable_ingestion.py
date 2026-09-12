@@ -48,6 +48,8 @@ from galaxy_frog.domain.ingestion.models import (
 )
 from galaxy_frog.domain.media import (
     AcquiredAudio,
+    AudioAcquisitionError,
+    AudioAcquisitionErrorCode,
     AudioAcquisitionRequest,
     AudioFallbackReason,
 )
@@ -351,10 +353,11 @@ class CaptionlessSource:
 class CountingAudioAcquirer:
     """Create one bounded local artifact and record whether restart repeats work."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, cleanup_failures: int = 0) -> None:
         self.path = path.resolve()
         self.acquire_calls = 0
         self.cleanup_calls = 0
+        self.cleanup_failures = cleanup_failures
 
     async def acquire(self, request: AudioAcquisitionRequest) -> AcquiredAudio:
         self.acquire_calls += 1
@@ -382,6 +385,13 @@ class CountingAudioAcquirer:
 
     async def cleanup(self, artifact: AcquiredAudio) -> bool:
         self.cleanup_calls += 1
+        if self.cleanup_failures > 0:
+            self.cleanup_failures -= 1
+            raise AudioAcquisitionError(
+                AudioAcquisitionErrorCode.WORKSPACE_ERROR,
+                "The integration cleanup failed safely.",
+                retryable=True,
+            )
         artifact.path.unlink(missing_ok=True)
         return True
 
@@ -398,12 +408,14 @@ class FailOnceTranscriptionProvider:
         compute_type=TranscriptionComputeType.INT8_FLOAT16,
     )
 
-    def __init__(self) -> None:
+    def __init__(self, *, failures: int = 1) -> None:
         self.requests: list[TranscriptionRequest] = []
+        self.failures = failures
 
     async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         self.requests.append(request)
-        if len(self.requests) == 1:
+        if self.failures > 0:
+            self.failures -= 1
             raise TranscriptionError(
                 TranscriptionErrorCode.EXECUTION_FAILED,
                 "The integration provider failed before producing output.",
@@ -465,6 +477,43 @@ class RecordingTranscriptSearch:
         return ()
 
 
+def build_captionless_worker(
+    *,
+    session: AsyncSession,
+    source: CaptionlessSource,
+    acquirer: CountingAudioAcquirer,
+    provider: FailOnceTranscriptionProvider,
+    search: RecordingTranscriptSearch,
+    worker_id: str,
+) -> IngestionWorker:
+    """Compose the real PostgreSQL pipeline around deterministic local test providers."""
+
+    ingestion = PostgresIngestionRepository(session)
+    videos = SqlAlchemyVideoRepository(session)
+    lease_duration = timedelta(minutes=2)
+    runner = IngestionJobRunner(
+        repository=ingestion,
+        handlers=caption_ingestion_handlers(
+            sources=(source,),
+            videos=videos,
+            transcript_search=search,
+            audio_acquirer=acquirer,
+            audio_assets=PostgresAudioAssetRepository(session),
+            transcription_checkpoints=PostgresTranscriptionCheckpointRepository(session),
+            transcription_provider=provider,
+        ),
+        worker_id=worker_id,
+        lease_duration=lease_duration,
+    )
+    return IngestionWorker(
+        repository=ingestion,
+        runner=runner,
+        worker_id=worker_id,
+        lease_duration=lease_duration,
+        poll_interval=timedelta(milliseconds=1),
+    )
+
+
 @pytest.mark.asyncio
 async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chain(
     tmp_path: Path,
@@ -484,35 +533,9 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
     acquirer = CountingAudioAcquirer(tmp_path / external_id / "audio.wav")
     provider = FailOnceTranscriptionProvider()
     search = RecordingTranscriptSearch()
-    lease_duration = timedelta(minutes=2)
     worker_id = "asr-restart-integration-worker"
     job_id: UUID | None = None
     video_id: UUID | None = None
-
-    def build_worker(session: AsyncSession) -> IngestionWorker:
-        ingestion = PostgresIngestionRepository(session)
-        videos = SqlAlchemyVideoRepository(session)
-        runner = IngestionJobRunner(
-            repository=ingestion,
-            handlers=caption_ingestion_handlers(
-                sources=(source,),
-                videos=videos,
-                transcript_search=search,
-                audio_acquirer=acquirer,
-                audio_assets=PostgresAudioAssetRepository(session),
-                transcription_checkpoints=PostgresTranscriptionCheckpointRepository(session),
-                transcription_provider=provider,
-            ),
-            worker_id=worker_id,
-            lease_duration=lease_duration,
-        )
-        return IngestionWorker(
-            repository=ingestion,
-            runner=runner,
-            worker_id=worker_id,
-            lease_duration=lease_duration,
-            poll_interval=timedelta(milliseconds=1),
-        )
 
     try:
         async with sessions() as session:
@@ -521,7 +544,14 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
             assert was_created is True
             job_id = created.job_id
 
-            failed = await build_worker(session).run_once()
+            failed = await build_captionless_worker(
+                session=session,
+                source=source,
+                acquirer=acquirer,
+                provider=provider,
+                search=search,
+                worker_id=worker_id,
+            ).run_once()
 
             assert failed is not None
             assert failed.job_id == job_id
@@ -536,7 +566,15 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
             await ingestion.retry(job_id)
 
         async with sessions() as restarted_session:
-            completed = await build_worker(restarted_session).run_once()
+            worker = build_captionless_worker(
+                session=restarted_session,
+                source=source,
+                acquirer=acquirer,
+                provider=provider,
+                search=search,
+                worker_id=worker_id,
+            )
+            completed = await worker.run_once()
 
             assert completed is not None
             assert completed.job_id == job_id
@@ -571,7 +609,160 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
             ).create_or_get(source_reference, fingerprint)
             assert duplicate_created is False
             assert duplicate.job_id == job_id
-            assert await build_worker(restarted_session).run_once() is None
+            assert await worker.run_once() is None
+
+        async with sessions() as verification_session:
+            assert (
+                await verification_session.scalar(
+                    select(func.count())
+                    .select_from(TranscriptionRunRow)
+                    .where(TranscriptionRunRow.job_id == job_id)
+                )
+                == 1
+            )
+            assert (
+                await verification_session.scalar(
+                    select(func.count())
+                    .select_from(TranscriptionRunCueRow)
+                    .join(TranscriptionRunRow)
+                    .where(TranscriptionRunRow.job_id == job_id)
+                )
+                == 2
+            )
+            assert (
+                await verification_session.scalar(
+                    select(func.count())
+                    .select_from(TranscriptCueRow)
+                    .where(TranscriptCueRow.video_id == video_id)
+                )
+                == 2
+            )
+            asset = await verification_session.scalar(
+                select(MediaAssetRow).where(MediaAssetRow.job_id == job_id)
+            )
+            assert asset is not None
+            assert asset.deleted_at is not None
+    finally:
+        async with sessions() as session:
+            if video_id is not None:
+                await session.execute(
+                    delete(TranscriptCueRow).where(TranscriptCueRow.video_id == video_id)
+                )
+            if job_id is not None:
+                await session.execute(delete(IngestionJobRow).where(IngestionJobRow.id == job_id))
+            if video_id is not None:
+                await session.execute(delete(VideoRow).where(VideoRow.id == video_id))
+            await session.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_failure_retry_reuses_every_persisted_output(tmp_path: Path) -> None:
+    """Prove cleanup resumes alone after transcript persistence and indexing have succeeded."""
+
+    engine = create_database_engine(Settings(app_env="test"))
+    sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    external_id = uuid4().hex[:11]
+    source_reference = SourceReference(
+        VideoSourceKind.YOUTUBE,
+        external_id,
+        f"https://www.youtube.com/watch?v={external_id}",
+    )
+    source = CaptionlessSource(source_reference)
+    fingerprint = sha256(f"cleanup-retry:{external_id}".encode()).hexdigest()
+    acquirer = CountingAudioAcquirer(
+        tmp_path / external_id / "audio.wav",
+        cleanup_failures=1,
+    )
+    provider = FailOnceTranscriptionProvider(failures=0)
+    search = RecordingTranscriptSearch()
+    worker_id = "cleanup-retry-integration-worker"
+    job_id: UUID | None = None
+    video_id: UUID | None = None
+
+    try:
+        async with sessions() as session:
+            ingestion = PostgresIngestionRepository(session)
+            created, was_created = await ingestion.create_or_get(source_reference, fingerprint)
+            assert was_created is True
+            job_id = created.job_id
+
+            failed = await build_captionless_worker(
+                session=session,
+                source=source,
+                acquirer=acquirer,
+                provider=provider,
+                search=search,
+                worker_id=worker_id,
+            ).run_once()
+
+            assert failed is not None
+            assert failed.status is IngestionJobStatus.FAILED
+            assert failed.stage is IngestionStage.CLEANUP
+            assert failed.attempt == 1
+            assert failed.last_error_code == AudioAcquisitionErrorCode.WORKSPACE_ERROR
+            assert failed.last_error_retryable is True
+            assert acquirer.acquire_calls == 1
+            assert acquirer.cleanup_calls == 1
+            assert len(provider.requests) == 1
+            persisted_video = await SqlAlchemyVideoRepository(session).find_by_source(
+                source_reference
+            )
+            assert persisted_video is not None
+            video_id = persisted_video.video_id
+            assert search.indexed == [video_id]
+            assert acquirer.path.is_file()
+
+            retained_asset = await session.scalar(
+                select(MediaAssetRow).where(MediaAssetRow.job_id == job_id)
+            )
+            assert retained_asset is not None
+            assert retained_asset.deleted_at is None
+            await ingestion.retry(job_id)
+
+        async with sessions() as restarted_session:
+            ingestion = PostgresIngestionRepository(restarted_session)
+            completed = await build_captionless_worker(
+                session=restarted_session,
+                source=source,
+                acquirer=acquirer,
+                provider=provider,
+                search=search,
+                worker_id=worker_id,
+            ).run_once()
+
+            assert completed is not None
+            assert completed.status is IngestionJobStatus.SUCCEEDED
+            assert completed.stage is IngestionStage.COMPLETED
+            assert completed.attempt == 2
+            assert completed.video_id is not None
+            assert completed.video_id == video_id
+            assert acquirer.acquire_calls == 1
+            assert acquirer.cleanup_calls == 2
+            assert len(provider.requests) == 1
+            assert search.indexed == [video_id]
+            assert not acquirer.path.exists()
+
+            events = await ingestion.list_events(job_id)
+            failure = next(
+                event for event in events if event.event_type is IngestionEventType.FAILED
+            )
+            assert failure.stage is IngestionStage.CLEANUP
+            assert failure.error_code == AudioAcquisitionErrorCode.WORKSPACE_ERROR
+            assert failure.retryable is True
+            assert (
+                sum(event.event_type is IngestionEventType.RETRY_REQUESTED for event in events) == 1
+            )
+            cleanup_completed = [
+                event
+                for event in events
+                if event.event_type is IngestionEventType.STAGE_COMPLETED
+                and event.stage is IngestionStage.CLEANUP
+            ]
+            assert len(cleanup_completed) == 1
+            assert cleanup_completed[0].attempt == 2
+            assert cleanup_completed[0].details is not None
+            assert cleanup_completed[0].details["temporary_media_present"] is False
 
         async with sessions() as verification_session:
             assert (
