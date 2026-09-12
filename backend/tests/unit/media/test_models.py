@@ -23,6 +23,7 @@ REFERENCE = SourceReference(
     "dQw4w9WgXcQ",
     "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 )
+ABSOLUTE_TEST_MEDIA_PATH = Path(__file__).resolve().parent / "audio.wav"
 
 
 def request() -> AudioAcquisitionRequest:
@@ -42,7 +43,7 @@ def artifact() -> AcquiredAudio:
         attempt=audio_request.attempt,
         source=audio_request.source,
         fallback_reason=audio_request.fallback_reason,
-        path=Path("C:/tmp/audio.wav"),
+        path=ABSOLUTE_TEST_MEDIA_PATH,
         start_ms=0,
         end_ms=12_345,
         size_bytes=395_084,

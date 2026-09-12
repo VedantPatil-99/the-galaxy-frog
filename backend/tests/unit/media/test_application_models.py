@@ -7,14 +7,21 @@ import pytest
 
 from galaxy_frog.application.media import DownloadedAudio, NormalizedAudio
 
+ABSOLUTE_TEST_MEDIA_ROOT = Path(__file__).resolve().parent
+
 
 def downloaded() -> DownloadedAudio:
-    return DownloadedAudio(Path("C:/tmp/source.webm"), 5, "yt-dlp", "2026.08.19")
+    return DownloadedAudio(
+        ABSOLUTE_TEST_MEDIA_ROOT / "source.webm",
+        5,
+        "yt-dlp",
+        "2026.08.19",
+    )
 
 
 def normalized() -> NormalizedAudio:
     return NormalizedAudio(
-        path=Path("C:/tmp/audio.wav"),
+        path=ABSOLUTE_TEST_MEDIA_ROOT / "audio.wav",
         duration_ms=1000,
         size_bytes=32_078,
         media_type="audio/wav",
