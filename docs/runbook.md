@@ -148,7 +148,52 @@ local diagnosis. The provider records the canonical source, unavailable/unusable
 the half-open `[0, duration_ms)` interval, acquisition time, and yt-dlp/FFmpeg revisions.
 
 P2.5 does not yet send caption failures into audio or ASR. No media process needs to stay active;
-P2.6 adds the transcription provider and P2.7 activates the durable fallback transition.
+P2.6 provides transcription and P2.7 activates the durable fallback transition.
+
+## Local multilingual ASR
+
+The backend locks faster-whisper 1.2.1 and CTranslate2 4.8.2 for Python 3.14.7. The default model is
+multilingual `small`, pinned to immutable Hugging Face commit
+`536b0662742c02347bc0e980a01041f333bce120`. Its verified SHA-256 model blob is in the local Hugging
+Face cache; no model service needs to run. The explicit defaults are:
+
+- `ASR_PROVIDER=faster-whisper`
+- `ASR_MODEL=small`
+- `ASR_MODEL_REVISION=536b0662742c02347bc0e980a01041f333bce120`
+- `ASR_DEVICE=cuda`
+- `ASR_COMPUTE_TYPE=int8_float16`
+- `ASR_MAX_CONCURRENCY=1`
+
+Current CTranslate2 GPU execution requires CUDA 12 cuBLAS and cuDNN 9. Install those machine-level
+NVIDIA components manually on Windows, ensure their `bin` directories are on the system `PATH`,
+then open a new Git Bash terminal. Do not install CUDA 13 for this provider. Verify the DLLs and
+driver from Git Bash:
+
+```bash
+nvidia-smi
+nvcc --version
+where.exe cublas64_12.dll
+where.exe cudnn64_9.dll
+```
+
+The opt-in integration test needs any real local speech file and its exact duration. The checked
+probe fixture is currently `tmp/asr-probe/jfk.flac` with duration 11,000 milliseconds. Run the GPU
+gate from Git Bash without starting Docker, PostgreSQL, FastAPI, Next.js, Ollama, or QStash:
+
+```bash
+export HF_HUB_OFFLINE=1
+export RUN_ASR_INTEGRATION=1
+export ASR_INTEGRATION_AUDIO_PATH="$(pwd)/tmp/asr-probe/jfk.flac"
+export ASR_INTEGRATION_AUDIO_DURATION_MS=11000
+export ASR_DEVICE=cuda
+export ASR_COMPUTE_TYPE=int8_float16
+uv run --directory backend pytest tests/integration/test_asr_provider.py --no-cov -s
+```
+
+The same test passed on CPU `int8` with two exact timestamped cues in 4.88 seconds. After CUDA 12.8.2
+and cuDNN 9.26 were installed, it passed on the RTX 2050 using CUDA `int8_float16` with one bounded
+cue in 31.72 seconds. Do not add an implicit CPU fallback: P2.7 owns the durable, observable fallback
+policy.
 
 ## API contract workflow
 

@@ -17,7 +17,7 @@ repos:
         files: ^backend/
       - id: backend-pyright
         name: backend pyright
-        entry: uv run --directory backend pyright
+        entry: uv run --directory backend python -m pyright
         language: system
         pass_filenames: false
         files: ^backend/

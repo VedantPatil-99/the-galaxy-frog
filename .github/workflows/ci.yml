@@ -83,7 +83,7 @@ jobs:
         run: uv run --directory backend ruff format --check .
 
       - name: Type-check
-        run: uv run --directory backend pyright
+        run: uv run --directory backend python -m pyright
 
       - name: Test
         run: uv run --directory backend pytest

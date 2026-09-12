@@ -30,6 +30,11 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("MEDIA_RETAIN_ON_SUCCESS", "true")
     monkeypatch.setenv("FFMPEG_EXECUTABLE", " C:/Tools/ffmpeg.exe ")
     monkeypatch.setenv("FFPROBE_EXECUTABLE", " C:/Tools/ffprobe.exe ")
+    monkeypatch.setenv("ASR_MODEL", " small ")
+    monkeypatch.setenv("ASR_MODEL_REVISION", " 536b0662742c02347bc0e980a01041f333bce120 ")
+    monkeypatch.setenv("ASR_DEVICE", "cpu")
+    monkeypatch.setenv("ASR_COMPUTE_TYPE", "int8")
+    monkeypatch.setenv("ASR_MAX_CONCURRENCY", "1")
 
     settings = Settings()
 
@@ -53,6 +58,12 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.media_retain_on_success is True
     assert settings.ffmpeg_executable == "C:/Tools/ffmpeg.exe"
     assert settings.ffprobe_executable == "C:/Tools/ffprobe.exe"
+    assert settings.asr_provider == "faster-whisper"
+    assert settings.asr_model == "small"
+    assert settings.asr_model_revision == "536b0662742c02347bc0e980a01041f333bce120"
+    assert settings.asr_device == "cpu"
+    assert settings.asr_compute_type == "int8"
+    assert settings.asr_max_concurrency == 1
 
 
 def test_settings_reject_an_unknown_environment() -> None:
@@ -114,6 +125,40 @@ def test_settings_reject_invalid_media_configuration(field: str, value: object) 
 def test_settings_reject_a_filesystem_root_as_the_media_workspace() -> None:
     with pytest.raises(ValidationError, match="MEDIA_WORKSPACE_ROOT"):
         Settings.model_validate({"media_workspace_root": Path.cwd().anchor})
+
+
+def test_asr_defaults_select_multilingual_small_on_the_gpu() -> None:
+    settings = Settings.model_validate({})
+
+    assert settings.asr_provider == "faster-whisper"
+    assert settings.asr_model == "small"
+    assert not settings.asr_model.endswith(".en")
+    assert settings.asr_device == "cuda"
+    assert settings.asr_compute_type == "int8_float16"
+    assert settings.asr_max_concurrency == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("asr_provider", "cloud"),
+        ("asr_model", " "),
+        ("asr_model_revision", ""),
+        ("asr_device", "gpu"),
+        ("asr_compute_type", "auto"),
+        ("asr_max_concurrency", 0),
+        ("asr_max_concurrency", 5),
+    ],
+)
+def test_settings_reject_invalid_asr_configuration(field: str, value: object) -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({field: value})
+
+
+@pytest.mark.parametrize("compute_type", ["float16", "int8_float16"])
+def test_settings_reject_float16_compute_on_cpu(compute_type: str) -> None:
+    with pytest.raises(ValidationError, match=r"CPU ASR.*int8 or float32"):
+        Settings.model_validate({"asr_device": "cpu", "asr_compute_type": compute_type})
 
 
 def test_qstash_dispatch_requires_complete_secret_configuration() -> None:

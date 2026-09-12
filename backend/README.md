@@ -44,7 +44,7 @@ repository root when an API schema changes so the frontend declarations are rege
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run pyright
+uv run python -m pyright
 uv run pytest
 ```
 

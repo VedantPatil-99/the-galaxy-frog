@@ -29,7 +29,7 @@
     "format:check": "uv run --directory backend ruff format --check .",
     "typecheck": "bun run --parallel typecheck:web typecheck:backend",
     "typecheck:web": "bun run --cwd apps/web typecheck",
-    "typecheck:backend": "uv run --directory backend pyright",
+    "typecheck:backend": "uv run --directory backend python -m pyright",
     "test": "bun run --parallel test:web test:backend",
     "test:web": "bun run --cwd apps/web test",
     "test:backend": "uv run --directory backend pytest",
