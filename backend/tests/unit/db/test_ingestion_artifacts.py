@@ -42,6 +42,7 @@ SOURCE = SourceReference(
     "dQw4w9WgXcQ",
     "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 )
+ABSOLUTE_TEST_AUDIO_PATH = Path(__file__).resolve().parent / "audio.wav"
 
 
 class AllResult:
@@ -101,7 +102,7 @@ def audio(job_id: UUID | None = None, attempt: int = 1) -> AcquiredAudio:
         attempt=attempt,
         source=SOURCE,
         fallback_reason=AudioFallbackReason.CAPTIONS_UNAVAILABLE,
-        path=Path("C:/tmp/audio.wav"),
+        path=ABSOLUTE_TEST_AUDIO_PATH,
         start_ms=0,
         end_ms=4000,
         size_bytes=128_078,
