@@ -89,6 +89,7 @@ async def test_download_uses_bounded_argument_array_and_ignores_printed_paths(
     arguments, cwd, timeout_seconds = runner.calls[0]
     assert arguments[:3] == ("python", "-m", "yt_dlp")
     assert "--no-playlist" in arguments
+    assert arguments[arguments.index("--js-runtimes") + 1] == "node"
     assert arguments[arguments.index("--paths") + 1] == str(tmp_path)
     assert arguments[arguments.index("--max-filesize") + 1] == "20"
     assert arguments[arguments.index("--match-filters") + 1] == "duration <= 7200"
@@ -98,6 +99,7 @@ async def test_download_uses_bounded_argument_array_and_ignores_printed_paths(
     assert result.path == (tmp_path / "source.webm").resolve()
     assert result.size_bytes == 5
     assert result.downloader_revision == "2026.08.19"
+    assert downloader.js_runtime == "node"
 
 
 @pytest.mark.asyncio

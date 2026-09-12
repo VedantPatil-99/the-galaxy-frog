@@ -4,6 +4,7 @@ import asyncio
 import sys
 from importlib.metadata import version
 from pathlib import Path
+from typing import Literal
 
 from galaxy_frog.adapters.media.process import CommandRunner, CommandTimedOut
 from galaxy_frog.application.media import DownloadedAudio
@@ -25,10 +26,18 @@ class YtDlpAudioDownloader:
         runner: CommandRunner,
         python_executable: str = sys.executable,
         revision: str | None = None,
+        js_runtime: Literal["node", "deno"] = "node",
     ) -> None:
         self._runner = runner
         self._python_executable = python_executable
         self._revision = revision or version("yt-dlp")
+        self._js_runtime: Literal["node", "deno"] = js_runtime
+
+    @property
+    def js_runtime(self) -> Literal["node", "deno"]:
+        """Return the configured runtime for yt-dlp's YouTube challenge scripts."""
+
+        return self._js_runtime
 
     async def download(
         self,
@@ -51,6 +60,8 @@ class YtDlpAudioDownloader:
             "--quiet",
             "--no-warnings",
             "--no-progress",
+            "--js-runtimes",
+            self._js_runtime,
             "--format",
             "bestaudio/best",
             "--paths",

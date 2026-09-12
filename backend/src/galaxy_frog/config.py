@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     media_retain_on_success: bool = False
     ffmpeg_executable: str = "ffmpeg"
     ffprobe_executable: str = "ffprobe"
+    yt_dlp_js_runtime: Literal["node", "deno"] = "node"
     asr_provider: Literal["faster-whisper"] = "faster-whisper"
     asr_model: str = "small"
     asr_model_revision: str = "536b0662742c02347bc0e980a01041f333bce120"

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from galaxy_frog.adapters.dispatch.local import LocalJobDispatcher
 from galaxy_frog.adapters.dispatch.qstash import QStashJobDispatcher, QStashSignatureVerifier
+from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.api import app as app_module
 from galaxy_frog.api.app import app, create_app
 from galaxy_frog.config import Settings
@@ -24,6 +25,8 @@ async def test_create_app_uses_validated_settings_without_database() -> None:
     assert application.state.database_engine is None
     assert isinstance(application.state.job_dispatcher, LocalJobDispatcher)
     assert application.state.dispatch_signature_verifier is None
+    source = cast(YouTubeSource, application.state.video_sources[0])
+    assert source.js_runtime == "node"
 
     async with application.router.lifespan_context(application):
         assert application.state.database_engine is None

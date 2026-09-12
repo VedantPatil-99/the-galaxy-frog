@@ -145,6 +145,7 @@ async def test_run_worker_uses_one_session_and_disposes_the_engine(
     assert getattr(started, "asr_device", None) == "cuda"
     assert getattr(started, "asr_model_revision", None) == settings().asr_model_revision
     assert getattr(started, "media_retain_on_success", None) is False
+    assert getattr(started, "yt_dlp_js_runtime", None) == "node"
     assert getattr(records["ingestion_worker_stopped"], "processed_jobs", None) == 3
 
 
