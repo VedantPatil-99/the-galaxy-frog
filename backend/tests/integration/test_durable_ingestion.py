@@ -33,12 +33,16 @@ from galaxy_frog.db.ingestion_repository import (
 )
 from galaxy_frog.db.models import (
     IngestionJobRow,
+    JobEventRow,
     MediaAssetRow,
+    RetrievalUnitRow,
+    TextEmbeddingRow,
     TranscriptCueRow,
     TranscriptionRunCueRow,
     TranscriptionRunRow,
     VideoRow,
 )
+from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.ingestion.models import (
     IngestionEventType,
@@ -53,7 +57,8 @@ from galaxy_frog.domain.media import (
     AudioAcquisitionRequest,
     AudioFallbackReason,
 )
-from galaxy_frog.domain.retrieval.models import RetrievedEvidence
+from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec, RetrievedEvidence
+from galaxy_frog.domain.retrieval.ports import TranscriptSearch
 from galaxy_frog.domain.transcription import (
     TranscriptionComputeType,
     TranscriptionCue,
@@ -477,13 +482,22 @@ class RecordingTranscriptSearch:
         return ()
 
 
+class FixtureEmbeddings:
+    """Persist stable 1,024-dimensional vectors without an external service."""
+
+    spec = EmbeddingCollectionSpec("fixture", "bge-m3", "phase-2-exit", 1024, "l2")
+
+    async def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        return tuple((1.0, *([0.0] * 1023)) for _text in texts)
+
+
 def build_captionless_worker(
     *,
     session: AsyncSession,
     source: CaptionlessSource,
     acquirer: CountingAudioAcquirer,
     provider: FailOnceTranscriptionProvider,
-    search: RecordingTranscriptSearch,
+    search: TranscriptSearch,
     worker_id: str,
 ) -> IngestionWorker:
     """Compose the real PostgreSQL pipeline around deterministic local test providers."""
@@ -532,7 +546,6 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
     fingerprint = sha256(f"asr-restart:{external_id}".encode()).hexdigest()
     acquirer = CountingAudioAcquirer(tmp_path / external_id / "audio.wav")
     provider = FailOnceTranscriptionProvider()
-    search = RecordingTranscriptSearch()
     worker_id = "asr-restart-integration-worker"
     job_id: UUID | None = None
     video_id: UUID | None = None
@@ -549,7 +562,7 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
                 source=source,
                 acquirer=acquirer,
                 provider=provider,
-                search=search,
+                search=RecordingTranscriptSearch(),
                 worker_id=worker_id,
             ).run_once()
 
@@ -566,6 +579,12 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
             await ingestion.retry(job_id)
 
         async with sessions() as restarted_session:
+            restarted_ingestion = PostgresIngestionRepository(restarted_session)
+            search = PgVectorTranscriptSearch(
+                session=restarted_session,
+                videos=SqlAlchemyVideoRepository(restarted_session),
+                provider=FixtureEmbeddings(),
+            )
             worker = build_captionless_worker(
                 session=restarted_session,
                 source=source,
@@ -587,7 +606,6 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
             assert not acquirer.path.exists()
             assert len(provider.requests) == 2
             assert provider.requests[1].attempt == 1
-            assert search.indexed == [video_id]
 
             transcript = await SqlAlchemyVideoRepository(restarted_session).get_transcript(video_id)
             assert transcript is not None
@@ -604,14 +622,33 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
             ]
             assert {cue.transcription_run_id for cue in transcript.cues} == {checkpoint.run_id}
 
-            duplicate, duplicate_created = await PostgresIngestionRepository(
-                restarted_session
-            ).create_or_get(source_reference, fingerprint)
+            events_before_duplicate = await restarted_ingestion.list_events(job_id)
+            duplicate, duplicate_created = await restarted_ingestion.create_or_get(
+                source_reference, fingerprint
+            )
             assert duplicate_created is False
             assert duplicate.job_id == job_id
             assert await worker.run_once() is None
+            events_after_duplicate = await restarted_ingestion.list_events(job_id)
+            assert events_after_duplicate == events_before_duplicate
 
         async with sessions() as verification_session:
+            assert (
+                await verification_session.scalar(
+                    select(func.count())
+                    .select_from(IngestionJobRow)
+                    .where(IngestionJobRow.input_fingerprint == fingerprint)
+                )
+                == 1
+            )
+            event_sequences = (
+                await verification_session.scalars(
+                    select(JobEventRow.sequence)
+                    .where(JobEventRow.job_id == job_id)
+                    .order_by(JobEventRow.sequence)
+                )
+            ).all()
+            assert event_sequences == list(range(1, len(event_sequences) + 1))
             assert (
                 await verification_session.scalar(
                     select(func.count())
@@ -629,6 +666,20 @@ async def test_asr_failure_restart_reuses_audio_and_persists_one_provenance_chai
                 )
                 == 2
             )
+            retrieval_unit_count = await verification_session.scalar(
+                select(func.count())
+                .select_from(RetrievalUnitRow)
+                .where(RetrievalUnitRow.video_id == video_id)
+            )
+            embedding_count = await verification_session.scalar(
+                select(func.count())
+                .select_from(TextEmbeddingRow)
+                .join(RetrievalUnitRow)
+                .where(RetrievalUnitRow.video_id == video_id)
+            )
+            assert retrieval_unit_count is not None
+            assert retrieval_unit_count > 0
+            assert embedding_count == retrieval_unit_count
             assert (
                 await verification_session.scalar(
                     select(func.count())
