@@ -6,7 +6,7 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 Phase 0 — Foundation and contracts — and Phase 1 — Transcript-first vertical slice — are complete.
 Phase 2 — Durable ingestion and ASR fallback — is in progress on
-`feat/ingestion-progress-recovery-ui`.
+`feat/ingestion-operational-hardening`; P2.1–P2.9 are complete and P2.10 is the remaining exit gate.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
@@ -42,6 +42,13 @@ browser shows the current stage, attempt, recent durable events, cancellation st
 eligible checkpoint retry. Completed transcripts preserve the player, question, retrieval, and
 citation-seeking flow while distinguishing caption-backed evidence from the actual ASR
 provider/model/revision/device/language/confidence/timing/fallback record.
+
+P2.9 makes operations inspectable without weakening the durable model. Native faster-whisper loads
+only when transcription begins. The worker emits visible safe key-value records for startup limits,
+claims, stage decisions, retryability, fallback, device/compute mode, cleanup, and shutdown while
+PostgreSQL events remain the source of truth. The browser summarizes those persisted decisions. A
+real PostgreSQL cleanup-failure test proves retry resumes cleanup alone without duplicating audio,
+ASR, transcript cues, or indexing.
 
 ## Architecture direction
 
