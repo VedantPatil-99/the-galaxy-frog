@@ -44,6 +44,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job
+         * @description Return the current durable projection for one ingestion job.
+         */
+        get: operations["get_job_v1_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Job
+         * @description Persist a cancellation request or immediately cancel queued work.
+         */
+        post: operations["cancel_job_v1_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{job_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Events
+         * @description Return append-only job events in their persisted sequence order.
+         */
+        get: operations["get_job_events_v1_jobs__job_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Job
+         * @description Requeue an eligible retryable failure from its persisted checkpoint.
+         */
+        post: operations["retry_job_v1_jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/videos/{video_id}": {
         parameters: {
             query?: never;
@@ -115,7 +195,7 @@ export interface paths {
         put?: never;
         /**
          * Import Video
-         * @description Synchronously import metadata and available captions without downloading media.
+         * @description Create or reuse a durable job without running provider work in the request.
          */
         post: operations["import_video_v1_videos_import_post"];
         delete?: never;
@@ -231,13 +311,127 @@ export interface components {
         };
         /**
          * ImportVideoResponse
-         * @description Import result that makes idempotent reuse explicit.
+         * @description Prompt durable-import acknowledgement with idempotent job reuse.
          */
         ImportVideoResponse: {
+            job: components["schemas"]["IngestionJobResponse"];
             /** Reused */
             reused: boolean;
-            video: components["schemas"]["VideoResponse"];
         };
+        /**
+         * IngestionEventResponse
+         * @description One append-only event with its durable order, stage, attempt, and safe details.
+         */
+        IngestionEventResponse: {
+            /** Attempt */
+            attempt: number;
+            /** Details */
+            details?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Error Code */
+            error_code?: string | null;
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            event_type: components["schemas"]["IngestionEventType"];
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** Message */
+            message?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Retryable */
+            retryable?: boolean | null;
+            /** Sequence */
+            sequence: number;
+            stage: components["schemas"]["IngestionStage"];
+        };
+        /**
+         * IngestionEventsResponse
+         * @description Ordered event history scoped to one durable ingestion job.
+         */
+        IngestionEventsResponse: {
+            /** Events */
+            events: components["schemas"]["IngestionEventResponse"][];
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+        };
+        /**
+         * IngestionEventType
+         * @description Append-only facts emitted while a durable job advances.
+         * @enum {string}
+         */
+        IngestionEventType: "created" | "claimed" | "heartbeat" | "stage_started" | "stage_completed" | "retry_requested" | "cancel_requested" | "cancelled" | "failed" | "completed";
+        /**
+         * IngestionJobResponse
+         * @description Current durable job projection with source identity and lifecycle timestamps.
+         */
+        IngestionJobResponse: {
+            /** Attempt */
+            attempt: number;
+            /** Cancel Requested At */
+            cancel_requested_at?: string | null;
+            /** Canonical Url */
+            canonical_url: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** External Id */
+            external_id: string;
+            /** Input Fingerprint */
+            input_fingerprint: string;
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** Last Error Code */
+            last_error_code?: string | null;
+            /** Last Error Message */
+            last_error_message?: string | null;
+            /** Last Error Retryable */
+            last_error_retryable?: boolean | null;
+            source_kind: components["schemas"]["VideoSourceKind"];
+            stage: components["schemas"]["IngestionStage"];
+            /** Started At */
+            started_at?: string | null;
+            status: components["schemas"]["IngestionJobStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Video Id */
+            video_id?: string | null;
+        };
+        /**
+         * IngestionJobStatus
+         * @description Persisted lifecycle state for one logical ingestion request.
+         * @enum {string}
+         */
+        IngestionJobStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+        /**
+         * IngestionStage
+         * @description Phase 2 stages in execution order, excluding later multimodal capabilities.
+         * @enum {string}
+         */
+        IngestionStage: "source_resolution" | "metadata" | "caption_retrieval" | "audio_acquisition" | "transcription" | "chunking" | "persistence" | "embedding" | "indexing" | "cleanup" | "completed";
         JsonValue: unknown;
         /**
          * QuestionRequest
@@ -358,6 +552,12 @@ export interface components {
              */
             video_id: string;
         };
+        /**
+         * VideoSourceKind
+         * @description Supported source families for the transcript-first slice.
+         * @enum {string}
+         */
+        VideoSourceKind: "youtube" | "local_file";
     };
     responses: never;
     parameters: never;
@@ -403,6 +603,238 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_job_v1_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionJobResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_job_v1_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionJobResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_job_events_v1_jobs__job_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionEventsResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    retry_job_v1_jobs__job_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionJobResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Service Unavailable */
@@ -581,7 +1013,7 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

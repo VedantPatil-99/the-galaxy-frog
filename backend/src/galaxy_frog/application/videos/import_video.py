@@ -20,6 +20,35 @@ class ImportVideoResult:
     reused: bool
 
 
+def select_caption_track(
+    tracks: Sequence[CaptionTrack],
+    preferred_languages: Sequence[str],
+) -> CaptionTrack:
+    """Select one caption track deterministically without depending on a provider SDK."""
+
+    if not tracks:
+        raise VideoSourceError(
+            VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE,
+            "This video has no available captions.",
+        )
+    language_rank = {
+        language.casefold(): index for index, language in enumerate(preferred_languages)
+    }
+
+    def rank(track: CaptionTrack) -> tuple[int, int, str]:
+        language = language_rank.get(track.language_code.casefold())
+        if language is not None:
+            group = 0 if track.kind is CaptionKind.MANUAL else 1
+            return (group, language, track.language_code)
+        return (
+            2 if track.kind is CaptionKind.MANUAL else 3,
+            0,
+            track.language_code,
+        )
+
+    return min(tracks, key=rank)
+
+
 class ImportVideo:
     """Resolve one source, normalize captions, chunk, and persist atomically."""
 
@@ -48,7 +77,7 @@ class ImportVideo:
 
         metadata = await source.fetch_metadata(reference)
         tracks = await source.list_caption_tracks(reference)
-        track = self._select_track(tracks)
+        track = select_caption_track(tracks, self._preferred_languages)
         source_cues = await source.fetch_caption_cues(reference, track)
         cues = tuple(
             TranscriptCue.from_source(
@@ -84,24 +113,4 @@ class ImportVideo:
         )
 
     def _select_track(self, tracks: Sequence[CaptionTrack]) -> CaptionTrack:
-        if not tracks:
-            raise VideoSourceError(
-                VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE,
-                "This video has no available captions.",
-            )
-        language_rank = {
-            language.casefold(): index for index, language in enumerate(self._preferred_languages)
-        }
-
-        def rank(track: CaptionTrack) -> tuple[int, int, str]:
-            language = language_rank.get(track.language_code.casefold())
-            if language is not None:
-                group = 0 if track.kind is CaptionKind.MANUAL else 1
-                return (group, language, track.language_code)
-            return (
-                2 if track.kind is CaptionKind.MANUAL else 3,
-                0,
-                track.language_code,
-            )
-
-        return min(tracks, key=rank)
+        return select_caption_track(tracks, self._preferred_languages)

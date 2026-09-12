@@ -1,7 +1,8 @@
 # Galaxy Frog local runbook
 
-This runbook covers the local Next.js, FastAPI, PostgreSQL/pgvector, and Phase 1 transcript-first
-stack. Run commands from the repository root in Git Bash unless a section says otherwise.
+This runbook covers the local Next.js, FastAPI, PostgreSQL/pgvector, Phase 1 transcript-first stack,
+and the Phase 2 durable-ingestion database foundation. Run commands from the repository root in Git
+Bash unless a section says otherwise.
 
 ## Prerequisites
 
@@ -39,11 +40,22 @@ bun run db:migrate
 
 ## Daily development
 
-Start both application processes:
+Start the three application processes (Next.js, FastAPI, and the durable ingestion worker):
 
 ```bash
 bun run dev
 ```
+
+Run the worker independently when diagnosing durable jobs:
+
+```bash
+bun run dev:worker
+```
+
+`INGESTION_LEASE_SECONDS` and `INGESTION_POLL_SECONDS` control the local lease and idle polling
+intervals. Leave `INGESTION_WORKER_ID` unset for a hostname/process-derived identity, or set a unique
+value per process. The public import returns a durable job immediately. Keep one worker running to
+process queued jobs; stopping it leaves work safely queued until a worker starts again.
 
 Phase 1 uses user-managed Ollama models. Install and start Ollama manually, then provision the exact
 models named in `.env`; these commands download model weights and therefore are never run by Codex:
@@ -63,6 +75,11 @@ The development endpoints are:
 - FastAPI liveness: `http://127.0.0.1:8000/health/live`
 - FastAPI readiness: `http://127.0.0.1:8000/health/ready`
 - Browser-to-FastAPI proxy: `http://localhost:3000/api/proxy/health/live`
+- Durable video import: `POST http://127.0.0.1:8000/v1/videos/import`
+- Job detail and events: `GET http://127.0.0.1:8000/v1/jobs/{job_id}` and
+  `GET http://127.0.0.1:8000/v1/jobs/{job_id}/events`
+- Job actions: `POST http://127.0.0.1:8000/v1/jobs/{job_id}/retry` and
+  `POST http://127.0.0.1:8000/v1/jobs/{job_id}/cancel`
 
 Use `Ctrl+C` to stop the application processes. Stop the local database separately when desired:
 
@@ -72,6 +89,30 @@ bun run infra:down
 
 `infra:down` preserves the named database volume. Do not add `--volumes` unless intentionally
 discarding all local database data.
+
+## Dispatch modes
+
+`JOB_DISPATCHER=local` is the default and requires no hosted service or credential. Imports and
+retries commit durable PostgreSQL state, then the local adapter acknowledges the job already visible
+to `bun run dev:worker` polling.
+
+QStash is optional. To exercise hosted delivery, create the QStash resource manually and add these
+values only to the untracked `.env` file:
+
+```bash
+JOB_DISPATCHER=qstash
+QSTASH_TOKEN=replace-with-local-secret
+QSTASH_CALLBACK_URL=https://your-public-host/internal/qstash/dispatch
+QSTASH_CURRENT_SIGNING_KEY=replace-with-local-secret
+QSTASH_NEXT_SIGNING_KEY=replace-with-local-secret
+```
+
+The callback URL must be the exact public URL configured as the QStash destination because signature
+verification binds the message subject to it. QStash sends only `job_id` and `requested_action`.
+`/internal/qstash/dispatch` is deliberately absent from OpenAPI and the generated frontend types,
+and the Next.js proxy returns `404` for every `/internal/*` path. Keep FastAPI and the persistent
+worker running; the callback acknowledges the durable pointer quickly while the worker claims from
+PostgreSQL. Never place QStash tokens or signing keys in source control.
 
 ## API contract workflow
 
@@ -110,11 +151,22 @@ The smoke test requires liveness and readiness to return `200`, then confirms th
 route travels through the proxy as the structured `404 NOT_FOUND` response with a correlation ID.
 Set `WEB_BASE_URL` only when the web application intentionally uses a different local address.
 
-Run the real migration, repository, idempotency, pgvector, and HTTP integration test explicitly:
+Run the real migration, durable FastAPI-to-worker flow, idempotency, pgvector, and HTTP integration
+test explicitly:
 
 ```bash
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_phase_one_slice.py
 ```
+
+After applying the Phase 2 migration, prove real PostgreSQL idempotency, concurrent claim exclusion,
+stale-lease recovery, persisted-stage restart resume, ordered events, cancellation, and retry rules:
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend pytest --no-cov tests/integration/test_durable_ingestion.py
+```
+
+These tests create uniquely identified jobs and delete them when they finish. Do not complete a
+durable-ingestion checkpoint based only on unit tests or an offline migration render.
 
 Targeted backend tests must disable the repository-wide coverage gate; use the complete suite to
 prove 100% coverage:

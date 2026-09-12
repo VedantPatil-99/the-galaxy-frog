@@ -5,6 +5,8 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 ## Current checkpoint
 
 Phase 0 — Foundation and contracts — and Phase 1 — Transcript-first vertical slice — are complete.
+Phase 2 — Durable ingestion and ASR fallback — is in progress on
+`feat/durable-ingestion-foundation`.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
@@ -17,6 +19,16 @@ seeks the player from evidence intervals. The live exit gate verified import, tr
 duplicate-free reuse, grounded answering, validated timestamp citations, and citation-to-player
 seeking.
 
+The first four Phase 2 packets add framework-independent ingestion job and event models, PostgreSQL
+tables and repository operations, lease-safe claims and heartbeats, deterministic idempotency
+fingerprints, cancellation/retry transitions, a standalone local worker, and resumable caption-first
+stage handlers. Real PostgreSQL gates prove concurrent claim exclusion, stale-lease recovery, and
+restart from the last completed stage. FastAPI import now returns a durable job promptly, exposes its
+current state and ordered events, and keeps retry/cancel schemas generated into the frontend client.
+Provider-neutral wake-up hints use local PostgreSQL polling by default; the optional QStash adapter
+sends identifier-only messages to a signature-verified internal callback that is neither exported in
+OpenAPI nor reachable through the browser proxy.
+
 ## Architecture direction
 
 - `apps/web`: presentation-only Next.js/React/TypeScript application.
@@ -25,6 +37,10 @@ seeking.
 - The web application consumes generated TypeScript types and reaches FastAPI through a thin proxy.
 - PostgreSQL is the system of record; Phase 1 stores versioned BGE-M3 vectors in pgvector and runs
   video-scoped cosine retrieval without later-phase hybrid search or reranking.
+- Phase 2 stores the durable ingestion projection and append-only event history in PostgreSQL;
+  workers claim bounded leases and resume only from persisted stage checkpoints.
+- Local dispatch is the default; optional QStash delivery carries no media, transcript, prompt, or
+  evidence data and never becomes a second source of truth.
 - Provider-specific integrations stay behind Python interfaces and configuration.
 
 See [docs/architecture.md](docs/architecture.md), [docs/mvp-scope.md](docs/mvp-scope.md), and [PLANS.md](PLANS.md).
@@ -59,7 +75,7 @@ bun run db:migrate
 
 Replace the sample database password in `.env` before starting the service.
 
-Start the Next.js and FastAPI development servers together:
+Start the Next.js, FastAPI, and durable ingestion worker processes together:
 
 ```bash
 bun run dev
@@ -72,12 +88,17 @@ bun run dev
 - Readiness: `http://127.0.0.1:8000/health/ready`
 - Browser proxy: `http://localhost:3000/api/proxy/health/live`
 - Video import: `POST http://127.0.0.1:8000/v1/videos/import`
+- Job detail: `GET http://127.0.0.1:8000/v1/jobs/{job_id}`
+- Job events: `GET http://127.0.0.1:8000/v1/jobs/{job_id}/events`
+- Job retry: `POST http://127.0.0.1:8000/v1/jobs/{job_id}/retry`
+- Job cancellation: `POST http://127.0.0.1:8000/v1/jobs/{job_id}/cancel`
 - Transcript: `GET http://127.0.0.1:8000/v1/videos/{video_id}/transcript`
 - Grounded question: `POST http://127.0.0.1:8000/v1/videos/{video_id}/questions`
 
-Use `Ctrl+C` to stop both processes. Run either process independently with `bun run dev:web` or
-`bun run dev:api`. `FASTAPI_BASE_URL` is read only by the Next.js server; it is never exposed as a
-`NEXT_PUBLIC_` browser variable.
+Use `Ctrl+C` to stop all processes. Run a process independently with `bun run dev:web`,
+`bun run dev:api`, or `bun run dev:worker`. `FASTAPI_BASE_URL` is read only by the Next.js server; it
+is never exposed as a `NEXT_PUBLIC_` browser variable. Keep the worker running while importing;
+otherwise jobs remain safely queued in PostgreSQL until a worker starts.
 
 ## API contracts
 

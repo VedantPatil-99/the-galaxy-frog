@@ -22,7 +22,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden rounded-full border bg-background/75 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur sm:inline-flex">
-            Caption-only · synchronous
+            Caption-first · durable jobs
           </span>
           <ThemeToggle />
         </div>

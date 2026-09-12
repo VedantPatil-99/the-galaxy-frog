@@ -3,12 +3,16 @@ import {
   isAnswerResponse,
   isHealthResponse,
   isImportVideoResponse,
+  isIngestionEventsResponse,
+  isIngestionJobResponse,
   isReadinessResponse,
   isTranscriptResponse,
   type ApiErrorResponse,
   type AnswerResponse,
   type HealthResponse,
   type ImportVideoResponse,
+  type IngestionEventsResponse,
+  type IngestionJobResponse,
   type ReadinessResponse,
   type TranscriptResponse,
 } from "@/lib/api/contracts"
@@ -102,6 +106,84 @@ export async function importVideo(
     method: "POST",
     body: JSON.stringify({ source_url: sourceUrl }),
   })
+}
+
+export async function getIngestionJob(
+  jobId: string,
+  fetcher: Fetcher = fetch,
+): Promise<IngestionJobResponse> {
+  return requestApi(
+    `/v1/jobs/${encodeURIComponent(jobId)}`,
+    isIngestionJobResponse,
+    fetcher,
+  )
+}
+
+export async function getIngestionEvents(
+  jobId: string,
+  fetcher: Fetcher = fetch,
+): Promise<IngestionEventsResponse> {
+  return requestApi(
+    `/v1/jobs/${encodeURIComponent(jobId)}/events`,
+    isIngestionEventsResponse,
+    fetcher,
+  )
+}
+
+export async function retryIngestionJob(
+  jobId: string,
+  fetcher: Fetcher = fetch,
+): Promise<IngestionJobResponse> {
+  return requestApi(
+    `/v1/jobs/${encodeURIComponent(jobId)}/retry`,
+    isIngestionJobResponse,
+    fetcher,
+    { method: "POST" },
+  )
+}
+
+export async function cancelIngestionJob(
+  jobId: string,
+  fetcher: Fetcher = fetch,
+): Promise<IngestionJobResponse> {
+  return requestApi(
+    `/v1/jobs/${encodeURIComponent(jobId)}/cancel`,
+    isIngestionJobResponse,
+    fetcher,
+    { method: "POST" },
+  )
+}
+
+export interface IngestionWaitOptions {
+  pollIntervalMs?: number
+  maxPolls?: number
+}
+
+const terminalIngestionStatuses = new Set(["succeeded", "failed", "cancelled"])
+
+export async function waitForIngestionJob(
+  initialJob: IngestionJobResponse,
+  fetcher: Fetcher = fetch,
+  options: IngestionWaitOptions = {},
+): Promise<IngestionJobResponse> {
+  const pollIntervalMs = options.pollIntervalMs ?? 1000
+  const maxPolls = options.maxPolls ?? 300
+  let job = initialJob
+
+  for (let poll = 0; poll <= maxPolls; poll += 1) {
+    if (terminalIngestionStatuses.has(job.status)) return job
+    if (poll === maxPolls) break
+    if (pollIntervalMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+    }
+    job = await getIngestionJob(job.job_id, fetcher)
+  }
+
+  throw new ApiClientError(
+    "The ingestion job did not finish within the local wait limit.",
+    408,
+    null,
+  )
 }
 
 export async function getTranscript(

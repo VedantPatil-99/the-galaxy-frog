@@ -7,7 +7,7 @@ test("renders the transcript-first workspace", () => {
   const markup = renderToStaticMarkup(<Home />)
 
   expect(markup).toContain("Ask the video. Keep the receipts.")
-  expect(markup).toContain("Import video")
+  expect(markup).toContain("Queue video")
   expect(markup).toContain("Your evidence workspace is ready.")
   expect(markup).toContain("does not download audio or video")
   expect(markup).toContain('aria-label="Toggle color theme"')

@@ -86,6 +86,13 @@ export function buildUpstreamUrl(
   ) {
     throw new ProxyInputError(400, "INVALID_PROXY_PATH", "The proxy path is invalid.")
   }
+  if (path[0] === "internal") {
+    throw new ProxyInputError(
+      404,
+      "PROXY_ROUTE_NOT_FOUND",
+      "The requested proxy route does not exist.",
+    )
+  }
 
   let upstream: URL
   try {

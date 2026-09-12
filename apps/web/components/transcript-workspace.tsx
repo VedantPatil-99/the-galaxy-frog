@@ -7,6 +7,7 @@ import {
   askVideoQuestion,
   getTranscript,
   importVideo,
+  waitForIngestionJob,
 } from "@/lib/api/client"
 import type { AnswerResponse, TranscriptResponse } from "@/lib/api/contracts"
 import { seekCommands, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
@@ -54,11 +55,19 @@ export function TranscriptWorkspace() {
     setAnswer(null)
     try {
       const imported = await importVideo(sourceUrl)
-      const loaded = await getTranscript(imported.video.video_id)
+      const completed = await waitForIngestionJob(imported.job)
+      if (completed.status !== "succeeded" || completed.video_id == null) {
+        throw new ApiClientError(
+          completed.last_error_message ?? "The ingestion job did not complete.",
+          409,
+          null,
+        )
+      }
+      const loaded = await getTranscript(completed.video_id)
       setTranscript(loaded)
       setNotice(
         imported.reused
-          ? "Existing import reused — no transcript rows were duplicated."
+          ? "Existing durable job reused — no transcript rows were duplicated."
           : "Caption transcript imported and indexed.",
       )
     } catch (caught) {
@@ -94,7 +103,7 @@ export function TranscriptWorkspace() {
       <form onSubmit={handleImport} className="rounded-2xl border bg-card p-3 shadow-sm sm:flex sm:items-center sm:gap-3">
         <label htmlFor="source-url" className="sr-only">Public YouTube URL</label>
         <input id="source-url" type="url" required value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=…" className="h-11 w-full rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
-        <button type="submit" disabled={importing} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Importing captions…" : "Import video"}</button>
+        <button type="submit" disabled={importing} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Processing durable job…" : "Queue video"}</button>
       </form>
 
       <div aria-live="polite" className="min-h-12 py-3 text-sm">

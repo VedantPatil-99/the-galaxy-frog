@@ -7,12 +7,16 @@ from importlib.metadata import version
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from galaxy_frog.adapters.dispatch.local import LocalJobDispatcher
+from galaxy_frog.adapters.dispatch.qstash import QStashJobDispatcher, QStashSignatureVerifier
 from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.api.errors import register_error_handlers
 from galaxy_frog.api.middleware import correlation_id_middleware
 from galaxy_frog.api.routes.health import router as health_router
+from galaxy_frog.api.routes.internal_dispatch import router as internal_dispatch_router
+from galaxy_frog.api.routes.jobs import router as jobs_router
 from galaxy_frog.api.routes.videos import router as videos_router
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -45,6 +49,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.database_engine = None
     application.state.settings = resolved_settings
     application.state.video_sources = (YouTubeSource(),)
+    if resolved_settings.job_dispatcher == "qstash":
+        qstash_token = resolved_settings.qstash_token
+        callback_url = resolved_settings.qstash_callback_url
+        current_signing_key = resolved_settings.qstash_current_signing_key
+        next_signing_key = resolved_settings.qstash_next_signing_key
+        assert qstash_token is not None
+        assert callback_url is not None
+        assert current_signing_key is not None
+        assert next_signing_key is not None
+        application.state.job_dispatcher = QStashJobDispatcher(
+            token=qstash_token.get_secret_value(),
+            callback_url=callback_url,
+        )
+        application.state.dispatch_signature_verifier = QStashSignatureVerifier(
+            current_signing_key=current_signing_key.get_secret_value(),
+            next_signing_key=next_signing_key.get_secret_value(),
+            callback_url=callback_url,
+        )
+    else:
+        application.state.job_dispatcher = LocalJobDispatcher()
+        application.state.dispatch_signature_verifier = None
     application.state.embedding_provider_factory = lambda: OllamaBgeM3EmbeddingProvider(
         base_url=resolved_settings.ollama_base_url,
         model=resolved_settings.embedding_model,
@@ -57,6 +82,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.middleware("http")(correlation_id_middleware)
     register_error_handlers(application)
     application.include_router(health_router)
+    application.include_router(internal_dispatch_router)
+    application.include_router(jobs_router)
     application.include_router(videos_router)
     return application
 

@@ -4,7 +4,17 @@ from datetime import datetime
 from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -98,3 +108,50 @@ class TextEmbeddingRow(Base):
     )
     input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=False)
+
+
+class IngestionJobRow(Base):
+    __tablename__ = "ingestion_jobs"
+    __table_args__ = (
+        UniqueConstraint("input_fingerprint", name="uq_ingestion_jobs_input_fingerprint"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    source_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    canonical_url: Mapped[str] = mapped_column(Text, nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    video_id: Mapped[UUID | None] = mapped_column(ForeignKey("videos.id", ondelete="SET NULL"))
+    lease_owner: Mapped[str | None] = mapped_column(String(255))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(64))
+    last_error_message: Mapped[str | None] = mapped_column(Text)
+    last_error_retryable: Mapped[bool | None] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class JobEventRow(Base):
+    __tablename__ = "job_events"
+    __table_args__ = (UniqueConstraint("job_id", "sequence", name="uq_job_events_sequence"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    job_id: Mapped[UUID] = mapped_column(
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    retryable: Mapped[bool | None] = mapped_column(Boolean)
+    details: Mapped[dict[str, object] | None] = mapped_column(JSON)

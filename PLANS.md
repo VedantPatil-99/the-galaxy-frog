@@ -186,6 +186,108 @@ idempotent re-import; the user also confirmed that selecting a citation seeks th
 - OCR, frames, VLMs, visual retrieval, FTS, RRF, reranking, temporal expansion, and LangGraph.
 - AWS deployment, chapters, notes, flashcards, quizzes, and other later-phase product features.
 
+## Active plan: Phase 2 — Durable ingestion and ASR fallback
+
+Duration target: 7–10 focused development days.
+
+Status: **in progress**. The approved plan is recorded in the Galaxy Frog Workspace as
+`P2.0 — Phase 2: Durable Ingestion and ASR Fallback`.
+
+### P2.1 — Durable ingestion foundation
+
+- [x] Add framework-independent ingestion job, stage, event, lease, cancellation, and retry values.
+- [x] Add `ingestion_jobs` and append-only `job_events` with portable Alembic migrations.
+- [x] Implement PostgreSQL-backed idempotent creation, ordered events, and lease-safe claiming.
+- [x] Prove concurrent claims, stale-lease recovery, cancellation, retry, and terminal-state rules.
+
+The framework-independent models, repository contract, PostgreSQL adapter, deterministic input
+fingerprint, and persisted stage runner are implemented and covered by unit tests. On 2026-09-06,
+Alembic applied revision `20260905_0004` to the configured PostgreSQL service and the opt-in P2.1
+integration test proved duplicate-free creation, concurrent claim exclusion, stale-lease recovery,
+ordered events, cancellation, retry, and terminal-state rules.
+
+### P2.2 — Worker and persisted stage runner
+
+- [x] Add a separate Python worker entry point that shares the modular backend package.
+- [x] Run deterministic stages from durable checkpoints rather than one long HTTP request.
+- [x] Heartbeat active leases and recover safely after worker restart.
+
+The local worker now polls PostgreSQL with a unique lease owner, runs the caption-first path through
+persisted source, metadata, caption, persistence, embedding, and cleanup checkpoints, and heartbeats
+around provider operations. The real PostgreSQL restart test proves a replacement worker resumes at
+the last completed stage without duplicating its event. The complete default backend suite passes
+with 242 tests, three opt-in database tests skipped, and 100% statement and branch coverage.
+
+### P2.3 — Job API and generated contracts
+
+- [x] Make import create or reuse a durable job and return promptly.
+- [x] Add FastAPI-owned job detail, ordered-event, retry, and cancellation endpoints.
+- [x] Regenerate committed OpenAPI and frontend TypeScript declarations.
+
+FastAPI now returns `202` with the durable job projection, exposes current state and ordered event
+history, and enforces retry/cancel transitions with stable errors. The generated frontend client
+polls that contract only through the Next.js proxy before loading the existing transcript view. The
+real PostgreSQL end-to-end test proves duplicate import requests share one job, the worker completes
+it once, event order remains intact, and Phase 1 transcript/retrieval/question data stays readable.
+
+### P2.4 — Dispatch adapters
+
+- [x] Define a provider-independent `JobDispatcher` protocol.
+- [x] Keep local PostgreSQL dispatch as the default development path.
+- [x] Add optional QStash dispatch and signature verification using identifier-only messages.
+- [x] Make duplicate authenticated delivery idempotent.
+
+Imports and retries now send provider-neutral wake-up hints after durable state is committed. Local
+development acknowledges jobs already visible to PostgreSQL polling; optional QStash publishing
+carries only `job_id` and `requested_action`, uses deterministic message deduplication, and verifies
+the exact raw callback body against the configured URL with current/next signing keys. The internal
+callback is excluded from OpenAPI and blocked by the Next.js proxy. Repeated authenticated delivery
+only reads and acknowledges the current job projection, so it cannot duplicate events or outputs.
+
+### P2.5 — Bounded audio acquisition
+
+- [ ] Acquire audio only after captions are unavailable or unusable.
+- [ ] Enforce duration, file-size, timeout, concurrency, and isolated-workspace limits.
+- [ ] Delete temporary audio after successful processing when configured.
+
+### P2.6 — Faster-whisper provider
+
+- [ ] Prove faster-whisper and CTranslate2 compatibility with Python 3.14.7 before locking packages.
+- [ ] Add a provider-independent transcription protocol and faster-whisper adapter.
+- [ ] Support explicit CPU/GPU configuration and store model, revision, language, and confidence.
+
+### P2.7 — Resumable caption-to-ASR fallback
+
+- [ ] Prefer captions and invoke audio/ASR only for transcript insufficiency.
+- [ ] Persist ASR cues through the existing integer-millisecond provenance model.
+- [ ] Resume failed transcription from its durable checkpoint without duplicate output.
+
+### P2.8 — Progress and recovery UI
+
+- [ ] Consume only generated job API types through the thin Next.js proxy.
+- [ ] Render stage progress, recoverable errors, cancellation, and retry controls.
+- [ ] Preserve transcript, retrieval, answer, and citation-seeking behavior after completion.
+
+### P2.9 — Operational hardening
+
+- [ ] Document worker startup, recovery, cleanup, limits, and manual provider setup.
+- [ ] Make retry, fallback, dispatcher, device, and cleanup decisions observable.
+- [ ] Add complete automated and database-backed failure-path coverage.
+
+### P2.10 — Exit gate
+
+- [ ] Transcribe an approved captionless video and render exact timestamp cues.
+- [ ] Prove worker restart recovery and transcription-stage resume.
+- [ ] Prove duplicate dispatch does not duplicate jobs, events, cues, units, or embeddings.
+- [ ] Verify stage-specific progress, cancellation, retry, and safe errors in the UI.
+- [ ] Run the complete quality, pre-commit, migration, integration, scripted smoke, and manual gates.
+
+## Phase 2 non-goals
+
+- PostgreSQL FTS, lexical retrieval, RRF, reranking, and temporal expansion.
+- OCR, scenes, frames, visual embeddings, VLM reasoning, and LangGraph.
+- Chapters, notes, flashcards, quizzes, provider-configuration UI, and AWS deployment.
+
 ## Decision log
 
 - 2026-08-29: Project name confirmed as **Galaxy Frog: A Video RAG**.
@@ -208,3 +310,19 @@ idempotent re-import; the user also confirmed that selecting a citation seeks th
   caption ingestion synchronous, preserve cue provenance, and stop before every Phase 2+ capability.
 - 2026-09-02: Pin Ollama generation to `think: false` because the current `qwen3:4b` tag otherwise
   returns structured output in a separate thinking channel and leaves the final response empty.
+- 2026-09-05: Start Phase 2 on `feat/durable-ingestion-foundation`; use PostgreSQL as the durable
+  job source of truth, local dispatch as the default, and QStash only as an optional identifier-only
+  adapter. Stop at manual media-runtime, model, credential, or system-configuration gates.
+- 2026-09-06: Complete P2.1 after applying Alembic revision `20260905_0004` and passing the real
+  PostgreSQL durable-ingestion integration gate, including concurrent claim and stale-lease recovery.
+- 2026-09-06: Complete P2.2 with the standalone local worker, caption-first persisted handlers,
+  provider-operation heartbeats, and a real PostgreSQL restart-resume acceptance test. Keep P2.3
+  responsible for replacing the synchronous import contract and exposing job APIs.
+- 2026-09-06: Complete P2.3 with prompt durable import, job detail/events/retry/cancel endpoints,
+  regenerated OpenAPI/TypeScript contracts, and a PostgreSQL-backed FastAPI-to-worker acceptance
+  test that preserves the Phase 1 read and grounded-answer paths.
+- 2026-09-06: Complete P2.4 with a provider-neutral dispatcher, local PostgreSQL polling as the
+  default, an optional identifier-only QStash adapter with URL-bound current/next-key signature
+  verification, a private callback outside generated browser contracts, and idempotent duplicate
+  delivery acknowledgement. Keep live QStash credentials optional and stop before P2.5's manual
+  FFmpeg/media-runtime gate.
