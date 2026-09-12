@@ -219,6 +219,40 @@ say ASR was skipped; ASR-backed transcripts display the exact provider/model rev
 device/compute type, selection reason, language confidence, processing time, source interval, and cue
 confidence. These values are read-only execution evidence, not provider controls.
 
+## Worker observation and recovery
+
+The standalone worker enables INFO-level logs. Its first record prints the selected dispatcher,
+lease/poll timing, media limits and retention, and the exact ASR provider/model revision plus
+device/compute mode. Later records show claims, stage transitions, retryability, fallback, reuse,
+exact intervals, cue counts, provider/tool revisions, measured processing time, cleanup policy, and
+shutdown. Logs deliberately exclude credentials, raw provider errors, source titles, transcript
+text, and local media paths. PostgreSQL job events remain authoritative; logs are diagnostic.
+
+Run the worker directly when observing a recovery:
+
+```bash
+bun run dev:worker
+```
+
+Use the job and event endpoints, or the browser's durable event trail, to confirm the persisted
+state. Apply this recovery matrix:
+
+| Observed state | Meaning | Operator action |
+| --- | --- | --- |
+| `queued` with no new `claimed` event | No worker is polling | Start `bun run dev:worker`; do not recreate the import |
+| `running` with an expired lease | A worker stopped mid-stage | Start a replacement worker; it reclaims after the configured lease |
+| `failed` and retryable | The completed checkpoint is reusable | Fix the named dependency, then use the retry endpoint/UI once |
+| `failed` and not retryable | The input or fixed configuration cannot proceed safely | Correct the input/configuration; do not force a retry |
+| failed at `transcription` | Audio remains available | Restore the configured CUDA/model runtime, then retry; acquisition is reused |
+| failed at `embedding` | Transcript/ASR evidence is already durable | Start Ollama with BGE-M3, then retry; ASR is not repeated |
+| failed at `cleanup` | Final evidence is durable and temporary audio is retained | Correct filesystem access, then retry; only cleanup resumes |
+| cancellation requested | The durable request is recorded | Let the worker stop at the next safe checkpoint |
+
+Retry and duplicate import never mean "start over." The job's active stage, append-only events,
+media/checkpoint rows, and unique constraints decide what can be reused. A successful cleanup marks
+the media row deleted only after the file is removed; its source interval and tool provenance remain
+in PostgreSQL.
+
 ## API contract workflow
 
 FastAPI is the source of truth for HTTP schemas. After an intentional API schema change, regenerate
