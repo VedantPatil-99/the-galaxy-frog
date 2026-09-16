@@ -197,34 +197,47 @@ class YouTubeSource:
         info = await self._extract(reference)
         key = "subtitles" if track.kind is CaptionKind.MANUAL else "automatic_captions"
         formats = self._caption_formats(info.get(key), track.language_code)
-        selected = next((item for item in formats if item.get("ext") == "json3"), None)
-        selected = selected or next((item for item in formats if item.get("ext") == "vtt"), None)
-        if selected is None or not isinstance(selected.get("url"), str):
+        supported = [
+            item
+            for extension in ("json3", "vtt")
+            for item in formats
+            if item.get("ext") == extension and isinstance(item.get("url"), str)
+        ]
+        if not supported:
             raise VideoSourceError(
                 VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE,
                 "The selected YouTube caption track has no supported timestamped format.",
             )
-        try:
-            document = await self._caption_loader(cast(str, selected["url"]))
-            cues = (
-                self._parse_json3(document)
-                if selected.get("ext") == "json3"
-                else self._parse_vtt(document)
-            )
-        except VideoSourceError:
-            raise
-        except Exception as exc:
-            raise VideoSourceError(
-                VideoSourceErrorCode.SOURCE_UNAVAILABLE,
-                "The YouTube caption document could not be retrieved.",
-                retryable=True,
-            ) from exc
-        if not cues:
-            raise VideoSourceError(
-                VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE,
-                "The selected YouTube caption track contains no usable cues.",
-            )
-        return cues
+        parse_failure: ValueError | None = None
+        for selected in supported:
+            try:
+                document = await self._caption_loader(cast(str, selected["url"]))
+            except VideoSourceError:
+                raise
+            except Exception as exc:
+                raise VideoSourceError(
+                    VideoSourceErrorCode.SOURCE_UNAVAILABLE,
+                    "The YouTube caption document could not be retrieved.",
+                    retryable=True,
+                ) from exc
+            try:
+                cues = (
+                    self._parse_json3(document)
+                    if selected.get("ext") == "json3"
+                    else self._parse_vtt(document)
+                )
+            except ValueError as exc:
+                parse_failure = exc
+                continue
+            if cues:
+                return cues
+        error = VideoSourceError(
+            VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE,
+            "The selected YouTube caption track contains no usable timestamped cues.",
+        )
+        if parse_failure is not None:
+            raise error from parse_failure
+        raise error
 
     async def _extract(self, reference: SourceReference) -> Mapping[str, object]:
         if reference.kind is not self.source_kind:
@@ -356,8 +369,6 @@ class YouTubeSource:
             segments = event.get("segs")
             if not isinstance(segments, list):
                 continue
-            if not isinstance(start, int) or not isinstance(duration, int) or duration <= 0:
-                raise ValueError("invalid JSON3 caption interval")
             text_parts: list[str] = []
             for segment_value in cast(list[object], segments):
                 if not isinstance(segment_value, Mapping):
@@ -368,15 +379,18 @@ class YouTubeSource:
                     text_parts.append(text_value)
             text = "".join(text_parts)
             normalized = " ".join(text.replace("\n", " ").split())
-            if normalized:
-                cues.append(
-                    SourceCaptionCue(
-                        source_order=len(cues),
-                        start_ms=start,
-                        end_ms=start + duration,
-                        text=normalized,
-                    )
+            if not normalized:
+                continue
+            if not isinstance(start, int) or not isinstance(duration, int) or duration <= 0:
+                raise ValueError("invalid JSON3 caption interval")
+            cues.append(
+                SourceCaptionCue(
+                    source_order=len(cues),
+                    start_ms=start,
+                    end_ms=start + duration,
+                    text=normalized,
                 )
+            )
         return tuple(cues)
 
     @classmethod

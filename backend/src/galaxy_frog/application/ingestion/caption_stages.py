@@ -37,7 +37,7 @@ from galaxy_frog.domain.transcription import (
     TranscriptionRequest,
 )
 from galaxy_frog.domain.transcripts import TranscriptCue
-from galaxy_frog.domain.videos.source import VideoSource, VideoSourceError
+from galaxy_frog.domain.videos.source import VideoSource, VideoSourceError, VideoSourceErrorCode
 from galaxy_frog.pipelines.transcription import TemporalChunker
 
 
@@ -189,6 +189,8 @@ class CaptionRetrievalStage(_TranscriptStage):
                 source.fetch_caption_cues(job.source, track)
             )
         except VideoSourceError as exc:
+            if exc.code is VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE:
+                return self._fallback(AudioFallbackReason.CAPTIONS_UNUSABLE)
             self._raise_source_error(exc)
         cues = tuple(
             TranscriptCue.from_source(
