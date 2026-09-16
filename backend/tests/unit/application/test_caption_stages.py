@@ -354,6 +354,20 @@ async def test_caption_and_persisted_video_failures_remain_stage_specific() -> N
 
     source.tracks = (CaptionTrack("manual:en", "en", CaptionKind.MANUAL),)
     source.failure = VideoSourceError(
+        VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE,
+        "The caption track is unusable.",
+    )
+    unusable_captions = await stages[IngestionStage.CAPTION_RETRIEVAL].execute(
+        caption_job,
+        caption_context,
+    )
+    assert unusable_captions.next_stage is IngestionStage.AUDIO_ACQUISITION
+    assert unusable_captions.details == {
+        "transcript_origin": "asr",
+        "fallback_reason": "captions_unusable",
+    }
+
+    source.failure = VideoSourceError(
         VideoSourceErrorCode.SOURCE_UNAVAILABLE,
         "Caption retrieval failed.",
         retryable=True,
