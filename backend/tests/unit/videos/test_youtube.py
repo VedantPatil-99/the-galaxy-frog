@@ -141,6 +141,7 @@ async def test_fetches_and_normalizes_json3_captions() -> None:
     document = json.dumps(
         {
             "events": [
+                {"tStartMs": 0, "segs": [{"utf8": "\n"}]},
                 {
                     "tStartMs": 0,
                     "dDurationMs": 1200,
@@ -187,6 +188,46 @@ async def test_fetches_webvtt_when_json3_is_unavailable() -> None:
         (0, 1500, "First cue."),
         (1500, 3000, "Second cue."),
     ]
+
+
+@pytest.mark.asyncio
+async def test_recovers_with_webvtt_when_json3_is_unusable() -> None:
+    payload = info_payload()
+    payload["subtitles"] = {
+        "en": [
+            {"ext": "vtt", "url": "https://example.com/en.vtt"},
+            {"ext": "json3", "url": "https://example.com/en.json3"},
+        ]
+    }
+    requested: list[str] = []
+
+    async def caption_loader(url: str) -> str:
+        requested.append(url)
+        if url.endswith(".json3"):
+            return json.dumps(
+                {
+                    "events": [
+                        {
+                            "tStartMs": 0,
+                            "dDurationMs": 0,
+                            "segs": [{"utf8": "Invalid interval."}],
+                        }
+                    ]
+                }
+            )
+        return "WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nRecovered cue."
+
+    source = YouTubeSource(info_loader=lambda _url: payload, caption_loader=caption_loader)
+    reference = source.canonicalize(f"https://youtu.be/{VIDEO_ID}")
+    track = (await source.list_caption_tracks(reference))[0]
+
+    cues = await source.fetch_caption_cues(reference, track)
+
+    assert requested == [
+        "https://example.com/en.json3",
+        "https://example.com/en.vtt",
+    ]
+    assert [(cue.start_ms, cue.end_ms, cue.text) for cue in cues] == [(0, 1500, "Recovered cue.")]
 
 
 def test_caption_selection_prefers_requested_manual_then_automatic() -> None:
@@ -253,7 +294,8 @@ async def test_rejects_malformed_caption_intervals(document: str) -> None:
     with pytest.raises(VideoSourceError) as captured:
         await source.fetch_caption_cues(reference, track)
 
-    assert captured.value.code is VideoSourceErrorCode.SOURCE_UNAVAILABLE
+    assert captured.value.code is VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE
+    assert captured.value.retryable is False
 
 
 @pytest.mark.asyncio
@@ -417,6 +459,16 @@ async def test_caption_failures_remain_stable() -> None:
     with pytest.raises(VideoSourceError) as captured:
         await source.fetch_caption_cues(reference, track)
     assert captured.value.code is VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE
+
+    async def unavailable(_url: str) -> str:
+        raise RuntimeError("temporary caption outage")
+
+    source = YouTubeSource(info_loader=lambda _url: info_payload(), caption_loader=unavailable)
+    track = (await source.list_caption_tracks(reference))[0]
+    with pytest.raises(VideoSourceError) as captured:
+        await source.fetch_caption_cues(reference, track)
+    assert captured.value.code is VideoSourceErrorCode.SOURCE_UNAVAILABLE
+    assert captured.value.retryable is True
 
 
 def test_caption_parser_ignores_non_cue_events_and_rejects_bad_vtt_time() -> None:
