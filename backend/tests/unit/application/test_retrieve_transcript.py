@@ -21,6 +21,7 @@ from galaxy_frog.domain.retrieval.pipeline import (
     RetrievalStage,
 )
 from galaxy_frog.domain.retrieval.query import analyze_query
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit
 
 
@@ -31,11 +32,13 @@ class StubRetriever:
         self.results = results
         self.error = error
         self.calls: list[tuple[UUID, str, int]] = []
+        self.windows: list[TimeWindow | None] = []
 
     async def search(
-        self, video_id: UUID, query: str, *, limit: int
+        self, video_id: UUID, query: str, *, limit: int, window: TimeWindow | None = None
     ) -> tuple[RetrievedEvidence, ...]:
         self.calls.append((video_id, query, limit))
+        self.windows.append(window)
         if self.error is not None:
             raise self.error
         return self.results
@@ -258,3 +261,17 @@ async def test_unresolved_temporal_query_never_becomes_unrestricted_search() -> 
     with pytest.raises(TemporalResolutionRequired):
         await RetrieveTranscript(lexical=lexical, dense=dense).execute(uuid4(), "before the demo")
     assert lexical.calls == dense.calls == []
+
+
+@pytest.mark.asyncio
+async def test_resolved_window_reaches_both_stages_and_checks_provider_scope() -> None:
+    video_id = uuid4()
+    lexical = StubRetriever((item(video_id, 1),))
+    dense = StubRetriever()
+    app = RetrieveTranscript(lexical=lexical, dense=dense)
+    window = TimeWindow(1000, 2000)
+    result = await app.execute(video_id, "before the demo", window=window)
+    assert lexical.windows == dense.windows == [window]
+    assert result.evidence[0].unit == lexical.results[0].unit
+    with pytest.raises(RetrievalIntegrityError, match="outside the time"):
+        await app.execute(video_id, "query", window=TimeWindow(2000))

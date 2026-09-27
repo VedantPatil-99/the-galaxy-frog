@@ -17,6 +17,7 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from galaxy_frog.application.retrieval.temporal import RetrieveTemporalEvidence
 from galaxy_frog.application.retrieval.text import RetrieveTranscript
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -27,6 +28,7 @@ from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.retrieval.pipeline import RetrievalMode
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
@@ -218,6 +220,55 @@ class FixtureEmbeddings:
             else (0.0, 1.0, *([0.0] * 1022))
             for text in texts
         )
+
+
+@pytest.mark.asyncio
+async def test_temporal_filters_precede_top_k_and_preserve_real_transcript() -> None:
+    engine = create_database_engine(Settings())
+    provider = FixtureEmbeddings()
+    video_ids: list[UUID] = []
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            video_id, unit_ids = await _seed(
+                session, ("quokka " * 30, "quokka middle", "quokka last")
+            )
+            video_ids.append(video_id)
+            other_id, _ = await _seed(session, ("quokka " * 30, "quokka middle"))
+            video_ids.append(other_id)
+            videos = SqlAlchemyVideoRepository(session)
+            before = await videos.get_transcript(video_id)
+            lexical = PostgresTranscriptLexicalSearch(session)
+            dense = PgVectorTranscriptSearch(session=session, videos=videos, provider=provider)
+            for adapter in (lexical, dense):
+                for window, expected in (
+                    (TimeWindow(10000, 20000), 1),
+                    (TimeWindow(0, 10000), 0),
+                    (TimeWindow(20000), 2),
+                ):
+                    found = await adapter.search(video_id, "quokka", limit=1, window=window)
+                    assert len(found) == 1 and found[0].unit.unit_id == unit_ids[expected]
+                assert await adapter.search(video_id, "quokka", window=TimeWindow(0, 0)) == ()
+            app = RetrieveTemporalEvidence(
+                videos=videos, retrieval=RetrieveTranscript(lexical=lexical, dense=dense)
+            )
+            result = await app.execute(
+                video_id, "quokka between 00:10 and 00:20", allow_fallback=False
+            )
+            assert result.groups[0].start_ms == 10000 and result.groups[0].end_ms == 20000
+            assert before is not None
+            assert result.groups[0].units == (before.units[1],)
+            assert result.groups[0].cues == (before.cues[1],)
+            assert await videos.get_transcript(video_id) == before
+    finally:
+        async with AsyncSession(engine) as cleanup:
+            await cleanup.execute(delete(VideoRow).where(VideoRow.id.in_(video_ids)))
+            await cleanup.execute(
+                delete(EmbeddingCollectionRow).where(
+                    EmbeddingCollectionRow.revision == provider.spec.revision
+                )
+            )
+            await cleanup.commit()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from galaxy_frog.db.models import RetrievalUnitCueRow, RetrievalUnitRow
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit
 
 
@@ -25,7 +26,7 @@ class PostgresTranscriptLexicalSearch:
         self._session = session
 
     async def search(
-        self, video_id: UUID, query: str, *, limit: int = 30
+        self, video_id: UUID, query: str, *, limit: int = 30, window: TimeWindow | None = None
     ) -> tuple[RetrievedEvidence, ...]:
         if not query.strip():
             raise ValueError("query must not be empty")
@@ -42,6 +43,12 @@ class PostgresTranscriptLexicalSearch:
             .order_by(rank.desc(), RetrievalUnitRow.id)
             .limit(limit)
         )
+        if window is not None:
+            if window.start_ms == window.end_ms:
+                return ()
+            statement = statement.where(RetrievalUnitRow.end_ms > window.start_ms)
+            if window.end_ms is not None:
+                statement = statement.where(RetrievalUnitRow.start_ms < window.end_ms)
         rows = (await self._session.execute(statement)).all()
         if not rows:
             return ()

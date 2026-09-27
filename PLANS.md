@@ -368,7 +368,7 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
 
 ## Active plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **P3.1–P3.3 locally complete; P3.4 is next**.
+Status: **P3.1–P3.4 locally complete; P3.5 is next**.
 Hosted CI/merge remain pending. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
@@ -384,7 +384,7 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
 - [x] P3.3 — Local reranking (`feat/local-transcript-reranking`). Pin BGE reranker v2-m3 and verified
   dependencies behind a Python interface. Target CUDA FP16, batch/concurrency one, and 512-token
   inputs. Rerank 30 candidates; record truncation, provider revision, device, and timing.
-- [ ] P3.4 — Temporal evidence (`feat/temporal-evidence-retrieval`). Support explicit times/ranges
+- [x] P3.4 — Temporal evidence (`feat/temporal-evidence-retrieval`). Support explicit times/ranges
   and named-event anchors. Show up to five distinct anchor choices when ambiguous and validate the
   chosen source interval server-side. Expand by 15 seconds each way, merge overlaps/gaps under five
   seconds, deduplicate cues, bound context, and return at most eight diverse groups.
@@ -433,7 +433,7 @@ and evidence records; and explicit lexical fallback on embedding-provider errors
 disable fallback. Collection/database failures and conflicting or cross-video evidence are rejected.
 The existing dense adapter owns indexing; no duplicate indexing lifecycle was introduced.
 
-Temporal signals currently raise `TemporalResolutionRequired` before retrievers run. P3.4 adds
+At the P3.2 checkpoint, temporal signals raised `TemporalResolutionRequired` before retrievers ran. P3.4 adds
 actual constraints and anchor resolution; P3.5 wires the shared service into search/questions and
 durable traces. The current HTTP question path remains operational with unchanged contracts.
 
@@ -467,6 +467,27 @@ passed with 591 backend tests, 12 opt-in skips, 100% statement/branch coverage, 
 generated contracts, lint/types, and production build. Focused retrieval/process/provider tests
 passed (86 tests). No quality improvement or Ollama coexistence is claimed by this packet.
 See [P3.3 verification](docs/phase-3/p3-3-verification.md). Hosted CI/merge remain pending.
+
+### P3.4 local acceptance — 2026-09-27
+
+`feat/temporal-evidence-retrieval` stacks on P3.3 `fba2630`. Timestamp/range constraints become
+half-open SQL filters before top-k selection in both adapters. The temporal service resolves named
+events first; literal matches use original cue intervals where possible and inspect the complete
+transcript so a second mention outside top-k still prevents automatic selection. Up to five distinct
+moments are offered. The user approved showing semantic suggestions when no literal match exists,
+always requiring selection, even with one suggestion. Stale/foreign selections fail explicitly.
+
+Expansion uses +/-15 seconds and merges overlaps or gaps under five seconds. It reserves matching
+units before neighbors, deduplicates cues, and limits context to 12,000 characters across at most
+eight groups. Display intervals and original citation intervals remain separate. Whole units that
+cross a requested boundary produce a warning; oversized context is omitted with an explicit reason.
+Time-only browsing is chronological and skips models. Unsupported temporal grammar fails explicitly.
+
+103 focused checks and nine real PostgreSQL integration checks pass. The complete quality gate
+passes with 646 backend tests, 13 opt-in skips, 100% statement/branch coverage, 26 frontend tests,
+generated contracts, lint/format/types, and production build. No migration or provider dependency
+was added. See [P3.4 verification](docs/phase-3/p3-4-verification.md). HTTP wiring and durable traces
+remain P3.5; hosted CI/merge and the real-model quality benchmark remain separate gates.
 
 ### Services, delivery, and non-goals
 

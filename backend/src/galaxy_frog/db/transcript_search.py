@@ -17,6 +17,7 @@ from galaxy_frog.db.models import (
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec, RetrievedEvidence
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit
 
 
@@ -101,11 +102,14 @@ class PgVectorTranscriptSearch:
         query: str,
         *,
         limit: int = 8,
+        window: TimeWindow | None = None,
     ) -> tuple[RetrievedEvidence, ...]:
         if not query.strip():
             raise ValueError("query must not be empty")
         if not 1 <= limit <= 30:
             raise ValueError("limit must be between 1 and 30")
+        if window is not None and window.start_ms == window.end_ms:
+            return ()
         collection_id = await self.ensure_indexed(video_id)
         vectors = await self._provider.embed((query,))
         query_vector = list(vectors[0])
@@ -123,6 +127,10 @@ class PgVectorTranscriptSearch:
             .order_by(distance, RetrievalUnitRow.id)
             .limit(limit)
         )
+        if window is not None:
+            statement = statement.where(RetrievalUnitRow.end_ms > window.start_ms)
+            if window.end_ms is not None:
+                statement = statement.where(RetrievalUnitRow.start_ms < window.end_ms)
         rows = (await self._session.execute(statement)).all()
         unit_ids = tuple(row[0].id for row in rows)
         cue_ids: defaultdict[str, list[str]] = defaultdict(list)

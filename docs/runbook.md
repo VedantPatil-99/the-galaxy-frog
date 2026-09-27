@@ -499,6 +499,14 @@ Application Control policy. Do not disable coverage, substitute generated contra
 different runtime to claim the exit gate. Temporary diagnostic shims are not part of the supported
 development workflow.
 
+## Temporal retrieval verification (P3.4)
+
+Follow [P3.4 verification](phase-3/p3-4-verification.md) for the supported timestamp/event grammar,
+observable boundary/context warnings, and repeatable Git Bash commands. Database acceptance needs
+only the existing PostgreSQL/pgvector service and deterministic fixture embeddings. It adds no
+migration, machine installation, or model download. Search/anchor browser controls arrive with the
+API/UI packets; the current question endpoint retains its earlier behavior until P3.5.
+
 ## Deployment boundary
 
 The local Phase 1 stack uses PostgreSQL with pgvector in Docker and a user-managed native Ollama

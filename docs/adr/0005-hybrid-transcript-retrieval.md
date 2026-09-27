@@ -48,6 +48,19 @@ implemented here; measure whole-pipeline latency and Ollama coexistence in the e
 making performance claims or changing lifecycle policy. The runtime records raw finite logits,
 input/original token counts, truncation, exact identity, device, timing, and allocated/reserved VRAM.
 
+P3.4 resolves temporal scope before database top-k and treats intervals as half-open. A deterministic
+English grammar supports one trailing timestamp/range or named event. Unrecognized temporal intent
+fails explicitly rather than dropping the constraint. Literal events use cue boundaries where
+possible and check the full stored transcript for ambiguity. Per the user's decision, semantic
+suggestions are useful for implied wording but always require confirmation. Choices are bounded
+to five and validated server-side against the video/event; missing or stale selections never broaden
+the query. Reranked requests use a fused anchor pass to avoid loading the cross-encoder twice.
+
+Expansion keeps whole original units, reserves seeds before neighbors, and caps context at 12,000
+characters. Display intervals may merge and clip; citation intervals never do. Boundary-straddling
+units and budget omissions are observable. This preserves citation identity but requires the answer
+path and UI to distinguish original evidence from requested display scope.
+
 ## Consequences
 
 - PostgreSQL FTS becomes available to existing caption and ASR transcripts without ingestion changes.

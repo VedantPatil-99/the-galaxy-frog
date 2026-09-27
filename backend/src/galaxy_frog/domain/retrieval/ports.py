@@ -4,6 +4,7 @@ from typing import Protocol
 from uuid import UUID
 
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec, RetrievedEvidence
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 
 
 class TextEmbeddingProvider(Protocol):
@@ -18,7 +19,7 @@ class TranscriptRetriever(Protocol):
     """Retrieve original transcript units without requiring an embedding provider."""
 
     async def search(
-        self, video_id: UUID, query: str, *, limit: int
+        self, video_id: UUID, query: str, *, limit: int, window: TimeWindow | None = None
     ) -> tuple[RetrievedEvidence, ...]: ...
 
 

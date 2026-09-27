@@ -26,7 +26,7 @@ evidence and produce timestamp-grounded answers.
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
-- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.3 locally verified, CI/merge pending
+- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.4 locally verified, CI/merge pending
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -144,7 +144,24 @@ tests, contracts/lint/types/build. Native integrations pass (two tests, includin
 The 30-candidate runtime probe used 1118 MiB peak reserved VRAM and took 44.2 s total, including
 22.9 s model loading. This startup cost is material; no real-model retrieval-quality improvement or
 Ollama coexistence is claimed. See [verification and commands](phase-3/p3-3-verification.md).
-Next packet is P3.4 temporal evidence. Continue stacked commits/pushes and give PR content in chat.
+At that checkpoint, the next packet was P3.4 temporal evidence.
+
+### P3.4 temporal evidence — 2026-09-27
+
+`feat/temporal-evidence-retrieval` stacks on `fba2630`. Timestamp/range scope is applied in PostgreSQL
+before lexical/dense top-k. Named events resolve against original transcript cues; ambiguous literal
+matches and all semantic suggestions require a server-validated selection. The user explicitly chose
+semantic suggestions plus confirmation for implied events such as “introduction”/“Welcome everyone.”
+Missing anchors never broaden scope. Expansion/merging keeps original units and ASR cue lineage,
+caps context at 12,000 characters, and warns about omitted units or boundary-straddling evidence.
+
+Local checks: 103 focused tests, nine PostgreSQL integrations, full quality gate with 646 backend
+tests at 100% statement/branch coverage, 13 opt-in skips, 26 frontend tests, generated contracts,
+lint/types, and production build. No new migration or installation. See
+[P3.4 verification](phase-3/p3-4-verification.md) for Git Bash procedures and grammar limitations.
+Next is P3.5: durable bounded traces, search/trace endpoints, shared question retrieval, and generated
+contracts. Continue stacked commits/pushes and supply PR content directly in chat. Do not create PRs.
+Hosted CI/merge and real-model retrieval quality remain pending.
 
 ### Historical checkpoint records
 
