@@ -239,3 +239,17 @@ and breaks ties by unit ID. Lexical scores are neither answer confidence nor dir
 dense similarity; P3.2 will fuse ranks. Results carry original units and ordered cue links, preserving
 caption/ASR lineage through the existing transcript tables. P3.1 does not activate a new public
 search or question path. See ADR 0005 for the approved subsequent retrieval boundaries.
+## Shared text retrieval (P3.2)
+
+`application/retrieval/text.py` composes the lexical and existing collection-safe dense ports.
+Stages run sequentially because adapters may share one `AsyncSession`. Query normalization and
+signal detection are deterministic domain functions; no language model classifies queries.
+Quoted phrases become the lexical expression while dense retrieval retains the full question.
+Temporal signals require explicit resolution before this service can retrieve unrestricted text.
+
+Equal-weight RRF combines ranks with constant 60 and stable unit-ID tie breaking. Scores remain
+separate from source scores, and duplicate appearances in one stage cannot boost a unit. Each result
+retains original intervals/cues plus bounded stage, fusion, candidate, and evidence records. Only
+embedding-provider failures allow an observable lexical fallback in hybrid mode; strict or dense-only
+requests fail instead. Database, collection, and evidence-integrity errors propagate.
+The current question API adopts this service in P3.5; persistent traces are also deferred to P3.5.

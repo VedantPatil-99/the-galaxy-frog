@@ -1,4 +1,10 @@
-# Phase 3 P3.1 manual verification
+# Phase 3 manual verification
+
+P3.1 evidence below is preserved as its historical acceptance record. On P3.2 branch
+`feat/hybrid-transcript-retrieval`, also run `tests/unit/application/test_retrieve_transcript.py`.
+Its latest complete gate reports 548 backend tests, ten opt-in skips, and 100% statement/branch
+coverage; the PostgreSQL commands below now cover eight tests, including real index reuse and
+hybrid fallback with deterministic embeddings. PR content is provided directly in chat.
 
 Verified on 2026-09-27 on `feat/transcript-lexical-retrieval`: 13 focused retrieval tests, seven
 PostgreSQL integrations, migration head `20260927_0006`, and the complete `bun run check` gate
@@ -29,6 +35,7 @@ uv run --directory backend python --version
 ```
 
 Expected branch: `feat/transcript-lexical-retrieval`. Expected Python: `3.14.7`.
+For P3.2, the expected branch is `feat/hybrid-transcript-retrieval`.
 If this returns the same Application Control error, stop here and report the executable path and
 error. The remaining steps cannot work until the interpreter can execute.
 
