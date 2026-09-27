@@ -266,3 +266,25 @@ domain results; original text, IDs, intervals, and cue links remain in the retri
 failure preserves fused order only with warnings/degraded status; strict mode fails. Empty evidence
 skips the provider. Each request releases model residency on child exit; the resulting load latency
 is measured in the [P3.3 verification record](phase-3/p3-3-verification.md).
+
+## Temporal evidence (P3.4)
+
+`RetrieveTemporalEvidence` parses one trailing timestamp/range or named-event constraint, then
+passes a half-open `TimeWindow` to both PostgreSQL adapters before ranking/limiting. Pure timestamp
+browsing selects up to 30 original units chronologically without embedding or reranking. Unsupported
+grammar fails explicitly. Quoted temporal words stay literal. The parser currently uses English
+operators; transcript text, dense retrieval, and reranking retain multilingual support.
+
+Named-event resolution records a separate retrieval pass, using fused retrieval for reranked mode.
+Literal inspection includes the entire stored transcript, preventing top-k truncation from concealing
+ambiguity. Cue intervals locate literal events; cross-cue phrases retain the original unit interval.
+Semantic suggestions use ranked, distinct unit intervals and always require user selection. Up to
+five choices have stable identities tied to video, event, interval, and original unit IDs. Selection
+is revalidated against current server candidates. Unresolved/ambiguous requests return no main pass.
+
+`expand_evidence` merges +/-15 second windows and gaps under five seconds, then selects at most eight
+groups by their best seed rank. The 12,000-character context budget reserves whole matching units
+before adding neighbors. Original text, cue IDs, cue order, caption/ASR origin, transcription-run ID,
+and unit intervals remain unchanged. Display windows are clipped to temporal scope; boundary-crossing
+originals and context omissions receive explicit warnings. No generator or HTTP schema is introduced
+by this packet. The subsequent API packet persists these records and reuses citation validation.

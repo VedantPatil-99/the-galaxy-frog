@@ -19,6 +19,7 @@ from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch, Transcrip
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit
 from galaxy_frog.domain.videos.models import SafeVideoMetadata, SourceReference, VideoSourceKind
 from galaxy_frog.domain.videos.records import TranscriptRecord, VideoRecord
@@ -45,6 +46,7 @@ class FakeSession:
         self.added_groups: list[tuple[object, ...]] = []
         self.flushes = 0
         self.commits = 0
+        self.statements: list[object] = []
 
     async def scalar(self, _statement: object) -> object | None:
         return self.scalar_values.popleft()
@@ -53,6 +55,7 @@ class FakeSession:
         return AllResult(self.scalars_values.popleft())
 
     async def execute(self, _statement: object) -> ExecuteResult:
+        self.statements.append(_statement)
         return ExecuteResult(self.execute_values.popleft())
 
     def add(self, value: object) -> None:
@@ -265,7 +268,8 @@ async def test_search_returns_ranked_video_scoped_units_with_cues() -> None:
 
 
 @pytest.mark.asyncio
-async def test_search_handles_no_results_without_loading_links() -> None:
+@pytest.mark.parametrize("window", [None, TimeWindow(0), TimeWindow(100, 900)])
+async def test_search_handles_no_results_without_loading_links(window: TimeWindow | None) -> None:
     item = unit()
     record = transcript(item)
     existing = collection()
@@ -276,4 +280,21 @@ async def test_search_handles_no_results_without_loading_links() -> None:
     session.execute_values.append([])
     adapter = search(session, FakeVideos((record,)), FakeProvider((((vector),),)))
 
-    assert await adapter.search(record.video.video_id, "question") == ()
+    assert await adapter.search(record.video.video_id, "question", window=window) == ()
+    sql = str(session.statements[0])
+    if window is not None:
+        assert "retrieval_units.end_ms >" in sql
+        assert sql.index("retrieval_units.end_ms >") < sql.index("LIMIT")
+        assert ("retrieval_units.start_ms <" in sql) == (window.end_ms is not None)
+
+
+@pytest.mark.asyncio
+async def test_empty_window_does_not_index_embed_or_query() -> None:
+    session, provider = FakeSession(), FakeProvider(())
+    assert (
+        await search(session, FakeVideos(()), provider).search(
+            uuid4(), "query", window=TimeWindow(0, 0)
+        )
+        == ()
+    )
+    assert not session.statements and not provider.inputs

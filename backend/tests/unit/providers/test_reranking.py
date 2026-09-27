@@ -29,6 +29,7 @@ from galaxy_frog.domain.retrieval.reranking import (
     RerankResult,
     RerankScore,
 )
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit
 from galaxy_frog.entrypoints import reranker_probe
 
@@ -342,7 +343,7 @@ def ranked_result() -> RerankResult:
 
 class RetrievalFixture:
     async def search(
-        self, video_id: UUID, query: str, *, limit: int
+        self, video_id: UUID, query: str, *, limit: int, window: TimeWindow | None = None
     ) -> tuple[RetrievedEvidence, ...]:
         return tuple(
             RetrievedEvidence(

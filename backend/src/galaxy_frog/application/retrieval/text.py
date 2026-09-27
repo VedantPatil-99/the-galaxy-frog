@@ -28,14 +28,15 @@ from galaxy_frog.domain.retrieval.reranking import (
     RerankingRun,
     TextReranker,
 )
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 
 
 class RetrieveTranscript:
     """Use the existing dense adapter's collection-safe indexing lifecycle.
 
     Stages are sequential because both adapters may share one database session.
-    No generator is accepted by this service. Temporal resolution is added in P3.4;
-    until then temporal requests fail explicitly before providers are invoked.
+    No generator is accepted. The temporal orchestrator supplies a resolved
+    window; unresolved temporal requests fail before providers are invoked.
     """
 
     def __init__(
@@ -61,12 +62,13 @@ class RetrieveTranscript:
         mode: RetrievalMode = RetrievalMode.HYBRID,
         limit: int = 8,
         allow_fallback: bool = True,
+        window: TimeWindow | None = None,
     ) -> TextRetrievalResult:
         if not 1 <= limit <= 8:
             raise ValueError("result limit must be between 1 and 8")
         mode = RetrievalMode(mode)
         analysis = analyze_query(query)
-        if analysis.kind == QueryKind.TEMPORAL:
+        if analysis.kind == QueryKind.TEMPORAL and window is None:
             raise TemporalResolutionRequired(
                 "Resolve the temporal constraint before text retrieval."
             )
@@ -76,14 +78,16 @@ class RetrieveTranscript:
         if mode != RetrievalMode.DENSE:
             stages.append(
                 await self._run(
-                    self._lexical, RetrievalMode.LEXICAL, video_id, analysis.lexical_query
+                    self._lexical, RetrievalMode.LEXICAL, video_id, analysis.lexical_query, window
                 )
             )
         if mode != RetrievalMode.LEXICAL:
             dense_started = self._clock()
             try:
                 stages.append(
-                    await self._run(self._dense, RetrievalMode.DENSE, video_id, analysis.normalized)
+                    await self._run(
+                        self._dense, RetrievalMode.DENSE, video_id, analysis.normalized, window
+                    )
                 )
             except EmbeddingProviderError:
                 if not allow_fallback or mode == RetrievalMode.DENSE:
@@ -152,10 +156,21 @@ class RetrieveTranscript:
         )
 
     async def _run(
-        self, retriever: TranscriptRetriever, stage: RetrievalMode, video_id: UUID, query: str
+        self,
+        retriever: TranscriptRetriever,
+        stage: RetrievalMode,
+        video_id: UUID,
+        query: str,
+        window: TimeWindow | None,
     ) -> RetrievalStage:
         started = self._clock()
-        results = await retriever.search(video_id, query, limit=self._config.candidate_limit)
+        results = await retriever.search(
+            video_id, query, limit=self._config.candidate_limit, window=window
+        )
         if len(results) > self._config.candidate_limit:
             raise RetrievalIntegrityError("Retriever exceeded its candidate limit.")
+        if window is not None and any(
+            not window.overlaps(row.unit.start_ms, row.unit.end_ms) for row in results
+        ):
+            raise RetrievalIntegrityError("Retriever returned evidence outside the time window.")
         return RetrievalStage(stage, (self._clock() - started) * 1000, results)

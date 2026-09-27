@@ -890,6 +890,11 @@ events, with user-selected anchors when ambiguous. Local BGE reranking targets G
 may retain lexical search or fused ordering only with explicit warnings and trace reasons. Strict
 benchmarks never substitute stages. Deliver stacked branches and PR text without creating PRs.
 
+P3.4 clarification (2026-09-27): when an event is only implied by the transcript wording, show
+semantic candidate timestamps and require the user to choose. Never automatically accept a semantic
+suggestion, even if there is only one. Literal ambiguity also requires selection. Preserve original
+cue intervals; separately bounded display windows do not replace citation evidence.
+
 ### Work
 
 - Add PostgreSQL FTS indexes.

@@ -12,6 +12,7 @@ from sqlalchemy.sql import Select
 from galaxy_frog.db.models import RetrievalUnitCueRow, RetrievalUnitRow
 from galaxy_frog.db.transcript_lexical_search import PostgresTranscriptLexicalSearch
 from galaxy_frog.domain.retrieval.ports import TranscriptRetriever
+from galaxy_frog.domain.retrieval.temporal import TimeWindow
 
 
 @pytest.mark.parametrize(("query", "limit"), [(" ", 8), ("word", 0), ("word", 31)])
@@ -24,13 +25,34 @@ async def test_invalid_request_does_not_query_database(query: str, limit: int) -
 
 
 @pytest.mark.asyncio
-async def test_no_match_never_loads_cues() -> None:
+@pytest.mark.parametrize("window", [None, TimeWindow(0), TimeWindow(100, 900)])
+async def test_no_match_never_loads_cues(window: TimeWindow | None) -> None:
     session = AsyncMock(spec=AsyncSession)
     result = MagicMock()
     result.all.return_value = []
     session.execute.return_value = result
-    assert await PostgresTranscriptLexicalSearch(session).search(uuid4(), "missing") == ()
+    assert (
+        await PostgresTranscriptLexicalSearch(session).search(uuid4(), "missing", window=window)
+        == ()
+    )
     session.scalars.assert_not_called()
+    sql = str(session.execute.call_args.args[0])
+    if window is not None:
+        assert "retrieval_units.end_ms >" in sql
+        assert sql.index("retrieval_units.end_ms >") < sql.index("LIMIT")
+        assert ("retrieval_units.start_ms <" in sql) == (window.end_ms is not None)
+
+
+@pytest.mark.asyncio
+async def test_empty_window_does_not_query() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    assert (
+        await PostgresTranscriptLexicalSearch(session).search(
+            uuid4(), "query", window=TimeWindow(0, 0)
+        )
+        == ()
+    )
+    session.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
