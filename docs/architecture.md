@@ -224,3 +224,18 @@ reuse, measured processing time, and cleanup retention. The browser derives its 
 summaries from the persisted FastAPI event contract rather than process logs. Native faster-whisper
 and its binary dependencies are imported only when a transcription requests the model, so API,
 worker wiring, and non-ASR tests do not initialize CUDA or NumPy.
+
+## Phase 3 lexical retrieval foundation
+
+P3.1 adds an independently callable PostgreSQL lexical retriever beside the existing dense adapter.
+A stored `simple`-dictionary `tsvector` on `retrieval_units.text` backfills existing rows and is
+maintained by PostgreSQL for new or changed text. A GIN index supports lexical matching without
+rerunning ingestion or adding a provider call. Quoted phrases use PostgreSQL web-search semantics;
+the language-neutral dictionary performs token matching, not language-specific stemming or fuzzy
+substring matching.
+
+The retriever binds user text, scopes every query by video, ranks with `ts_rank_cd` normalization 32,
+and breaks ties by unit ID. Lexical scores are neither answer confidence nor directly comparable to
+dense similarity; P3.2 will fuse ranks. Results carry original units and ordered cue links, preserving
+caption/ASR lineage through the existing transcript tables. P3.1 does not activate a new public
+search or question path. See ADR 0005 for the approved subsequent retrieval boundaries.

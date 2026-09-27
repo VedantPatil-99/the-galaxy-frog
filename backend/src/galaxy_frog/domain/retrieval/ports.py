@@ -14,6 +14,14 @@ class TextEmbeddingProvider(Protocol):
     async def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]: ...
 
 
+class TranscriptRetriever(Protocol):
+    """Retrieve original transcript units without requiring an embedding provider."""
+
+    async def search(
+        self, video_id: UUID, query: str, *, limit: int
+    ) -> tuple[RetrievedEvidence, ...]: ...
+
+
 class TranscriptSearch(Protocol):
     """Index and query transcript units without mixing collections."""
 

@@ -9,14 +9,17 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -81,12 +84,20 @@ class TranscriptCueRow(Base):
 
 class RetrievalUnitRow(Base):
     __tablename__ = "retrieval_units"
+    __table_args__ = (
+        Index("ix_retrieval_units_search_vector", "search_vector", postgresql_using="gin"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     video_id: Mapped[UUID] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), index=True)
     start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
     end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('simple'::regconfig, text)", persisted=True),
+        nullable=False,
+    )
 
 
 class RetrievalUnitCueRow(Base):
