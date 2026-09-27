@@ -1,6 +1,7 @@
 """Shared bounded lexical/dense retrieval with observable embedding fallback."""
 
 from collections.abc import Callable
+from dataclasses import replace
 from time import perf_counter
 from uuid import UUID
 
@@ -20,6 +21,13 @@ from galaxy_frog.domain.retrieval.pipeline import (
 )
 from galaxy_frog.domain.retrieval.ports import TranscriptRetriever
 from galaxy_frog.domain.retrieval.query import analyze_query
+from galaxy_frog.domain.retrieval.reranking import (
+    RerankCandidate,
+    RerankerError,
+    RerankerErrorCode,
+    RerankingRun,
+    TextReranker,
+)
 
 
 class RetrieveTranscript:
@@ -35,11 +43,13 @@ class RetrieveTranscript:
         *,
         lexical: TranscriptRetriever,
         dense: TranscriptRetriever,
+        reranker: TextReranker | None = None,
         config: RetrievalConfig | None = None,
         clock: Callable[[], float] = perf_counter,
     ) -> None:
         self._lexical = lexical
         self._dense = dense
+        self._reranker = reranker
         self._config = config or RetrievalConfig()
         self._clock = clock
 
@@ -94,6 +104,39 @@ class RetrieveTranscript:
                 )
         rankings = fuse_rankings(video_id, tuple(stages), constant=self._config.rrf_constant)
         candidates = rankings[: self._config.fusion_limit]
+        reranking = None
+        if mode == RetrievalMode.RERANKED and candidates:
+            try:
+                if self._reranker is None:
+                    raise RerankerError(RerankerErrorCode.NOT_CONFIGURED)
+                reranked = await self._reranker.rerank(
+                    analysis.normalized,
+                    tuple(
+                        RerankCandidate(item.unit.unit_id, item.unit.text) for item in candidates
+                    ),
+                )
+                if sorted(item.unit_id for item in reranked.scores) != sorted(
+                    item.unit.unit_id for item in candidates
+                ):
+                    raise RetrievalIntegrityError("Reranker changed candidate identities.")
+                by_id = {item.unit_id: item for item in reranked.scores}
+                ordered = sorted(
+                    candidates, key=lambda item: (-by_id[item.unit.unit_id].score, item.fusion_rank)
+                )
+                candidates = tuple(
+                    replace(item, rerank_rank=rank, rerank_score=by_id[item.unit.unit_id].score)
+                    for rank, item in enumerate(ordered, start=1)
+                )
+                reranking = RerankingRun(reranked)
+            except RerankerError as exc:
+                if not allow_fallback:
+                    raise
+                reranking = RerankingRun(None, exc.code)
+                warnings.append(
+                    RetrievalWarning(
+                        exc.code.value, "Reranking failed; results retain fused ordering."
+                    )
+                )
         return TextRetrievalResult(
             analysis=analysis,
             mode=mode,
@@ -105,6 +148,7 @@ class RetrieveTranscript:
             warnings=tuple(warnings),
             degraded=bool(warnings),
             elapsed_ms=(self._clock() - started) * 1000,
+            reranking=reranking,
         )
 
     async def _run(

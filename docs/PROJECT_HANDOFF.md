@@ -26,7 +26,7 @@ evidence and produce timestamp-grounded answers.
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
-- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.2 locally verified, CI/merge pending
+- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.3 locally verified, CI/merge pending
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -128,6 +128,23 @@ weights. Neither package is installed in the project environment, and the defaul
 reranker snapshot. Existing Python 3.14.7 works; no Python reinstall is needed for completed checks.
 Return PR content directly in chat, not a new file. Temporal queries fail explicitly until P3.4
 resolves constraints; P3.5 adds durable traces and connects the shared search/question service.
+
+### P3.3 local reranking — 2026-09-27
+
+The user completed manual runtime/model provisioning. Branch `feat/local-transcript-reranking`
+stacks on P3.2 `bf6c1d9`. The adapter uses a Python provider port and the existing bounded command
+runner; it accepts an explicit provisioned interpreter via `RERANKER_PYTHON`, loads only the pinned
+local model, and requires CUDA FP16. Thirty candidates, 512 tokens, batch one, concurrency one, and
+a 120-second default deadline bound work. Child exit releases its model memory. Reranked mode
+preserves all original evidence and source/fusion scores; failures are explicit and strict mode
+rejects fallback. The existing question HTTP path still changes only in P3.5.
+
+Full local gate: 591 backend tests, 12 opt-in skips, 100% statement/branch coverage, 26 frontend
+tests, contracts/lint/types/build. Native integrations pass (two tests, including hard timeout).
+The 30-candidate runtime probe used 1118 MiB peak reserved VRAM and took 44.2 s total, including
+22.9 s model loading. This startup cost is material; no real-model retrieval-quality improvement or
+Ollama coexistence is claimed. See [verification and commands](phase-3/p3-3-verification.md).
+Next packet is P3.4 temporal evidence. Continue stacked commits/pushes and give PR content in chat.
 
 ### Historical checkpoint records
 

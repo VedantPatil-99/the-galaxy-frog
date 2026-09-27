@@ -6,9 +6,10 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 Phases 0–2 are complete and merged. Phase 2 PRs #4–#10 and the caption-control-event fix in
 PR #11 are included in `main` at `3566a01`; all three hosted CI jobs passed on that merge.
-Phase 3 — Hybrid text retrieval and reranking — is approved. P3.1–P3.2 are locally verified:
+Phase 3 — Hybrid text retrieval and reranking — is approved. P3.1–P3.3 are locally verified:
 PostgreSQL FTS and a shared lexical/dense retrieval service with deterministic fusion and explicit
-embedding fallback pass the full quality gate. P3.3 requires manual GPU runtime/model provisioning.
+embedding fallback pass the full quality gate. The pinned CUDA reranker also passes native execution,
+truncation, and timeout checks. Its process isolation releases VRAM but adds model-loading latency.
 Hosted CI and merge remain pending; search/answer API wiring arrives in P3.5.
 See [the Phase 3 manual verification procedure](docs/phase-3/manual-verification.md).
 

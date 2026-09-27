@@ -34,6 +34,20 @@ consumes generated declarations through the existing proxy. Provider failures ma
 fused retrieval only when warnings, degraded status, and trace reasons expose the missing stage.
 Strict evaluation disables fallbacks.
 
+P3.3 runs the local cross-encoder in one child process per request using the existing bounded
+command runner. Queries and candidate text travel in a temporary JSON file, not command-line
+arguments; cleanup follows success, failure, timeout, and cancellation. Native dependencies stay
+optional and can use an explicitly provisioned interpreter. The child loads only the immutable
+local snapshot, rejects unverified torch/Transformers versions and unavailable CUDA, and exits to
+release VRAM. Concurrency is one per shared provider instance/API process. A concurrent request
+fails observably with `reranker_busy`; there is no unbounded queue.
+
+This deliberately accepts model-loading latency: the first full local 30-candidate provider run
+took 44.2 seconds, including 22.9 seconds loading the model. Persistent model residency is not
+implemented here; measure whole-pipeline latency and Ollama coexistence in the exit gate before
+making performance claims or changing lifecycle policy. The runtime records raw finite logits,
+input/original token counts, truncation, exact identity, device, timing, and allocated/reserved VRAM.
+
 ## Consequences
 
 - PostgreSQL FTS becomes available to existing caption and ASR transcripts without ingestion changes.

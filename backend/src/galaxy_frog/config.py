@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     asr_device: Literal["cpu", "cuda"] = "cuda"
     asr_compute_type: Literal["int8", "int8_float16", "float16", "float32"] = "int8_float16"
     asr_max_concurrency: int = Field(default=1, ge=1, le=4)
+    reranker_python: Path | None = None
+    reranker_timeout_seconds: float = Field(default=120, gt=0, le=600)
+
+    @field_validator("reranker_python")
+    @classmethod
+    def validate_reranker_python(cls, value: Path | None) -> Path | None:
+        if value is None:
+            return None
+        return (value if value.is_absolute() else _REPOSITORY_ROOT / value).resolve()
 
     @field_validator("database_url")
     @classmethod
