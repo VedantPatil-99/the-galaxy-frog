@@ -446,6 +446,8 @@ P3.3 prerequisite inspection found no `torch` or `transformers` in the project e
 reranker weights in the default Hugging Face cache. GPU remains RTX 2050, 4 GB, driver 572.61.
 User-provisioned runtime/weights and a successful CUDA probe are required before live reranking.
 Do not install or download automatically. PR metadata is delivered directly in chat per user request.
+The user requested [manual reranker setup](docs/phase-3/reranker-manual-setup.md). Published wheel
+and model-revision availability is verified; the isolated CUDA/model probe is pending user execution.
 
 ### Services, delivery, and non-goals
 
