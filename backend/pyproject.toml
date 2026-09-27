@@ -22,6 +22,25 @@ dependencies = [
     "yt-dlp[default]>=2026.8,<2027",
 ]
 
+[project.optional-dependencies]
+reranking = [
+    "torch==2.11.0+cu128; sys_platform == 'win32' or sys_platform == 'linux'",
+    "transformers==5.17.0",
+    "huggingface-hub==1.30.0",
+    "tokenizers==0.23.2",
+    "safetensors==0.8.0",
+    "networkx==3.6.1",
+    "setuptools==78.1.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128", extra = "reranking" }
+
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
 build-backend = "uv_build"

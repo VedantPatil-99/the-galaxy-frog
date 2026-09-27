@@ -5,6 +5,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
+from galaxy_frog.domain.retrieval.reranking import RerankingRun
 from galaxy_frog.domain.transcripts.models import RetrievalUnit
 
 
@@ -12,6 +13,7 @@ class RetrievalMode(StrEnum):
     LEXICAL = "lexical"
     DENSE = "dense"
     HYBRID = "hybrid"
+    RERANKED = "reranked"
 
 
 class QueryKind(StrEnum):
@@ -59,6 +61,8 @@ class RankedEvidence:
     stages: tuple[StageRank, ...]
     fusion_rank: int
     fusion_score: float
+    rerank_rank: int | None = None
+    rerank_score: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,3 +91,4 @@ class TextRetrievalResult:
     warnings: tuple[RetrievalWarning, ...]
     degraded: bool
     elapsed_ms: float
+    reranking: RerankingRun | None = None

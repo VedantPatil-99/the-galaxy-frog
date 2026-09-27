@@ -368,7 +368,7 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
 
 ## Active plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **P3.1–P3.2 locally complete; P3.3 requires manual reranker provisioning**.
+Status: **P3.1–P3.3 locally complete; P3.4 is next**.
 Hosted CI/merge remain pending. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
@@ -381,7 +381,7 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
 - [x] P3.2 — Shared hybrid retrieval (`feat/hybrid-transcript-retrieval`). Reuse collection-safe
   dense search, analyze queries deterministically, fuse 30 candidates per retriever using equal-weight
   RRF with constant 60, and record each stage's scores/ranks separately.
-- [ ] P3.3 — Local reranking (`feat/local-transcript-reranking`). Pin BGE reranker v2-m3 and verified
+- [x] P3.3 — Local reranking (`feat/local-transcript-reranking`). Pin BGE reranker v2-m3 and verified
   dependencies behind a Python interface. Target CUDA FP16, batch/concurrency one, and 512-token
   inputs. Rerank 30 candidates; record truncation, provider revision, device, and timing.
 - [ ] P3.4 — Temporal evidence (`feat/temporal-evidence-retrieval`). Support explicit times/ranges
@@ -446,8 +446,27 @@ P3.3 prerequisite inspection found no `torch` or `transformers` in the project e
 reranker weights in the default Hugging Face cache. GPU remains RTX 2050, 4 GB, driver 572.61.
 User-provisioned runtime/weights and a successful CUDA probe are required before live reranking.
 Do not install or download automatically. PR metadata is delivered directly in chat per user request.
-The user requested [manual reranker setup](docs/phase-3/reranker-manual-setup.md). Published wheel
-and model-revision availability is verified; the isolated CUDA/model probe is pending user execution.
+The user requested [manual reranker setup](docs/phase-3/reranker-manual-setup.md) and subsequently
+completed the isolated CUDA/model probe successfully. The earlier missing-runtime blocker is resolved.
+
+### P3.3 local acceptance — 2026-09-27
+
+The user's isolated probe passed with Python 3.14.7, torch 2.11.0+cu128, Transformers 5.17.0,
+CUDA 12.8, and BGE revision `953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e` on RTX 2050.
+Relevant/irrelevant scores were 3.375/-11.03125; inference was 1397 ms then 82 ms; peak reserved
+GPU memory was 1114 MiB. This is execution evidence, not benchmark or coexistence acceptance.
+The snapshot and package freeze were inspected locally. `feat/local-transcript-reranking` starts
+from P3.2 `bf6c1d9` and adds the provider interface, bounded subprocess using the existing command
+runner, CUDA-only offline Transformers runtime, observed truncation, safe fallback, and runtime
+probe. Releasing the child after each request frees VRAM at the cost of model-load latency.
+
+The full 30-candidate native probe passed: 4811 tokens truncated to 512, 1118 MiB peak reserved,
+22.9 s model load and 44.2 s total wall time. GPU usage returned to 0 MiB after exit. Two opt-in
+native integration tests passed, including a real hard deadline. The complete `bun run check` gate
+passed with 591 backend tests, 12 opt-in skips, 100% statement/branch coverage, 26 frontend tests,
+generated contracts, lint/types, and production build. Focused retrieval/process/provider tests
+passed (86 tests). No quality improvement or Ollama coexistence is claimed by this packet.
+See [P3.3 verification](docs/phase-3/p3-3-verification.md). Hosted CI/merge remain pending.
 
 ### Services, delivery, and non-goals
 

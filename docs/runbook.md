@@ -303,6 +303,12 @@ It uses a separate ignored probe environment with the existing interpreter, publ
 and an immutable model snapshot. No services are required for that isolated probe; stop Ollama and
 GPU-heavy applications first. Runtime compatibility and coexistence must be measured separately.
 
+The user-provisioned P3.3 runtime now passes native execution. See
+[P3.3 verification](phase-3/p3-3-verification.md) for current commands, measured startup cost,
+deadline/fallback behavior, and the remaining coexistence/quality gates. Set `RERANKER_PYTHON` to
+the provisioned interpreter or manually provision the optional `reranking` extra in the backend
+environment. The provider never downloads weights or changes device/model implicitly.
+
 Run the complete static and automated test gate:
 
 ```bash

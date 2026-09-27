@@ -253,3 +253,16 @@ retains original intervals/cues plus bounded stage, fusion, candidate, and evide
 embedding-provider failures allow an observable lexical fallback in hybrid mode; strict or dense-only
 requests fail instead. Database, collection, and evidence-integrity errors propagate.
 The current question API adopts this service in P3.5; persistent traces are also deferred to P3.5.
+
+## Local reranker (P3.3)
+
+`TextReranker` is a domain port; `BgeTranscriptReranker` owns a bounded offline CUDA subprocess.
+It uses the existing command runner's kill/reap behavior and bounded output collection. The small
+standalone runtime needs only torch and Transformers, allowing an explicitly provisioned interpreter
+without importing FastAPI or database clients there. Provider output is validated before it reaches
+domain results; original text, IDs, intervals, and cue links remain in the retrieval service.
+
+`reranked` mode reranks the fused candidate budget and exposes raw scores separately. Provider
+failure preserves fused order only with warnings/degraded status; strict mode fails. Empty evidence
+skips the provider. Each request releases model residency on child exit; the resulting load latency
+is measured in the [P3.3 verification record](phase-3/p3-3-verification.md).
