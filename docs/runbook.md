@@ -298,6 +298,11 @@ alembic, or pre_commit), as the root scripts do. P3.1 passed with the existing i
 security-policy changes. If the interpreter or native imports are also blocked, stop and report the
 exact error; do not claim an unexecuted gate passed.
 
+Before P3.3 live reranking, follow [manual reranker setup](phase-3/reranker-manual-setup.md).
+It uses a separate ignored probe environment with the existing interpreter, published package pins,
+and an immutable model snapshot. No services are required for that isolated probe; stop Ollama and
+GPU-heavy applications first. Runtime compatibility and coexistence must be measured separately.
+
 Run the complete static and automated test gate:
 
 ```bash

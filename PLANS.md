@@ -368,7 +368,8 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
 
 ## Active plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **approved; P3.1 locally complete, hosted CI/merge pending**. Duration target: 5–7 focused days.
+Status: **P3.1–P3.2 locally complete; P3.3 requires manual reranker provisioning**.
+Hosted CI/merge remain pending. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
 ### Approved work packets
@@ -377,7 +378,7 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
   Add a stored `simple`-dictionary `tsvector`, GIN index, provider-independent retrieval interface,
   and video-scoped adapter preserving unit/cue identities. Prove migration backfill, automatic
   maintenance, exact phrases, names, deterministic order, video isolation, and ingestion regression.
-- [ ] P3.2 — Shared hybrid retrieval (`feat/hybrid-transcript-retrieval`). Reuse collection-safe
+- [x] P3.2 — Shared hybrid retrieval (`feat/hybrid-transcript-retrieval`). Reuse collection-safe
   dense search, analyze queries deterministically, fuse 30 candidates per retriever using equal-weight
   RRF with constant 60, and record each stage's scores/ranks separately.
 - [ ] P3.3 — Local reranking (`feat/local-transcript-reranking`). Pin BGE reranker v2-m3 and verified
@@ -422,6 +423,31 @@ Alembic, and pre-commit now pass with the existing Python 3.14.7 environment; no
 security-policy change was needed. Fixed the new test's empty-list mock typing and duplicate test
 module filename. Hosted CI and merge remain pending. Reproduce using
 [manual verification](docs/phase-3/manual-verification.md).
+
+### P3.2 local acceptance — 2026-09-27
+
+`feat/hybrid-transcript-retrieval` stacks on P3.1 commit `8ac25db`. The shared Python service
+supports lexical, dense, and hybrid modes; deterministic quoted-phrase/spoken/temporal analysis;
+equal-weight RRF with unit-ID tie breaking; separate stage scores/ranks/timings; bounded candidate
+and evidence records; and explicit lexical fallback on embedding-provider errors. Strict requests
+disable fallback. Collection/database failures and conflicting or cross-video evidence are rejected.
+The existing dense adapter owns indexing; no duplicate indexing lifecycle was introduced.
+
+Temporal signals currently raise `TemporalResolutionRequired` before retrievers run. P3.4 adds
+actual constraints and anchor resolution; P3.5 wires the shared service into search/questions and
+durable traces. The current HTTP question path remains operational with unchanged contracts.
+
+All 61 focused/regression tests and eight PostgreSQL integrations pass. `bun run check` passes with
+548 backend tests, ten opt-in skips, 100% statement/branch coverage, 26 frontend tests, generated
+contracts, lint, types, and production build. Pre-commit passes. Integration embeddings are fixtures;
+no semantic-quality or GPU-performance improvement is claimed.
+
+P3.3 prerequisite inspection found no `torch` or `transformers` in the project environment and no
+reranker weights in the default Hugging Face cache. GPU remains RTX 2050, 4 GB, driver 572.61.
+User-provisioned runtime/weights and a successful CUDA probe are required before live reranking.
+Do not install or download automatically. PR metadata is delivered directly in chat per user request.
+The user requested [manual reranker setup](docs/phase-3/reranker-manual-setup.md). Published wheel
+and model-revision availability is verified; the isolated CUDA/model probe is pending user execution.
 
 ### Services, delivery, and non-goals
 

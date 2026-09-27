@@ -26,7 +26,7 @@ evidence and produce timestamp-grounded answers.
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
-- Phase 3 — Hybrid text retrieval and reranking: approved; P3.1 locally verified, CI/merge pending
+- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.2 locally verified, CI/merge pending
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -107,8 +107,27 @@ separately. Standard `python -m pytest`, `python -m alembic`, and `python -m pre
 the existing Python 3.14.7 environment after a console-launcher Application Control block. No
 installation or security-policy change was needed. See
 [manual verification](phase-3/manual-verification.md). Hosted CI and merge are pending.
-Next packet: P3.2 on the approved stacked branch. No PR is created by the agent. Preserve the user's
+P3.1 was pushed as `2b5c396` and `8ac25db`. No PR is created by the agent. Preserve the user's
 GPU-first, named-event-anchor, visible-fallback, and stacked-branch decisions.
+
+### P3.2 shared retrieval — 2026-09-27
+
+Branch `feat/hybrid-transcript-retrieval` stacks on P3.1. `RetrieveTranscript` adds bounded lexical,
+dense, and hybrid modes, deterministic query signals, RRF, per-stage score/rank/timing records, and
+explicit lexical fallback on embedding failure. Strict mode disables fallback. Cross-video evidence,
+conflicting lineage, collection violations, and database failures cannot silently degrade.
+The existing pgvector adapter still owns indexing. No HTTP or question behavior is switched yet.
+
+Local acceptance: 61 focused/regression tests, eight real PostgreSQL integrations, complete
+`bun run check` (548 backend tests, ten opt-in skips, 100% statement/branch coverage, 26 frontend
+tests, generated contracts, lint/types, and production build), plus pre-commit. Database integration
+uses deterministic embeddings, so real-model quality is not measured by this packet.
+
+Next packet: P3.3, requiring user-provisioned CUDA PyTorch, Transformers, and pinned BGE reranker
+weights. Neither package is installed in the project environment, and the default cache has no
+reranker snapshot. Existing Python 3.14.7 works; no Python reinstall is needed for completed checks.
+Return PR content directly in chat, not a new file. Temporal queries fail explicitly until P3.4
+resolves constraints; P3.5 adds durable traces and connects the shared search/question service.
 
 ### Historical checkpoint records
 

@@ -6,11 +6,8 @@ from typing import cast
 
 import httpx
 
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
-
-
-class EmbeddingProviderError(RuntimeError):
-    """Safe failure raised when the configured embedder cannot produce valid vectors."""
 
 
 class OllamaBgeM3EmbeddingProvider:

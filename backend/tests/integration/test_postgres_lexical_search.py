@@ -17,11 +17,16 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from galaxy_frog.application.retrieval.text import RetrieveTranscript
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
-from galaxy_frog.db.models import RetrievalUnitRow, VideoRow
+from galaxy_frog.db.models import EmbeddingCollectionRow, RetrievalUnitRow, VideoRow
 from galaxy_frog.db.transcript_lexical_search import PostgresTranscriptLexicalSearch
+from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
+from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
+from galaxy_frog.domain.retrieval.pipeline import RetrievalMode
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
@@ -192,4 +197,76 @@ async def test_actual_migration_backfills_and_roundtrips_without_losing_text() -
             # The application table still has its own generated column after the temporary test.
             await connection.execute(select(RetrievalUnitRow.search_vector).limit(1))
     finally:
+        await engine.dispose()
+
+
+class FixtureEmbeddings:
+    """Deliberately rank the semantic fixture ahead of the lexical fixture."""
+
+    def __init__(self) -> None:
+        self.spec = EmbeddingCollectionSpec("fixture", "hybrid", uuid4().hex, 1024, "l2")
+        self.inputs: list[tuple[str, ...]] = []
+        self.fail = False
+
+    async def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        self.inputs.append(texts)
+        if self.fail:
+            raise EmbeddingProviderError("fixture unavailable")
+        return tuple(
+            (1.0, 0.0, *([0.0] * 1022))
+            if text.startswith("The quokka")
+            else (0.0, 1.0, *([0.0] * 1022))
+            for text in texts
+        )
+
+
+@pytest.mark.asyncio
+async def test_shared_hybrid_reuses_real_index_and_preserves_lineage_on_fallback() -> None:
+    engine = create_database_engine(Settings())
+    provider = FixtureEmbeddings()
+    video_ids: list[UUID] = []
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            video_id, unit_ids = await _seed(
+                session, ("The quokka is an exact name.", "A semantic fixture about the animal.")
+            )
+            video_ids.append(video_id)
+            other_id, _ = await _seed(session, ("The quokka belongs to another video.",))
+            video_ids.append(other_id)
+            videos = SqlAlchemyVideoRepository(session)
+            before = await videos.get_transcript(video_id)
+            dense = PgVectorTranscriptSearch(session=session, videos=videos, provider=provider)
+            service = RetrieveTranscript(
+                lexical=PostgresTranscriptLexicalSearch(session), dense=dense
+            )
+            result = await service.execute(video_id, 'Explain "quokka"', allow_fallback=False)
+            assert result.stages[0].results[0].unit.unit_id == unit_ids[0]
+            assert result.stages[1].results[0].unit.unit_id == unit_ids[1]
+            assert result.evidence[0].unit.unit_id == unit_ids[0]
+            assert len(result.evidence[0].stages) == 2
+            assert all(row.video_id == video_id for row in result.rankings)
+            assert len(provider.inputs) == 2  # Missing-unit batch, then query.
+            repeated = await service.execute(video_id, 'Explain "quokka"')
+            assert repeated.rankings == result.rankings
+            assert len(provider.inputs) == 3  # Existing units were not embedded again.
+            assert await videos.get_transcript(video_id) == before
+
+            provider.fail = True
+            fallback = await service.execute(video_id, 'Explain "quokka"')
+            assert fallback.degraded
+            assert fallback.evidence[0].unit == result.evidence[0].unit
+            assert fallback.stages[1].failure_code == "embedding_provider_unavailable"
+            lexical = await service.execute(video_id, "quokka", mode=RetrievalMode.LEXICAL)
+            assert not lexical.degraded
+            with pytest.raises(EmbeddingProviderError):
+                await service.execute(video_id, "quokka", allow_fallback=False)
+    finally:
+        async with AsyncSession(engine) as cleanup:
+            await cleanup.execute(delete(VideoRow).where(VideoRow.id.in_(video_ids)))
+            await cleanup.execute(
+                delete(EmbeddingCollectionRow).where(
+                    EmbeddingCollectionRow.revision == provider.spec.revision
+                )
+            )
+            await cleanup.commit()
         await engine.dispose()
