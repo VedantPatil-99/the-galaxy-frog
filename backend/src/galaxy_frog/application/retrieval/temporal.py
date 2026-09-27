@@ -1,7 +1,7 @@
 """Resolve temporal scope before retrieval; never guess a semantic event anchor."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import StrEnum
 from hashlib import sha256
 from typing import Protocol
@@ -178,6 +178,10 @@ class RetrieveTemporalEvidence:
         self._videos = videos
         self._retrieval = retrieval
         self._expansion = expansion
+
+    @property
+    def configuration(self) -> dict[str, object]:
+        return {"retrieval": asdict(self._retrieval.config), "expansion": asdict(self._expansion)}
 
     async def execute(
         self,

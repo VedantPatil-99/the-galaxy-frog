@@ -1,8 +1,25 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 
 import { buildUpstreamUrl, proxyRequest } from "@/lib/api/proxy"
 
 describe("API proxy", () => {
+  test("allows bounded retrieval time for search and questions", async () => {
+    const timeout = spyOn(AbortSignal, "timeout").mockImplementation(() => new AbortController().signal)
+    try {
+      for (const [path, method, expected] of [
+        [["v1", "videos", "id", "search"], "POST", 300_000],
+        [["v1", "videos", "id", "questions"], "POST", 300_000],
+        [["v1", "videos", "import"], "POST", 120_000],
+        [["health", "live"], "GET", 10_000],
+      ] as const) {
+        await proxyRequest(new Request("http://web.test/api/proxy/check", { method }), path, async () => Response.json({}), "http://api.test")
+        expect(timeout).toHaveBeenLastCalledWith(expected)
+      }
+    } finally {
+      timeout.mockRestore()
+    }
+  })
+
   test("builds a fixed-host upstream URL with the incoming query", () => {
     const result = buildUpstreamUrl(
       "http://web.test/api/proxy/health/ready?detail=full",

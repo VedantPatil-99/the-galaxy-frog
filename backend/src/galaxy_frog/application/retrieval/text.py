@@ -54,6 +54,10 @@ class RetrieveTranscript:
         self._config = config or RetrievalConfig()
         self._clock = clock
 
+    @property
+    def config(self) -> RetrievalConfig:
+        return self._config
+
     async def execute(
         self,
         video_id: UUID,

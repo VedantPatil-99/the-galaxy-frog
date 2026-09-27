@@ -288,3 +288,27 @@ before adding neighbors. Original text, cue IDs, cue order, caption/ASR origin, 
 and unit intervals remain unchanged. Display windows are clipped to temporal scope; boundary-crossing
 originals and context omissions receive explicit warnings. No generator or HTTP schema is introduced
 by this packet. The subsequent API packet persists these records and reuses citation validation.
+
+## Traced search and question API (P3.5)
+
+`SearchTranscript` wraps the temporal service and persists a version-1 record before returning
+results. Both public search and question routes use it. The request-scoped database session backs
+lexical search, collection-safe dense search, transcript reads, and trace persistence. One app-scoped
+reranker object enforces its concurrency bound; generation is constructed only after anchor resolution.
+
+Migration `20260927_0007` adds `retrieval_traces`, indexed by video/time with cascade deletion when
+its video is deleted. Python and PostgreSQL enforce a 256 KiB serialized record limit. Trace records
+contain query analysis, active configuration, declared providers, separate stage/fusion/reranker
+records, timings, fallback reasons, anchor decisions, and original interval/cue/ASR lineage. Stage
+and group copies exclude transcript text; anchor snippets are bounded. Oversized records fail with
+an explicit code. There is no automatic retention deletion policy; per-record size is bounded.
+
+Search exposes status, anchor choices, evidence groups, warnings, and a durable trace ID. A trace read
+filters by both video ID and trace ID. Questions keep prior answer/citation fields and add retrieval
+metadata/status. Unresolved anchors produce an empty answer without generation. Resolved questions
+reuse original citation validation and additionally require constrained quotes to appear in cues
+overlapping the selected scope. Safe generation/citation errors include the already persisted trace ID.
+
+FastAPI OpenAPI owns all new contracts, including the nested original evidence records. The Next.js
+proxy only forwards requests; search/question timeouts are five minutes to allow bounded native
+startup and generation. The backend provider deadlines remain independent and observable.

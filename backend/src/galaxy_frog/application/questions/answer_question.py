@@ -25,7 +25,7 @@ class AnswerQuestion:
     def __init__(
         self,
         *,
-        search: TranscriptSearch,
+        search: TranscriptSearch | None = None,
         provider: GenerationProvider,
         evidence_limit: int = 8,
     ) -> None:
@@ -36,7 +36,21 @@ class AnswerQuestion:
     async def execute(self, video_id: UUID, question: str) -> GeneratedAnswer:
         if not question.strip():
             raise ValueError("question must not be empty")
+        if self._search is None:
+            raise ValueError("execute requires a search adapter")
         evidence = await self._search.search(video_id, question, limit=self._evidence_limit)
+        return await self.execute_with_evidence(video_id, question, evidence)
+
+    async def execute_with_evidence(
+        self, video_id: UUID, question: str, evidence: tuple[RetrievedEvidence, ...]
+    ) -> GeneratedAnswer:
+        """Reuse citation validation after the shared temporal retrieval path resolves."""
+        if not question.strip():
+            raise ValueError("question must not be empty")
+        if any(item.video_id != video_id for item in evidence):
+            raise CitationValidationError(
+                "Retrieved evidence did not belong to the requested video."
+            )
         if not evidence:
             return self._insufficient()
         draft = await self._provider.generate(question, evidence)

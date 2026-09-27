@@ -26,7 +26,7 @@ evidence and produce timestamp-grounded answers.
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
-- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.4 locally verified, CI/merge pending
+- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.5 locally verified, CI/merge pending
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -162,6 +162,23 @@ lint/types, and production build. No new migration or installation. See
 Next is P3.5: durable bounded traces, search/trace endpoints, shared question retrieval, and generated
 contracts. Continue stacked commits/pushes and supply PR content directly in chat. Do not create PRs.
 Hosted CI/merge and real-model retrieval quality remain pending.
+
+### P3.5 traces and API — 2026-09-28
+
+`feat/retrieval-traces-api` stacks on P3.4 `97a3a0b`. Apply migration `20260927_0007` for bounded,
+versioned traces with a video foreign key and cascade cleanup. Search and questions share the traced
+temporal service, defaulting to reranked mode with observable fallback. Search does not construct a
+generator. Unresolved/ambiguous questions return retrieval status/anchors before generation. Original
+answer/citation fields remain; constrained quotes must also occur in cues overlapping the scope.
+The shared app reranker enforces concurrency one. Search/questions have a five-minute proxy deadline.
+Set `RERANKER_PYTHON` to the already provisioned interpreter when running the API with full reranking.
+
+Full gate: 664 backend tests, 14 opt-in skips, 100% statement/branch coverage, 27 frontend tests,
+contracts/lint/types/build. Ten PostgreSQL integrations pass, including real HTTP trace persistence,
+fresh-session reads, foreign-video rejection, size/version constraints, and cascade cleanup.
+See [P3.5 verification](phase-3/p3-5-verification.md) for exact Git Bash procedures. The next packet is
+P3.6 presentation-only evidence/anchor/trace controls using regenerated contracts. Hosted CI/merge,
+live browser acceptance, and real-model quality/coexistence remain pending.
 
 ### Historical checkpoint records
 

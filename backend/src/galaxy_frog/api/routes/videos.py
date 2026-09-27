@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 
-from galaxy_frog.adapters.embeddings.ollama import EmbeddingProviderError
 from galaxy_frog.adapters.generation.ollama import GenerationProviderError
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.api.dependencies import (
@@ -18,6 +17,8 @@ from galaxy_frog.api.dependencies import (
 from galaxy_frog.api.dispatching import dispatch_ingestion_job
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.job_schemas import ingestion_job_response
+from galaxy_frog.api.retrieval import SearchDependency, run_search
+from galaxy_frog.api.retrieval_schemas import search_response
 from galaxy_frog.api.schemas import ErrorResponse
 from galaxy_frog.api.video_schemas import (
     AnswerResponse,
@@ -37,10 +38,12 @@ from galaxy_frog.application.questions.answer_question import (
     AnswerQuestion,
     CitationValidationError,
 )
+from galaxy_frog.application.retrieval.temporal import RetrievalStatus
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
-from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch, TranscriptIndexError
+from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.domain.generation.ports import GenerationProvider
+from galaxy_frog.domain.retrieval.models import RetrievedEvidence
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.videos.records import TranscriptRecord, VideoRecord
 from galaxy_frog.domain.videos.source import VideoSource, VideoSourceError, VideoSourceErrorCode
@@ -249,33 +252,59 @@ async def ask_question(
     body: QuestionRequest,
     request: Request,
     repository: RepositoryDependency,
+    retrieval_service: SearchDependency,
 ) -> AnswerResponse:
     """Retrieve transcript evidence and return a deterministically validated answer."""
 
-    if await repository.get_video(video_id) is None:
-        raise ApiError(
-            status_code=HTTPStatus.NOT_FOUND,
-            code="VIDEO_NOT_FOUND",
-            message="The requested video does not exist.",
-            retryable=False,
+    execution = await run_search(video_id, body.question, body, repository, retrieval_service)
+    metadata = search_response(execution, body.mode)
+    if execution.result.status != RetrievalStatus.RESOLVED:
+        return AnswerResponse(
+            answer="",
+            confidence="low",
+            evidence=[],
+            warnings=[
+                "Choose a matching event timestamp before an answer can be generated."
+                if metadata.anchors
+                else "No matching event anchor was found."
+            ],
+            degraded_mode=metadata.degraded,
+            retrieval_status=metadata.status,
+            retrieval=metadata,
         )
     provider_factory = cast(
         Callable[[], GenerationProvider], request.app.state.generation_provider_factory
     )
     service = AnswerQuestion(
-        search=_transcript_search(request, repository),
         provider=provider_factory(),
     )
+    # Expansion keeps whole original units. Original citation validation remains
+    # authoritative; no synthetic merged unit IDs enter generation.
+    evidence = tuple(
+        RetrievedEvidence(video_id, unit, 0.0)
+        for group in execution.result.groups
+        for unit in group.units
+    )
     try:
-        answer = await service.execute(video_id, body.question)
-    except EmbeddingProviderError as exc:
-        raise ApiError(
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-            code="EMBEDDING_UNAVAILABLE",
-            message="Transcript retrieval is temporarily unavailable.",
-            retryable=True,
-            suggested_action="Start Ollama with the configured BGE-M3 model and retry.",
-        ) from exc
+        answer = await service.execute_with_evidence(video_id, body.question, evidence)
+        window = execution.result.window
+        if window is not None:
+            allowed = {
+                item.unit.unit_id: " ".join(
+                    cue.text
+                    for group in execution.result.groups
+                    for cue in group.cues
+                    if cue.cue_id in item.unit.cue_ids and window.overlaps(cue.start_ms, cue.end_ms)
+                )
+                for item in evidence
+            }
+            if any(
+                citation.quote not in allowed[citation.retrieval_unit_id]
+                for citation in answer.evidence
+            ):
+                raise CitationValidationError(
+                    "Citation falls outside the selected time constraint."
+                )
     except GenerationProviderError as exc:
         raise ApiError(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
@@ -283,14 +312,16 @@ async def ask_question(
             message="Grounded answer generation is temporarily unavailable.",
             retryable=True,
             suggested_action="Start Ollama with the configured generation model and retry.",
+            details={"trace_id": str(execution.trace.trace_id)},
         ) from exc
-    except (CitationValidationError, TranscriptIndexError) as exc:
+    except CitationValidationError as exc:
         raise ApiError(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             code="CITATION_VALIDATION_FAILED",
             message="The generated answer could not be supported by the retrieved transcript.",
             retryable=True,
             suggested_action="Retry the question or inspect the transcript evidence.",
+            details={"trace_id": str(execution.trace.trace_id)},
         ) from exc
     return AnswerResponse(
         answer=answer.answer,
@@ -306,6 +337,8 @@ async def ask_question(
             )
             for item in answer.evidence
         ],
-        warnings=list(answer.warnings),
-        degraded_mode=answer.degraded_mode,
+        warnings=[*answer.warnings, *(warning.message for warning in execution.result.warnings)],
+        degraded_mode=answer.degraded_mode or execution.result.degraded,
+        retrieval_status=metadata.status,
+        retrieval=metadata,
     )

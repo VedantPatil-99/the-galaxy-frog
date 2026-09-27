@@ -7,13 +7,18 @@ from fastapi import FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from galaxy_frog.api import dependencies
+from galaxy_frog.api.app import create_app
 from galaxy_frog.api.dependencies import (
     get_database_probe,
     get_ingestion_repository,
     get_video_repository,
 )
 from galaxy_frog.api.errors import ApiError
+from galaxy_frog.api.retrieval import get_retrieval_traces, get_search_service
+from galaxy_frog.application.retrieval.search import SearchTranscript
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
+from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
+from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 
 
 def make_request(engine: AsyncEngine | None) -> Request:
@@ -26,6 +31,14 @@ def make_request(engine: AsyncEngine | None) -> Request:
 
 def test_database_probe_dependency_is_absent_without_engine() -> None:
     assert get_database_probe(make_request(None)) is None
+
+
+def test_retrieval_dependencies_share_the_app_reranker_and_request_session() -> None:
+    app = create_app()
+    request = Request({"type": "http", "app": app, "headers": []})
+    repository = SqlAlchemyVideoRepository(cast(AsyncSession, object()))
+    assert isinstance(get_search_service(request, repository), SearchTranscript)
+    assert isinstance(get_retrieval_traces(repository), PostgresRetrievalTraces)
 
 
 @pytest.mark.asyncio

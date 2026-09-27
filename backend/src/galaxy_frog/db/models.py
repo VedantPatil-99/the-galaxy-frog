@@ -22,6 +22,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from galaxy_frog.domain.retrieval.traces import TraceValue
+
 
 class Base(DeclarativeBase):
     """Declarative metadata root used by migrations and repositories."""
@@ -41,6 +43,23 @@ class VideoRow(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RetrievalTraceRow(Base):
+    __tablename__ = "retrieval_traces"
+    __table_args__ = (
+        CheckConstraint("version = 1", name="ck_retrieval_traces_version"),
+        CheckConstraint("octet_length(payload::text) <= 262144", name="ck_retrieval_traces_size"),
+        Index("ix_retrieval_traces_video_created", "video_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    video_id: Mapped[UUID] = mapped_column(
+        ForeignKey("videos.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload: Mapped[dict[str, TraceValue]] = mapped_column(JSON, nullable=False)
 
 
 class TranscriptCueRow(Base):

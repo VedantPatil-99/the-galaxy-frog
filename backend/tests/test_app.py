@@ -94,6 +94,8 @@ async def test_docs_and_openapi_are_available() -> None:
         "/v1/videos/import",
         "/v1/videos/{video_id}",
         "/v1/videos/{video_id}/questions",
+        "/v1/videos/{video_id}/search",
+        "/v1/videos/{video_id}/retrieval-traces/{trace_id}",
         "/v1/videos/{video_id}/transcript",
     }
 

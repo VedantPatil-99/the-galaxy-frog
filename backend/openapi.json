@@ -1,6 +1,47 @@
 {
   "components": {
     "schemas": {
+      "AnchorChoice": {
+        "properties": {
+          "anchor_id": {
+            "title": "Anchor Id",
+            "type": "string"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "match_kind": {
+            "title": "Match Kind",
+            "type": "string"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "unit_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unit Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "anchor_id",
+          "start_ms",
+          "end_ms",
+          "unit_ids",
+          "text",
+          "match_kind"
+        ],
+        "title": "AnchorChoice",
+        "type": "object"
+      },
       "AnswerResponse": {
         "description": "Evidence-grounded answer contract.",
         "properties": {
@@ -28,6 +69,20 @@
             "title": "Evidence",
             "type": "array"
           },
+          "retrieval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retrieval_status": {
+            "$ref": "#/components/schemas/RetrievalStatus",
+            "default": "resolved"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -45,6 +100,15 @@
         ],
         "title": "AnswerResponse",
         "type": "object"
+      },
+      "CaptionKind": {
+        "description": "Whether a caption track was authored or generated automatically.",
+        "enum": [
+          "manual",
+          "automatic"
+        ],
+        "title": "CaptionKind",
+        "type": "string"
       },
       "ErrorPayload": {
         "description": "Stable, human-safe API error information.",
@@ -111,6 +175,48 @@
           "error"
         ],
         "title": "ErrorResponse",
+        "type": "object"
+      },
+      "EvidenceGroup": {
+        "properties": {
+          "cues": {
+            "items": {
+              "$ref": "#/components/schemas/TranscriptCue"
+            },
+            "title": "Cues",
+            "type": "array"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/RankedEvidence"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalUnit"
+            },
+            "title": "Units",
+            "type": "array"
+          }
+        },
+        "required": [
+          "start_ms",
+          "end_ms",
+          "hits",
+          "units",
+          "cues"
+        ],
+        "title": "EvidenceGroup",
         "type": "object"
       },
       "EvidenceResponse": {
@@ -528,20 +634,156 @@
         "type": "string"
       },
       "JsonValue": {},
+      "QueryAnalysis": {
+        "properties": {
+          "exact_phrases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exact Phrases",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/QueryKind"
+          },
+          "lexical_query": {
+            "title": "Lexical Query",
+            "type": "string"
+          },
+          "normalized": {
+            "title": "Normalized",
+            "type": "string"
+          },
+          "original": {
+            "title": "Original",
+            "type": "string"
+          },
+          "version": {
+            "default": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "original",
+          "normalized",
+          "lexical_query",
+          "exact_phrases",
+          "kind"
+        ],
+        "title": "QueryAnalysis",
+        "type": "object"
+      },
+      "QueryKind": {
+        "enum": [
+          "spoken",
+          "exact",
+          "temporal"
+        ],
+        "title": "QueryKind",
+        "type": "string"
+      },
       "QuestionRequest": {
+        "additionalProperties": false,
         "description": "A non-empty transcript question.",
         "properties": {
+          "allow_fallback": {
+            "default": true,
+            "title": "Allow Fallback",
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 8,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RetrievalMode",
+            "default": "reranked"
+          },
           "question": {
             "maxLength": 2000,
             "minLength": 1,
             "title": "Question",
             "type": "string"
+          },
+          "selected_anchor": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Anchor"
           }
         },
         "required": [
           "question"
         ],
         "title": "QuestionRequest",
+        "type": "object"
+      },
+      "RankedEvidence": {
+        "properties": {
+          "fusion_rank": {
+            "title": "Fusion Rank",
+            "type": "integer"
+          },
+          "fusion_score": {
+            "title": "Fusion Score",
+            "type": "number"
+          },
+          "rerank_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerank Rank"
+          },
+          "rerank_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerank Score"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageRank"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/RetrievalUnit"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "unit",
+          "stages",
+          "fusion_rank",
+          "fusion_score"
+        ],
+        "title": "RankedEvidence",
         "type": "object"
       },
       "ReadinessResponse": {
@@ -563,6 +805,102 @@
           }
         },
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "RetrievalMode": {
+        "enum": [
+          "lexical",
+          "dense",
+          "hybrid",
+          "reranked"
+        ],
+        "title": "RetrievalMode",
+        "type": "string"
+      },
+      "RetrievalStatus": {
+        "enum": [
+          "resolved",
+          "anchor_selection_required",
+          "anchor_unresolved"
+        ],
+        "title": "RetrievalStatus",
+        "type": "string"
+      },
+      "RetrievalTraceResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "version": {
+            "const": 1,
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trace_id",
+          "video_id",
+          "created_at",
+          "payload"
+        ],
+        "title": "RetrievalTraceResponse",
+        "type": "object"
+      },
+      "RetrievalUnit": {
+        "description": "A searchable transcript interval with ordered cue provenance.",
+        "properties": {
+          "cue_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cue Ids",
+            "type": "array"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "unit_id": {
+            "title": "Unit Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit_id",
+          "start_ms",
+          "end_ms",
+          "text",
+          "cue_ids"
+        ],
+        "title": "RetrievalUnit",
         "type": "object"
       },
       "RetrievalUnitResponse": {
@@ -602,6 +940,326 @@
           "cue_ids"
         ],
         "title": "RetrievalUnitResponse",
+        "type": "object"
+      },
+      "RetrievalWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "RetrievalWarning",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_fallback": {
+            "default": true,
+            "title": "Allow Fallback",
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 8,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RetrievalMode",
+            "default": "reranked"
+          },
+          "query": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "selected_anchor": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Anchor"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "properties": {
+          "analysis": {
+            "$ref": "#/components/schemas/QueryAnalysis"
+          },
+          "anchors": {
+            "items": {
+              "$ref": "#/components/schemas/AnchorChoice"
+            },
+            "title": "Anchors",
+            "type": "array"
+          },
+          "context_chars": {
+            "title": "Context Chars",
+            "type": "integer"
+          },
+          "degraded": {
+            "title": "Degraded",
+            "type": "boolean"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceGroup"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RetrievalMode"
+          },
+          "selected_anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Anchor"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RetrievalStatus"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeWindow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "video_id",
+          "trace_id",
+          "status",
+          "mode",
+          "analysis",
+          "window",
+          "anchors",
+          "selected_anchor",
+          "evidence",
+          "context_chars",
+          "warnings",
+          "degraded"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "SourceReference": {
+        "description": "Canonical provider identity for one video source.",
+        "properties": {
+          "canonical_url": {
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/VideoSourceKind"
+          }
+        },
+        "required": [
+          "kind",
+          "external_id",
+          "canonical_url"
+        ],
+        "title": "SourceReference",
+        "type": "object"
+      },
+      "StageRank": {
+        "properties": {
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/RetrievalMode"
+          }
+        },
+        "required": [
+          "stage",
+          "rank",
+          "score"
+        ],
+        "title": "StageRank",
+        "type": "object"
+      },
+      "TimeWindow": {
+        "properties": {
+          "end_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Ms"
+          },
+          "start_ms": {
+            "default": 0,
+            "title": "Start Ms",
+            "type": "integer"
+          }
+        },
+        "title": "TimeWindow",
+        "type": "object"
+      },
+      "TranscriptCue": {
+        "description": "Normalized caption or ASR cue with exact evidence lineage.",
+        "properties": {
+          "caption_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptionKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Method"
+          },
+          "cue_id": {
+            "title": "Cue Id",
+            "type": "string"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "language_code": {
+            "title": "Language Code",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/TranscriptOrigin",
+            "default": "caption"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceReference"
+          },
+          "source_order": {
+            "title": "Source Order",
+            "type": "integer"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "transcription_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcription Run Id"
+          }
+        },
+        "required": [
+          "cue_id",
+          "source",
+          "language_code",
+          "source_order",
+          "start_ms",
+          "end_ms",
+          "text"
+        ],
+        "title": "TranscriptCue",
         "type": "object"
       },
       "TranscriptCueResponse": {
@@ -721,6 +1379,15 @@
         ],
         "title": "TranscriptCueResponse",
         "type": "object"
+      },
+      "TranscriptOrigin": {
+        "description": "The evidence-producing path for a normalized transcript cue.",
+        "enum": [
+          "caption",
+          "asr"
+        ],
+        "title": "TranscriptOrigin",
+        "type": "string"
       },
       "TranscriptResponse": {
         "description": "Complete transcript projection used by the Phase 1 UI.",
@@ -1566,6 +2233,142 @@
         "summary": "Ask Question",
         "tags": [
           "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/retrieval-traces/{trace_id}": {
+      "get": {
+        "operationId": "read_retrieval_trace_v1_videos__video_id__retrieval_traces__trace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrievalTraceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Retrieval Trace",
+        "tags": [
+          "retrieval"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/search": {
+      "post": {
+        "operationId": "search_video_v1_videos__video_id__search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Search Video",
+        "tags": [
+          "retrieval"
         ]
       }
     },

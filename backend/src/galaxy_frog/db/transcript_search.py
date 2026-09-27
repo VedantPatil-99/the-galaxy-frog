@@ -15,14 +15,11 @@ from galaxy_frog.db.models import (
     TextEmbeddingRow,
 )
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.retrieval.errors import TranscriptIndexError as TranscriptIndexError
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec, RetrievedEvidence
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit
-
-
-class TranscriptIndexError(RuntimeError):
-    """Raised when indexing or search would violate collection compatibility."""
 
 
 class PgVectorTranscriptSearch:

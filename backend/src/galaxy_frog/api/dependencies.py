@@ -7,11 +7,39 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.application.ingestion.dispatch import DispatchSignatureVerifier, JobDispatcher
+from galaxy_frog.application.retrieval.search import SearchTranscript
+from galaxy_frog.application.retrieval.temporal import RetrieveTemporalEvidence
+from galaxy_frog.application.retrieval.text import RetrieveTranscript
 from galaxy_frog.db.engine import probe_database
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
+from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
+from galaxy_frog.db.transcript_lexical_search import PostgresTranscriptLexicalSearch
+from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
+from galaxy_frog.domain.retrieval.reranking import TextReranker
 
 type DatabaseProbe = Callable[[], Awaitable[None]]
+
+
+def build_retrieval_service(
+    request: Request, repository: SqlAlchemyVideoRepository
+) -> SearchTranscript:
+    provider = cast(
+        Callable[[], TextEmbeddingProvider], request.app.state.embedding_provider_factory
+    )()
+    retrieval = RetrieveTranscript(
+        lexical=PostgresTranscriptLexicalSearch(repository.session),
+        dense=PgVectorTranscriptSearch(
+            session=repository.session, videos=repository, provider=provider
+        ),
+        reranker=cast(TextReranker, request.app.state.reranker),
+    )
+    return SearchTranscript(
+        retrieval=RetrieveTemporalEvidence(videos=repository, retrieval=retrieval),
+        traces=PostgresRetrievalTraces(repository.session),
+        embedding_spec=provider.spec,
+    )
 
 
 def get_job_dispatcher(request: Request) -> JobDispatcher:

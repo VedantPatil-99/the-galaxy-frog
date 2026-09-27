@@ -895,6 +895,11 @@ semantic candidate timestamps and require the user to choose. Never automaticall
 suggestion, even if there is only one. Literal ambiguity also requires selection. Preserve original
 cue intervals; separately bounded display windows do not replace citation evidence.
 
+P3.5 implementation (2026-09-28): search/questions share one Python retrieval service, and traces
+are versioned, video-scoped records capped at 256 KiB. FastAPI exports search, trace-read, and additive
+question metadata schemas; generated frontend types remain authoritative. Missing anchors block
+generation. The browser evidence controls remain P3.6 and real-model quality measurements P3.7.
+
 ### Work
 
 - Add PostgreSQL FTS indexes.

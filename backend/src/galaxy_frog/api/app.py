@@ -11,12 +11,14 @@ from galaxy_frog.adapters.dispatch.local import LocalJobDispatcher
 from galaxy_frog.adapters.dispatch.qstash import QStashJobDispatcher, QStashSignatureVerifier
 from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
+from galaxy_frog.adapters.reranking.bge import BgeTranscriptReranker
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.api.errors import register_error_handlers
 from galaxy_frog.api.middleware import correlation_id_middleware
 from galaxy_frog.api.routes.health import router as health_router
 from galaxy_frog.api.routes.internal_dispatch import router as internal_dispatch_router
 from galaxy_frog.api.routes.jobs import router as jobs_router
+from galaxy_frog.api.routes.retrieval import router as retrieval_router
 from galaxy_frog.api.routes.videos import router as videos_router
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -48,6 +50,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.state.database_engine = None
     application.state.settings = resolved_settings
+    application.state.reranker = BgeTranscriptReranker(
+        python=resolved_settings.reranker_python,
+        timeout_seconds=resolved_settings.reranker_timeout_seconds,
+    )
     application.state.video_sources = (
         YouTubeSource(js_runtime=resolved_settings.yt_dlp_js_runtime),
     )
@@ -87,6 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(internal_dispatch_router)
     application.include_router(jobs_router)
     application.include_router(videos_router)
+    application.include_router(retrieval_router)
     return application
 
 

@@ -63,6 +63,19 @@ path and UI to distinguish original evidence from requested display scope.
 
 ## Consequences
 
+P3.5 persists version-1, video-scoped trace rows before returning search or question retrieval.
+Records are capped at 256 KiB in both Python and PostgreSQL. Preserve rankings/lineage and omit
+duplicate transcript text from stage/group copies; reject oversized records explicitly. The trace
+records declared provider identities even on failure, and actual reranker metadata when available.
+Known provider, temporal, anchor, and integrity errors receive durable failure traces. Database
+failure cannot claim durable success. No automatic retention deletion policy is introduced.
+
+Question responses preserve answer/citation fields and add retrieval status/metadata. Anchor choices
+block generation; retrieval-only requests never construct a generator. Original evidence drives
+citations, with an additional overlapping-cue quote check on temporal queries. One app-scoped
+reranker instance enforces concurrency; the presentation proxy allows five minutes for retrieval
+and questions without making provider decisions itself.
+
 - PostgreSQL FTS becomes available to existing caption and ASR transcripts without ingestion changes.
 - The additive generated column must be migrated before code selecting the updated model is run.
 - Migration can hold a table lock while computing the column/index; run it with ingestion stopped.

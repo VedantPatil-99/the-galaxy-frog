@@ -164,6 +164,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/videos/{video_id}/retrieval-traces/{trace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Retrieval Trace */
+        get: operations["read_retrieval_trace_v1_videos__video_id__retrieval_traces__trace_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search Video */
+        post: operations["search_video_v1_videos__video_id__search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/videos/{video_id}/transcript": {
         parameters: {
             query?: never;
@@ -208,6 +242,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnchorChoice */
+        AnchorChoice: {
+            /** Anchor Id */
+            anchor_id: string;
+            /** End Ms */
+            end_ms: number;
+            /** Match Kind */
+            match_kind: string;
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+            /** Unit Ids */
+            unit_ids: string[];
+        };
         /**
          * AnswerResponse
          * @description Evidence-grounded answer contract.
@@ -224,9 +273,18 @@ export interface components {
             degraded_mode: boolean;
             /** Evidence */
             evidence: components["schemas"]["EvidenceResponse"][];
+            retrieval?: components["schemas"]["SearchResponse"] | null;
+            /** @default resolved */
+            retrieval_status: components["schemas"]["RetrievalStatus"];
             /** Warnings */
             warnings: string[];
         };
+        /**
+         * CaptionKind
+         * @description Whether a caption track was authored or generated automatically.
+         * @enum {string}
+         */
+        CaptionKind: "manual" | "automatic";
         /**
          * ErrorPayload
          * @description Stable, human-safe API error information.
@@ -253,6 +311,19 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorPayload"];
+        };
+        /** EvidenceGroup */
+        EvidenceGroup: {
+            /** Cues */
+            cues: components["schemas"]["TranscriptCue"][];
+            /** End Ms */
+            end_ms: number;
+            /** Hits */
+            hits: components["schemas"]["RankedEvidence"][];
+            /** Start Ms */
+            start_ms: number;
+            /** Units */
+            units: components["schemas"]["RetrievalUnit"][];
         };
         /**
          * EvidenceResponse
@@ -433,13 +504,68 @@ export interface components {
          */
         IngestionStage: "source_resolution" | "metadata" | "caption_retrieval" | "audio_acquisition" | "transcription" | "chunking" | "persistence" | "embedding" | "indexing" | "cleanup" | "completed";
         JsonValue: unknown;
+        /** QueryAnalysis */
+        QueryAnalysis: {
+            /** Exact Phrases */
+            exact_phrases: string[];
+            kind: components["schemas"]["QueryKind"];
+            /** Lexical Query */
+            lexical_query: string;
+            /** Normalized */
+            normalized: string;
+            /** Original */
+            original: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: string;
+        };
+        /**
+         * QueryKind
+         * @enum {string}
+         */
+        QueryKind: "spoken" | "exact" | "temporal";
         /**
          * QuestionRequest
          * @description A non-empty transcript question.
          */
         QuestionRequest: {
+            /**
+             * Allow Fallback
+             * @default true
+             */
+            allow_fallback: boolean;
+            /**
+             * Limit
+             * @default 8
+             */
+            limit: number;
+            /** @default reranked */
+            mode: components["schemas"]["RetrievalMode"];
             /** Question */
             question: string;
+            /** Selected Anchor */
+            selected_anchor?: string | null;
+        };
+        /** RankedEvidence */
+        RankedEvidence: {
+            /** Fusion Rank */
+            fusion_rank: number;
+            /** Fusion Score */
+            fusion_score: number;
+            /** Rerank Rank */
+            rerank_rank?: number | null;
+            /** Rerank Score */
+            rerank_score?: number | null;
+            /** Stages */
+            stages: components["schemas"]["StageRank"][];
+            unit: components["schemas"]["RetrievalUnit"];
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
         };
         /**
          * ReadinessResponse
@@ -458,6 +584,60 @@ export interface components {
             status: "ready";
         };
         /**
+         * RetrievalMode
+         * @enum {string}
+         */
+        RetrievalMode: "lexical" | "dense" | "hybrid" | "reranked";
+        /**
+         * RetrievalStatus
+         * @enum {string}
+         */
+        RetrievalStatus: "resolved" | "anchor_selection_required" | "anchor_unresolved";
+        /** RetrievalTraceResponse */
+        RetrievalTraceResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Payload */
+            payload: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id: string;
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+        };
+        /**
+         * RetrievalUnit
+         * @description A searchable transcript interval with ordered cue provenance.
+         */
+        RetrievalUnit: {
+            /** Cue Ids */
+            cue_ids: string[];
+            /** End Ms */
+            end_ms: number;
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+            /** Unit Id */
+            unit_id: string;
+        };
+        /**
          * RetrievalUnitResponse
          * @description One retrieval interval with ordered cue provenance.
          */
@@ -472,6 +652,120 @@ export interface components {
             start_ms: number;
             /** Text */
             text: string;
+        };
+        /** RetrievalWarning */
+        RetrievalWarning: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** SearchRequest */
+        SearchRequest: {
+            /**
+             * Allow Fallback
+             * @default true
+             */
+            allow_fallback: boolean;
+            /**
+             * Limit
+             * @default 8
+             */
+            limit: number;
+            /** @default reranked */
+            mode: components["schemas"]["RetrievalMode"];
+            /** Query */
+            query: string;
+            /** Selected Anchor */
+            selected_anchor?: string | null;
+        };
+        /** SearchResponse */
+        SearchResponse: {
+            analysis: components["schemas"]["QueryAnalysis"];
+            /** Anchors */
+            anchors: components["schemas"]["AnchorChoice"][];
+            /** Context Chars */
+            context_chars: number;
+            /** Degraded */
+            degraded: boolean;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceGroup"][];
+            mode: components["schemas"]["RetrievalMode"];
+            /** Selected Anchor */
+            selected_anchor: string | null;
+            status: components["schemas"]["RetrievalStatus"];
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id: string;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+            /** Warnings */
+            warnings: components["schemas"]["RetrievalWarning"][];
+            window: components["schemas"]["TimeWindow"] | null;
+        };
+        /**
+         * SourceReference
+         * @description Canonical provider identity for one video source.
+         */
+        SourceReference: {
+            /** Canonical Url */
+            canonical_url: string;
+            /** External Id */
+            external_id: string;
+            kind: components["schemas"]["VideoSourceKind"];
+        };
+        /** StageRank */
+        StageRank: {
+            /** Rank */
+            rank: number;
+            /** Score */
+            score: number;
+            stage: components["schemas"]["RetrievalMode"];
+        };
+        /** TimeWindow */
+        TimeWindow: {
+            /** End Ms */
+            end_ms?: number | null;
+            /**
+             * Start Ms
+             * @default 0
+             */
+            start_ms: number;
+        };
+        /**
+         * TranscriptCue
+         * @description Normalized caption or ASR cue with exact evidence lineage.
+         */
+        TranscriptCue: {
+            caption_kind?: components["schemas"]["CaptionKind"] | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Confidence Method */
+            confidence_method?: string | null;
+            /** Cue Id */
+            cue_id: string;
+            /** End Ms */
+            end_ms: number;
+            /** Language Code */
+            language_code: string;
+            /** @default caption */
+            origin: components["schemas"]["TranscriptOrigin"];
+            source: components["schemas"]["SourceReference"];
+            /** Source Order */
+            source_order: number;
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+            /** Track Id */
+            track_id?: string | null;
+            /** Transcription Run Id */
+            transcription_run_id?: string | null;
         };
         /**
          * TranscriptCueResponse
@@ -569,6 +863,12 @@ export interface components {
              */
             transcribed_at: string;
         };
+        /**
+         * TranscriptOrigin
+         * @description The evidence-producing path for a normalized transcript cue.
+         * @enum {string}
+         */
+        TranscriptOrigin: "caption" | "asr";
         /**
          * TranscriptResponse
          * @description Complete transcript projection used by the Phase 1 UI.
@@ -1011,6 +1311,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_retrieval_trace_v1_videos__video_id__retrieval_traces__trace_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trace_id: string;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetrievalTraceResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_video_v1_videos__video_id__search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */
