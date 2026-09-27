@@ -883,6 +883,13 @@ This is MVP checkpoint B.
 
 Duration: 5–7 days.
 
+Approved for implementation on 2026-09-27 after confirming Phase 2 and caption fix PR #11 are merged
+with passing main CI. `PLANS.md` holds the active seven-packet execution plan and acceptance status.
+The approved temporal scope includes both explicit timestamps/ranges and transcript-derived named
+events, with user-selected anchors when ambiguous. Local BGE reranking targets GPU first; failures
+may retain lexical search or fused ordering only with explicit warnings and trace reasons. Strict
+benchmarks never substitute stages. Deliver stacked branches and PR text without creating PRs.
+
 ### Work
 
 - Add PostgreSQL FTS indexes.

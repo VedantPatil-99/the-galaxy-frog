@@ -186,11 +186,12 @@ idempotent re-import; the user also confirmed that selecting a citation seeks th
 - OCR, frames, VLMs, visual retrieval, FTS, RRF, reranking, temporal expansion, and LangGraph.
 - AWS deployment, chapters, notes, flashcards, quizzes, and other later-phase product features.
 
-## Active plan: Phase 2 — Durable ingestion and ASR fallback
+## Completed plan: Phase 2 — Durable ingestion and ASR fallback
 
 Duration target: 7–10 focused development days.
 
-Status: **local exit gate complete; pull request and hosted CI pending**. The approved plan is
+Status: **complete and merged**. PRs #4–#10 and the caption-control-event fix in PR #11 are merged;
+`main` at `3566a01` passed generated-contract, backend, and frontend CI. The approved plan is
 recorded in the Galaxy Frog Workspace as `P2.0 — Phase 2: Durable Ingestion and ASR Fallback`.
 
 ### P2.1 — Durable ingestion foundation
@@ -353,8 +354,9 @@ citations. `smoke:phase2` then proved duplicate import leaves the event trail, t
 cues, and units unchanged; the database-backed test separately proves exactly one pgvector row per
 retrieval unit. The repository-wide quality/build, pre-commit, migration, five PostgreSQL
 integration tests, FFmpeg test, warmed CUDA ASR probe, scripted smoke, and manual UI gates all pass.
-Phase 2 is locally complete but is not represented as merged until its stacked branches pass the
-normal pull-request and GitHub Actions path into `main`.
+The stacked Phase 2 PRs subsequently merged, followed by the caption-control-event fix in PR #11
+on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this was reverified on
+2026-09-27 before starting Phase 3.
 
 ## Phase 2 non-goals
 
@@ -364,7 +366,86 @@ normal pull-request and GitHub Actions path into `main`.
   profiles, cloud-consent controls, live pricing configuration, and AWS deployment. P2.8 may display
   the provider decision that actually ran; Phase 8 owns changing that policy from the UI.
 
+## Active plan: Phase 3 — Hybrid text retrieval and reranking
+
+Status: **approved; P3.1 locally complete, hosted CI/merge pending**. Duration target: 5–7 focused days.
+Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
+
+### Approved work packets
+
+- [x] P3.1 — PostgreSQL FTS and lexical retrieval (`feat/transcript-lexical-retrieval`).
+  Add a stored `simple`-dictionary `tsvector`, GIN index, provider-independent retrieval interface,
+  and video-scoped adapter preserving unit/cue identities. Prove migration backfill, automatic
+  maintenance, exact phrases, names, deterministic order, video isolation, and ingestion regression.
+- [ ] P3.2 — Shared hybrid retrieval (`feat/hybrid-transcript-retrieval`). Reuse collection-safe
+  dense search, analyze queries deterministically, fuse 30 candidates per retriever using equal-weight
+  RRF with constant 60, and record each stage's scores/ranks separately.
+- [ ] P3.3 — Local reranking (`feat/local-transcript-reranking`). Pin BGE reranker v2-m3 and verified
+  dependencies behind a Python interface. Target CUDA FP16, batch/concurrency one, and 512-token
+  inputs. Rerank 30 candidates; record truncation, provider revision, device, and timing.
+- [ ] P3.4 — Temporal evidence (`feat/temporal-evidence-retrieval`). Support explicit times/ranges
+  and named-event anchors. Show up to five distinct anchor choices when ambiguous and validate the
+  chosen source interval server-side. Expand by 15 seconds each way, merge overlaps/gaps under five
+  seconds, deduplicate cues, bound context, and return at most eight diverse groups.
+- [ ] P3.5 — Traces/API (`feat/retrieval-traces-api`). Persist bounded, versioned traces; add
+  `POST /v1/videos/{video_id}/search` and a video-scoped trace-read endpoint. Share retrieval with
+  questions; preserve answer/citation fields and add retrieval metadata plus anchor-selection status.
+  Regenerate OpenAPI and frontend types. Retrieval-only execution never invokes generation.
+- [ ] P3.6 — Evidence UI (`feat/retrieval-evidence-ui`). Present retrieval-only results, rankings,
+  anchor choices, merged intervals, original evidence, visible fallback, and citation seeking through
+  generated contracts and the existing proxy.
+- [ ] P3.7 — Exit gate (`test/phase-3-exit-gate`). Compare dense-only, fused, reranked, and temporal
+  retrieval on a frozen caption/ASR set; report Recall@5, MRR@10, temporal overlap, latency, and memory.
+  Complete full quality, database, live provider, smoke, browser, and documentation gates.
+
+### Invariants and fallback policy
+
+FastAPI owns providers, retrieval, persistence, and schemas. Never mix embedding collections or
+rewrite original half-open millisecond intervals. Expanded groups reference original units/cues;
+citations continue to validate against those originals. Unresolved temporal anchors never become
+unrestricted searches. Embedder failure may retain lexical retrieval; reranker failure may retain
+fused ordering, with explicit warnings, degraded status, and trace reasons. Never silently switch
+device, model, or cloud provider. Strict benchmark runs disable fallback.
+
+### P3.1 local acceptance — 2026-09-27
+
+On 2026-09-27, the branch was created from verified `origin/main` at `3566a01`. The lexical adapter,
+revision `20260927_0006`, and provenance tests pass locally. The migration is applied at head;
+seven PostgreSQL integration checks cover lexical search, migration backfill/roundtrip, ingestion,
+and the existing dense/question slice. All 13 focused retrieval tests pass. `bun run check` passes:
+514 backend tests (nine opt-in skips), 100% statement/branch coverage, 26 frontend tests, generated
+contracts, lint, formatting, strict typing, and production build. Pre-commit passes.
+
+Windows Application Control initially blocked execution, and the user's terminal isolated a
+blocked `pytest` launcher while Python itself ran. Standard `python -m` entry points for pytest,
+Alembic, and pre-commit now pass with the existing Python 3.14.7 environment; no installation or
+security-policy change was needed. Fixed the new test's empty-list mock typing and duplicate test
+module filename. Hosted CI and merge remain pending. Reproduce using
+[manual verification](docs/phase-3/manual-verification.md).
+
+### Services, delivery, and non-goals
+
+P3.1 needs PostgreSQL/pgvector for live tests. Hybrid tests add Ollama/BGE-M3. Reranking needs a
+user-provisioned pinned model and compatible CUDA runtime; the RTX 2050 has 4 GB VRAM, so prove
+bounded inference and coexistence with Ollama. UI checks add FastAPI, Next.js, and Qwen3; fresh
+ingestion additionally needs the existing worker/media/ASR services. Do not install machine tools,
+download models, change drivers, or downgrade Python automatically.
+
+Use stacked branches and atomic Conventional Commits; push verified packets regularly. Provide
+ready-to-copy PR bases, titles, and descriptions without creating PRs. Preserve historical records
+and synchronize Notion checkpoints. Local completion and hosted CI/merge completion are distinct.
+
+No ingestion redesign, OCR, scenes/frames, visual embeddings, VLM, LangGraph, learning artifacts,
+cloud deployment, interactive provider policy, or later-phase evaluation platform.
+
 ## Decision log
+
+- 2026-09-27: Verify Phase 2 and PR #11 merged with passing main CI. Approve Phase 3 as seven
+  stacked packets, GPU-first BGE reranking, timestamp and named-event temporal queries, explicit
+  degraded local retrieval, strict benchmarks, and manually created PRs. Start P3.1; verification
+  initially awaited resolution of the Windows Application Control Python execution block.
+- 2026-09-27: Complete P3.1 local acceptance using the existing interpreter's standard module
+  entry points; retain locked versions and security settings. Hosted Phase 3 CI/merge are pending.
 
 - 2026-08-29: Project name confirmed as **Galaxy Frog: A Video RAG**.
 - 2026-08-29: Use a modular monorepo with `apps/web` and `backend`.

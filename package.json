@@ -16,7 +16,7 @@
     "infra:up": "docker compose up -d postgres",
     "infra:down": "docker compose down",
     "infra:logs": "docker compose logs -f postgres",
-    "db:migrate": "uv run --directory backend alembic upgrade head",
+    "db:migrate": "uv run --directory backend python -m alembic upgrade head",
     "openapi:generate": "uv run --directory backend python -m galaxy_frog.openapi",
     "openapi:check": "uv run --directory backend python -m galaxy_frog.openapi --check",
     "api:generate": "bun run --cwd apps/web api:generate",
@@ -32,13 +32,13 @@
     "typecheck:backend": "uv run --directory backend python -m pyright",
     "test": "bun run --parallel test:web test:backend",
     "test:web": "bun run --cwd apps/web test",
-    "test:backend": "uv run --directory backend pytest",
+    "test:backend": "uv run --directory backend python -m pytest",
     "build": "bun run --cwd apps/web build",
     "smoke": "bash scripts/smoke-test.sh",
     "smoke:phase1": "bun scripts/phase-1-smoke.ts",
     "smoke:phase2": "bun scripts/phase-2-smoke.ts",
     "check": "bun run --sequential contracts:check lint format:check typecheck test build",
-    "precommit": "uv run --directory backend pre-commit run --all-files"
+    "precommit": "uv run --directory backend python -m pre_commit run --all-files"
   },
   "ignoreScripts": [
     "sharp",

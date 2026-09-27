@@ -286,6 +286,18 @@ Never hand-edit the generated files.
 
 ## Verification and smoke tests
 
+Phase 3 P3.1 adds the generated lexical column through revision `20260927_0006`. Stop any running
+API/worker during this migration, apply it before restarting code that selects retrieval units, and
+verify with PostgreSQL/pgvector running. Ollama, ASR, FastAPI, and Next.js processes are not needed
+for the focused P3.1 database tests. The default full quality suite uses provider fakes.
+
+See [Phase 3 manual verification](phase-3/manual-verification.md) for ordered Git Bash commands and
+the verified Windows module-entry-point procedure. If a Python console launcher reports Application
+Control error 4551 while `python --version` works, use its standard `python -m` entry point (pytest,
+alembic, or pre_commit), as the root scripts do. P3.1 passed with the existing interpreter and no
+security-policy changes. If the interpreter or native imports are also blocked, stop and report the
+exact error; do not claim an unexecuted gate passed.
+
 Run the complete static and automated test gate:
 
 ```bash

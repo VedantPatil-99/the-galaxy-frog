@@ -25,7 +25,8 @@ evidence and produce timestamp-grounded answers.
 - Phase 1 — Transcript-first vertical slice: complete
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
-- Phase 2 — Durable ingestion and ASR fallback: local exit gate complete; PR/hosted CI pending
+- Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
+- Phase 3 — Hybrid text retrieval and reranking: approved; P3.1 locally verified, CI/merge pending
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -35,7 +36,7 @@ evidence and produce timestamp-grounded answers.
 - P2.7 — Resumable caption-to-ASR fallback: complete
 - P2.8 — Progress and recovery UI: complete
 - P2.9 — Operational hardening: complete
-- P2.10 — Quality, integration, live captionless smoke, and manual UI exit gate: complete locally
+- P2.10 — Quality, integration, live captionless smoke, and manual UI exit gate: complete and merged
 - The Next.js presentation shell uses React 19, strict TypeScript,
   Tailwind CSS v4, shadcn/ui with Base UI, and system-aware themes
 - The FastAPI application factory, typed settings, CLI entrypoint, and starter tests are established
@@ -89,6 +90,27 @@ Docker was not required for Step 2. Step 3A uses Docker Desktop with the WSL 2 b
 PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
 ## Current state and next task
+
+### Phase 3 kickoff — 2026-09-27
+
+PRs #4–#10 and caption-control-event fix #11 are merged. The current `main` commit `3566a01`
+passed all three hosted CI jobs. P3.1 is on `feat/transcript-lexical-retrieval`, created from that
+verified base. It adds lexical retrieval beside the existing dense implementation without changing
+the ingestion lifecycle or public question API. The approved seven-packet plan is in `PLANS.md`
+and [Notion P3.0](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
+
+The first packet passes local acceptance: migration head `20260927_0006`, seven PostgreSQL
+integration checks, 13 focused retrieval tests, and the complete quality gate (514 backend tests,
+100% statement/branch coverage, 26 frontend tests, generated contracts, lint/types, production
+build, and pre-commit). Nine opt-in tests are skipped by the default suite; database checks ran
+separately. Standard `python -m pytest`, `python -m alembic`, and `python -m pre_commit` work with
+the existing Python 3.14.7 environment after a console-launcher Application Control block. No
+installation or security-policy change was needed. See
+[manual verification](phase-3/manual-verification.md). Hosted CI and merge are pending.
+Next packet: P3.2 on the approved stacked branch. No PR is created by the agent. Preserve the user's
+GPU-first, named-event-anchor, visible-fallback, and stacked-branch decisions.
+
+### Historical checkpoint records
 
 Phase 0 Step 2 is complete in four reviewed batches:
 
@@ -262,9 +284,9 @@ succeeded job and proved the events, transcription run, cue IDs, and retrieval-u
 unchanged on duplicate import. The repository-wide `bun run check`, `bun run precommit`, Alembic
 head, four durable-ingestion plus one Phase 1 PostgreSQL integration tests, FFmpeg integration, and
 warmed CUDA ASR probe all pass; the default backend result is 508 passed, 7 opt-in skipped, and 100%
-statement/branch coverage, with 26 frontend tests passing. No Phase 3 work is included. Phase 2 must
-still traverse the appropriate stacked pull requests and GitHub Actions before `main` can be called
-complete and merged.
+statement/branch coverage, with 26 frontend tests passing. No Phase 3 work was included. Phase 2
+at that point still had to traverse stacked pull requests and GitHub Actions. That merge gate was
+subsequently completed through PRs #4–#11 and reverified on 2026-09-27.
 
 Provider presentation remains intentionally split across phases. P2.8 shows read-only execution
 evidence from FastAPI—actual ASR provider, model, revision, device, selection/fallback reason and
