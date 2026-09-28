@@ -8,6 +8,12 @@ from pydantic import ValidationError
 from galaxy_frog.config import Settings
 
 
+@pytest.mark.parametrize("limit", [0, 31])
+def test_settings_reject_unbounded_fused_candidates(limit: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(retrieval_fusion_limit=limit)
+
+
 def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv(
@@ -36,10 +42,12 @@ def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("ASR_DEVICE", "cpu")
     monkeypatch.setenv("ASR_COMPUTE_TYPE", "int8")
     monkeypatch.setenv("ASR_MAX_CONCURRENCY", "1")
+    monkeypatch.setenv("RETRIEVAL_FUSION_LIMIT", "20")
 
     settings = Settings()
 
     assert settings.app_env == "test"
+    assert settings.retrieval_fusion_limit == 20
     assert settings.database_url is not None
     assert settings.database_url.get_secret_value().startswith("postgresql+asyncpg://")
     assert settings.ollama_base_url == "http://127.0.0.1:11434"

@@ -16,9 +16,11 @@ from galaxy_frog.api.dependencies import (
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.retrieval import get_retrieval_traces, get_search_service
 from galaxy_frog.application.retrieval.search import SearchTranscript
+from galaxy_frog.config import Settings
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.retrieval.pipeline import RetrievalConfig
 
 
 def make_request(engine: AsyncEngine | None) -> Request:
@@ -39,6 +41,24 @@ def test_retrieval_dependencies_share_the_app_reranker_and_request_session() -> 
     repository = SqlAlchemyVideoRepository(cast(AsyncSession, object()))
     assert isinstance(get_search_service(request, repository), SearchTranscript)
     assert isinstance(get_retrieval_traces(repository), PostgresRetrievalTraces)
+
+
+@pytest.mark.parametrize("limit", [20, 30])
+def test_retrieval_uses_the_configured_fused_candidate_budget(
+    monkeypatch: pytest.MonkeyPatch, limit: int
+) -> None:
+    observed: list[int] = []
+
+    def config_factory(*, fusion_limit: int) -> RetrievalConfig:
+        observed.append(fusion_limit)
+        return RetrievalConfig(fusion_limit=fusion_limit)
+
+    monkeypatch.setattr(dependencies, "RetrievalConfig", config_factory)
+    app = create_app(Settings(retrieval_fusion_limit=limit))
+    request = Request({"type": "http", "app": app, "headers": []})
+    repository = SqlAlchemyVideoRepository(cast(AsyncSession, object()))
+    get_search_service(request, repository)
+    assert observed == [limit]
 
 
 @pytest.mark.asyncio

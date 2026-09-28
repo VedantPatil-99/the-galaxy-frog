@@ -10,12 +10,14 @@ from galaxy_frog.application.ingestion.dispatch import DispatchSignatureVerifier
 from galaxy_frog.application.retrieval.search import SearchTranscript
 from galaxy_frog.application.retrieval.temporal import RetrieveTemporalEvidence
 from galaxy_frog.application.retrieval.text import RetrieveTranscript
+from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import probe_database
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
 from galaxy_frog.db.transcript_lexical_search import PostgresTranscriptLexicalSearch
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.retrieval.pipeline import RetrievalConfig
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.retrieval.reranking import TextReranker
 
@@ -34,6 +36,9 @@ def build_retrieval_service(
             session=repository.session, videos=repository, provider=provider
         ),
         reranker=cast(TextReranker, request.app.state.reranker),
+        config=RetrievalConfig(
+            fusion_limit=cast(Settings, request.app.state.settings).retrieval_fusion_limit
+        ),
     )
     return SearchTranscript(
         retrieval=RetrieveTemporalEvidence(videos=repository, retrieval=retrieval),
