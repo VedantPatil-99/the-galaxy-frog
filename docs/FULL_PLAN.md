@@ -900,6 +900,12 @@ are versioned, video-scoped records capped at 256 KiB. FastAPI exports search, t
 question metadata schemas; generated frontend types remain authoritative. Missing anchors block
 generation. The browser evidence controls remain P3.6 and real-model quality measurements P3.7.
 
+P3.6 implementation (2026-09-28): generated-contract UI controls now expose retrieval-only search,
+anchor selection, original evidence/rankings, fallback warnings, traces, and timestamp seeking.
+The complete automated gate and live proxy/anchor checks pass. Manual browser acceptance remains
+open after the agent browser sandbox failed to initialize. Broad application reranker timeouts are
+recorded for the P3.7 latency/quality gate; no retrieval-quality improvement is claimed.
+
 ### Work
 
 - Add PostgreSQL FTS indexes.

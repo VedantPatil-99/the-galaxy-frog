@@ -11,6 +11,11 @@ export type TranscriptCueResponse = components["schemas"]["TranscriptCueResponse
 export type TranscriptResponse = components["schemas"]["TranscriptResponse"]
 export type TranscriptionRunResponse = components["schemas"]["TranscriptionRunResponse"]
 export type VideoResponse = components["schemas"]["VideoResponse"]
+export type SearchRequest = components["schemas"]["SearchRequest"]
+export type SearchResponse = components["schemas"]["SearchResponse"]
+export type QuestionRequest = components["schemas"]["QuestionRequest"]
+export type RetrievalTraceResponse = components["schemas"]["RetrievalTraceResponse"]
+export type RetrievalMode = components["schemas"]["RetrievalMode"]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -269,6 +274,8 @@ export function isAnswerResponse(value: unknown): value is AnswerResponse {
     typeof value.answer === "string" &&
     ["low", "medium", "high"].includes(String(value.confidence)) &&
     typeof value.degraded_mode === "boolean" &&
+    (value.retrieval == null || isSearchResponse(value.retrieval)) &&
+    (value.retrieval_status === undefined || retrievalStatuses.has(String(value.retrieval_status))) &&
     isStringArray(value.warnings) &&
     Array.isArray(value.evidence) &&
     value.evidence.every(
@@ -283,4 +290,44 @@ export function isAnswerResponse(value: unknown): value is AnswerResponse {
         item.modality === "transcript",
     )
   )
+}
+
+const retrievalModes = new Set(["lexical", "dense", "hybrid", "reranked"])
+const retrievalStatuses = new Set(["resolved", "anchor_selection_required", "anchor_unresolved"])
+
+function isInterval(value: unknown): value is Record<string, unknown> & { start_ms: number; end_ms: number } {
+  return isRecord(value) && typeof value.start_ms === "number" && Number.isFinite(value.start_ms) &&
+    typeof value.end_ms === "number" && Number.isFinite(value.end_ms) &&
+    value.start_ms >= 0 && value.end_ms > value.start_ms
+}
+
+function isOriginalUnit(value: unknown): boolean {
+  return isInterval(value) && typeof value.unit_id === "string" && typeof value.text === "string" && isStringArray(value.cue_ids)
+}
+
+export function isSearchResponse(value: unknown): value is SearchResponse {
+  return isRecord(value) && typeof value.video_id === "string" && typeof value.trace_id === "string" &&
+    retrievalStatuses.has(String(value.status)) && retrievalModes.has(String(value.mode)) &&
+    typeof value.degraded === "boolean" && typeof value.context_chars === "number" &&
+    isRecord(value.analysis) && typeof value.analysis.original === "string" && typeof value.analysis.normalized === "string" &&
+    isNullableString(value.selected_anchor) &&
+    (value.window === null || (isRecord(value.window) && typeof value.window.start_ms === "number" &&
+      (value.window.end_ms === null || typeof value.window.end_ms === "number"))) &&
+    Array.isArray(value.warnings) && value.warnings.every(warning => isRecord(warning) && typeof warning.code === "string" && typeof warning.message === "string") &&
+    Array.isArray(value.anchors) && value.anchors.every(anchor => isInterval(anchor) && typeof anchor.anchor_id === "string" &&
+      typeof anchor.text === "string" && typeof anchor.match_kind === "string" && isStringArray(anchor.unit_ids)) &&
+    Array.isArray(value.evidence) && value.evidence.every(group => isInterval(group) &&
+      Array.isArray(group.units) && group.units.every(isOriginalUnit) &&
+      Array.isArray(group.cues) && group.cues.every(isTranscriptCue) &&
+      Array.isArray(group.hits) && group.hits.every(hit => isRecord(hit) && hit.video_id === value.video_id &&
+        isOriginalUnit(hit.unit) && typeof hit.fusion_rank === "number" && typeof hit.fusion_score === "number" &&
+        (hit.rerank_rank == null || typeof hit.rerank_rank === "number") &&
+        (hit.rerank_score == null || typeof hit.rerank_score === "number") &&
+        Array.isArray(hit.stages) && hit.stages.every(stage => isRecord(stage) && retrievalModes.has(String(stage.stage)) &&
+          typeof stage.rank === "number" && typeof stage.score === "number")))
+}
+
+export function isRetrievalTraceResponse(value: unknown): value is RetrievalTraceResponse {
+  return isRecord(value) && value.version === 1 && typeof value.trace_id === "string" &&
+    typeof value.video_id === "string" && typeof value.created_at === "string" && isRecord(value.payload)
 }

@@ -312,3 +312,12 @@ overlapping the selected scope. Safe generation/citation errors include the alre
 FastAPI OpenAPI owns all new contracts, including the nested original evidence records. The Next.js
 proxy only forwards requests; search/question timeouts are five minutes to allow bounded native
 startup and generation. The backend provider deadlines remain independent and observable.
+
+### P3.6 evidence presentation
+
+The browser selects retrieval-only versus question submission and presents the generated response.
+Anchor IDs return to FastAPI for validation; the client neither resolves events nor ranks evidence.
+Merged windows, original cue/unit intervals, caption/ASR lineage, stage scores, fallback warnings,
+and saved traces are inspectable. All evidence and anchor preview timestamps reuse the existing
+YouTube seek commands. Query/mode/video changes clear stale results, and active requests disable
+conflicting submissions. Browser acceptance remains separate from HTTP/component tests.

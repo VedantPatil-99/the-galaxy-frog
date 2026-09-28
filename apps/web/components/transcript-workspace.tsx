@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from "react"
 
 import { IngestionProgress } from "@/components/ingestion-progress"
 import { TranscriptionEvidence } from "@/components/transcription-evidence"
+import { RetrievalEvidence } from "@/components/retrieval-evidence"
 import {
   ApiClientError,
   askVideoQuestion,
@@ -13,28 +14,25 @@ import {
   importVideo,
   retryIngestionJob,
   waitForIngestionJob,
+  searchVideo,
 } from "@/lib/api/client"
 import type {
   AnswerResponse,
   IngestionEventsResponse,
   IngestionJobResponse,
   TranscriptResponse,
+  SearchResponse,
+  RetrievalMode,
 } from "@/lib/api/contracts"
 import { seekCommands, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
-
-function timestamp(milliseconds: number): string {
-  const totalSeconds = Math.floor(milliseconds / 1000)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  const clock = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
-  return hours > 0 ? `${hours}:${clock}` : clock
-}
+import { timestamp } from "@/lib/timestamp"
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
     const action = error.response?.error.suggested_action
-    return action ? `${error.message} ${action}` : error.message
+    const trace = error.response?.error.details?.trace_id
+    const message = action ? `${error.message} ${action}` : error.message
+    return typeof trace === "string" ? `${message} Retrieval trace: ${trace}` : message
   }
   return "The request could not be completed. Please try again."
 }
@@ -45,6 +43,9 @@ export function TranscriptWorkspace() {
   const [question, setQuestion] = useState("")
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
   const [answer, setAnswer] = useState<AnswerResponse | null>(null)
+  const [retrieval, setRetrieval] = useState<SearchResponse | null>(null)
+  const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("reranked")
+  const [evidenceOnly, setEvidenceOnly] = useState(false)
   const [job, setJob] = useState<IngestionJobResponse | null>(null)
   const [events, setEvents] = useState<IngestionEventsResponse["events"]>([])
   const [notice, setNotice] = useState<string | null>(null)
@@ -87,6 +88,8 @@ export function TranscriptWorkspace() {
     }
 
     const loaded = await getTranscript(completed.video_id)
+    setAnswer(null)
+    setRetrieval(null)
     setTranscript(loaded)
     if (loaded.transcription !== null) {
       setNotice(
@@ -107,6 +110,7 @@ export function TranscriptWorkspace() {
     setError(null)
     setNotice(null)
     setAnswer(null)
+    setRetrieval(null)
     setTranscript(null)
     setJob(null)
     setEvents([])
@@ -165,12 +169,30 @@ export function TranscriptWorkspace() {
 
   async function handleQuestion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    await submitQuery()
+  }
+
+  function clearResults() {
+    setAnswer(null)
+    setRetrieval(null)
+    setError(null)
+  }
+
+  async function submitQuery(selectedAnchor?: string) {
     if (transcript === null) return
     setAsking(true)
     setError(null)
     setAnswer(null)
+    setRetrieval(null)
     try {
-      setAnswer(await askVideoQuestion(transcript.video.video_id, question))
+      const options = { mode: retrievalMode, selected_anchor: selectedAnchor, limit: 8, allow_fallback: true }
+      if (evidenceOnly) {
+        setRetrieval(await searchVideo(transcript.video.video_id, { ...options, query: question }))
+      } else {
+        const response = await askVideoQuestion(transcript.video.video_id, question, fetch, options)
+        setRetrieval(response.retrieval ?? null)
+        setAnswer(response.retrieval_status === "anchor_selection_required" || response.retrieval_status === "anchor_unresolved" ? null : response)
+      }
     } catch (caught) {
       setError(errorMessage(caught))
     } finally {
@@ -181,7 +203,7 @@ export function TranscriptWorkspace() {
   return (
     <section aria-labelledby="workspace-title" className="mx-auto w-full max-w-7xl px-5 pb-16 sm:px-7 lg:px-10">
       <div className="mb-7 max-w-3xl">
-        <p className="mb-3 font-mono text-xs tracking-[0.22em] text-primary uppercase">Phase 2 · Durable ingestion</p>
+        <p className="mb-3 font-mono text-xs tracking-[0.22em] text-primary uppercase">Phase 3 · Temporal evidence</p>
         <h1 id="workspace-title" className="font-heading text-4xl leading-tight font-semibold tracking-[-0.04em] sm:text-5xl">Ask the video. Keep the receipts.</h1>
         <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public YouTube video. Galaxy Frog uses viable captions first, falls back to bounded local multilingual ASR only when needed, and keeps every answer linked to exact evidence.</p>
       </div>
@@ -189,7 +211,7 @@ export function TranscriptWorkspace() {
       <form onSubmit={handleImport} className="rounded-2xl border bg-card p-3 shadow-sm sm:flex sm:items-center sm:gap-3">
         <label htmlFor="source-url" className="sr-only">Public YouTube URL</label>
         <input id="source-url" type="url" required value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=…" className="h-11 w-full rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
-        <button type="submit" disabled={importing} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Following durable job…" : "Queue video"}</button>
+        <button type="submit" disabled={importing || asking} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Following durable job…" : "Queue video"}</button>
       </form>
 
       <div aria-live="polite" className="min-h-12 py-3 text-sm">
@@ -228,7 +250,7 @@ export function TranscriptWorkspace() {
                 </div>
                 <div className="flex gap-2 text-xs">
                   <span className="rounded-full border px-2.5 py-1">Transcript ready</span>
-                  <span className="rounded-full border px-2.5 py-1">Index ready</span>
+                  <span className="rounded-full border px-2.5 py-1">{transcript.video.index_ready ? "Dense index ready" : "Lexical evidence available"}</span>
                 </div>
               </div>
             </article>
@@ -242,9 +264,22 @@ export function TranscriptWorkspace() {
               </div>
               <form onSubmit={handleQuestion} className="flex flex-col gap-3 sm:flex-row">
                 <label htmlFor="question" className="sr-only">Question about this video</label>
-                <input id="question" required maxLength={2000} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What does the speaker say about…?" className="h-11 flex-1 rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
-                <button type="submit" disabled={asking} className="h-11 rounded-xl bg-foreground px-5 text-sm font-semibold text-background disabled:opacity-60">{asking ? "Checking evidence…" : "Ask"}</button>
+                <input id="question" required disabled={asking} maxLength={2000} value={question} onChange={(event) => { setQuestion(event.target.value); clearResults() }} placeholder="What does the speaker say about…?" className="h-11 min-w-0 flex-1 rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
+                <button type="submit" disabled={asking} className="h-11 rounded-xl bg-foreground px-5 text-sm font-semibold text-background disabled:opacity-60">{asking ? "Checking evidence…" : evidenceOnly ? "Find evidence" : "Ask"}</button>
               </form>
+              <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={evidenceOnly} disabled={asking} onChange={event => { setEvidenceOnly(event.target.checked); clearResults() }} />Evidence only · no answer generation</label>
+                <label className="flex items-center gap-2">Retrieval method
+                  <select value={retrievalMode} disabled={asking} onChange={event => { setRetrievalMode(event.target.value as RetrievalMode); clearResults() }} className="rounded-lg border bg-background p-2 text-xs">
+                    <option value="reranked">Hybrid + reranking</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="lexical">Exact terms</option>
+                    <option value="dense">Semantic</option>
+                  </select>
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">Try a name, a quoted phrase, “before 02:30”, or “after the introduction”.</p>
+              {asking ? <p role="status" className="mt-3 text-sm text-muted-foreground">Retrieving evidence. This can take a few minutes.</p> : null}
 
               {answer ? (
                 <div className="mt-6 border-t pt-6">
@@ -264,6 +299,7 @@ export function TranscriptWorkspace() {
                   </div>
                 </div>
               ) : null}
+              {retrieval ? <RetrievalEvidence key={retrieval.trace_id} result={retrieval} pending={asking} onSelectAnchor={submitQuery} onSeek={seekTo} /> : null}
             </article>
           </div>
 

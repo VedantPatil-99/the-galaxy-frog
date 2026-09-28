@@ -518,6 +518,18 @@ generation model. Retrieval-only requests never call generation. Search/question
 have a five-minute timeout; provider deadlines still apply. Trace rows have a 256 KiB record limit
 and remain until explicit cleanup or their parent video's deletion.
 
+## Phase 3 browser verification
+
+The evidence UI adds retrieval-only search, event selection, original provenance/ranking details,
+and durable trace inspection. Follow [P3.6 verification](phase-3/p3-6-verification.md) for the cached
+video procedure and exact service commands. The agent browser sandbox failed to initialize on
+2026-09-28; manual visual/seek acceptance is still required. Broad real reranker requests reached
+the default 120-second deadline even though the isolated probe passed; retain failure traces and
+report elapsed time and fallback rather than assuming GPU availability implies application success.
+
+Windows executable-shim launch failures in the web checks are avoided by calling installed ESLint,
+TypeScript, and OpenAPI JavaScript entrypoints through Bun. This requires no security-policy change.
+
 ## Deployment boundary
 
 The local Phase 1 stack uses PostgreSQL with pgvector in Docker and a user-managed native Ollama

@@ -7,6 +7,8 @@ import {
   isIngestionJobResponse,
   isReadinessResponse,
   isTranscriptResponse,
+  isSearchResponse,
+  isRetrievalTraceResponse,
   type ApiErrorResponse,
   type AnswerResponse,
   type HealthResponse,
@@ -15,6 +17,10 @@ import {
   type IngestionJobResponse,
   type ReadinessResponse,
   type TranscriptResponse,
+  type SearchRequest,
+  type SearchResponse,
+  type QuestionRequest,
+  type RetrievalTraceResponse,
 } from "@/lib/api/contracts"
 
 const PROXY_BASE_PATH = "/api/proxy"
@@ -204,13 +210,23 @@ export async function askVideoQuestion(
   videoId: string,
   question: string,
   fetcher: Fetcher = fetch,
+  options: Omit<QuestionRequest, "question"> = { mode: "reranked", limit: 8, allow_fallback: true },
 ): Promise<AnswerResponse> {
   return requestApi(
     `/v1/videos/${encodeURIComponent(videoId)}/questions`,
     isAnswerResponse,
     fetcher,
-    { method: "POST", body: JSON.stringify({ question }) },
+    { method: "POST", body: JSON.stringify({ ...options, question }) },
   )
+}
+
+export async function searchVideo(videoId: string, request: SearchRequest, fetcher: Fetcher = fetch): Promise<SearchResponse> {
+  return requestApi(`/v1/videos/${encodeURIComponent(videoId)}/search`, isSearchResponse, fetcher,
+    { method: "POST", body: JSON.stringify(request) })
+}
+
+export async function getRetrievalTrace(videoId: string, traceId: string, fetcher: Fetcher = fetch): Promise<RetrievalTraceResponse> {
+  return requestApi(`/v1/videos/${encodeURIComponent(videoId)}/retrieval-traces/${encodeURIComponent(traceId)}`, isRetrievalTraceResponse, fetcher)
 }
 
 export async function checkApiConnectivity(
