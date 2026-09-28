@@ -368,7 +368,7 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
 
 ## Active plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **P3.1–P3.5 locally complete; P3.6 implemented, manual browser acceptance pending**.
+Status: **P3.1–P3.5 locally complete; P3.6 pushed with manual browser acceptance pending; P3.7 in progress**.
 Hosted CI/merge remain pending. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
@@ -400,6 +400,9 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
 - [ ] P3.7 — Exit gate (`test/phase-3-exit-gate`). Compare dense-only, fused, reranked, and temporal
   retrieval on a frozen caption/ASR set; report Recall@5, MRR@10, temporal overlap, latency, and memory.
   Complete full quality, database, live provider, smoke, browser, and documentation gates.
+  A frozen 12-case caption/ASR manifest, strict benchmark runner, and metric tests are prepared.
+  Compare fused candidate budgets 30 and 20 before changing the default; see
+  [P3.7 procedure](docs/phase-3/p3-7-verification.md).
 
 ### Invariants and fallback policy
 
