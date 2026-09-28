@@ -6,10 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "bun node_modules/eslint/bin/eslint.js",
+    "typecheck": "next typegen && bun node_modules/typescript/bin/tsc --noEmit",
     "test": "bun test",
-    "api:generate": "openapi-typescript ../../backend/openapi.json --output lib/api/generated/schema.d.ts --alphabetize",
+    "api:generate": "bun node_modules/openapi-typescript/bin/cli.js ../../backend/openapi.json --output lib/api/generated/schema.d.ts --alphabetize",
     "api:check": "bun run api:generate --check"
   },
   "dependencies": {
