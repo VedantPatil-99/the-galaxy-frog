@@ -1,8 +1,8 @@
 # P3.7 exit gate
 
-Status: in progress on `test/phase-3-exit-gate`, stacked on P3.6 `66c7917`.
-Manual browser acceptance remains open. No quality improvement or final Phase 3 completion is claimed
-until the measured results and remaining acceptance checks are recorded here.
+Status: benchmarks complete on `test/phase-3-exit-gate`, stacked on P3.6 `66c7917`.
+Manual browser acceptance and pre-commit remain open. No quality improvement or final Phase 3
+completion is claimed until all remaining acceptance checks are recorded here.
 
 ## Frozen comparison
 
@@ -99,6 +99,69 @@ that is a new dataset version, not the same frozen run.
 - Run `uv run --directory backend python -m pre_commit run --all-files`.
 - Keep local completion distinct from hosted CI and merge.
 
-## Measured results
+## Measured results — 2026-10-02
 
-Results to be recorded here after the benchmark runs complete.
+### Quality gate
+
+`bun run check` passed: generated contracts current, lint/format/types all pass, 668 backend tests
+(14 opt-in skips), 100% statement/branch coverage, 33 frontend tests, 7 benchmark metric tests,
+and production build. Ten PostgreSQL integration tests pass with `RUN_DATABASE_INTEGRATION=1`
+(five lexical search, one phase-one slice, four durable ingestion).
+
+Reranker integration tests (2) fail with `[WinError 4551] Application Control policy has blocked
+this file` — the same AppControl restriction that prevents the benchmark runner subprocess from
+launching. This is a known execution context limitation, not a code defect.
+
+### Frozen benchmark — RETRIEVAL_FUSION_LIMIT=30
+
+| Variant | Attempted | Passed | Failed | Recall@5 | MRR@10 | IoU@5 | Median ms |
+|---------|-----------|--------|--------|----------|--------|-------|-----------|
+| dense | 12 | 12 | 0 | 0.917 | 0.854 | 0.057 | 478 ms |
+| fused | 12 | 12 | 0 | 0.917 | 0.854 | 0.057 | 423 ms |
+| reranked | 12 | 0 | 12 | — | — | — | — |
+| expanded | 12 | 0 | 12 | — | — | — | — |
+
+Peak GPU memory (nvidia-smi sampled, shared with Ollama): 737 MiB observed for dense and fused.
+
+### Frozen benchmark — RETRIEVAL_FUSION_LIMIT=20
+
+| Variant | Attempted | Passed | Failed | Recall@5 | MRR@10 | IoU@5 | Median ms |
+|---------|-----------|--------|--------|----------|--------|-------|-----------|
+| dense | 12 | 12 | 0 | 0.917 | 0.854 | 0.057 | 478 ms |
+| fused | 12 | 12 | 0 | 0.917 | 0.854 | 0.057 | 453 ms |
+| reranked | 12 | 0 | 12 | — | — | — | — |
+| expanded | 12 | 0 | 12 | — | — | — | — |
+
+### Failure analysis — reranked and expanded
+
+All reranked requests returned HTTP 503 `reranker_dependency_unavailable`. The FastAPI server
+process received `[WinError 4551] An Application Control policy has blocked this file` when
+attempting `CreateProcess` on the reranker subprocess (`runtime.py`). This is the same
+AppControl restriction that blocked the integration tests. The 503 is the correct observable
+degraded response; the benchmark correctly counts these as failures and does not fall back
+silently. Expanded requests depend on successful reranked output and are also counted as failed.
+
+The reranker did execute successfully in P3.6 manual testing: trace `5d3a8ea3-6a92-4c2c-88b7-fdeb4b84e254`
+recorded 44.1 s reranker elapsed, 22.9 s model loading, and 1116 MiB peak reserved VRAM. Two earlier
+broad requests (also P3.6) hit the 120-second deadline. The AppControl behavior is context-dependent
+and not reproducible across terminal sessions. No code defect is implicated.
+
+### Budget comparison (LIMIT=30 vs LIMIT=20)
+
+Dense quality is identical at both budgets (Recall@5=0.917, MRR@10=0.854, IoU=0.057, median 478 ms).
+Fused at LIMIT=30 is 30 ms faster at the median than LIMIT=20 (423 ms vs 453 ms); this difference
+is within request noise. There is no quality case for reducing the candidate budget to 20. The
+default LIMIT=30 is retained. The seven-unit ASR sample cannot independently distinguish these
+budgets as documented.
+
+### Dense vs fused quality
+
+RRF fusion produces the same Recall@5=0.917 and MRR@10=0.854 as dense-only retrieval on this
+12-case frozen set. No quality improvement from fusion is claimed. Fusion is 55 ms faster at the
+median than dense at LIMIT=30 (different internal request path). No quality improvement from the
+fusion pipeline over dense retrieval is established by these results.
+
+### Remaining acceptance
+
+- [ ] Pre-commit: `uv run --directory backend python -m pre_commit run --all-files`
+- [ ] Manual browser acceptance: follow steps 1–7 in `p3-6-verification.md`
