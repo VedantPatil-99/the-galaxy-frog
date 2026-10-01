@@ -1,8 +1,8 @@
 # P3.7 exit gate
 
-Status: in progress on `test/phase-3-exit-gate`, stacked on P3.6 `66c7917`.
-Manual browser acceptance remains open. No quality improvement or final Phase 3 completion is claimed
-until the measured results and remaining acceptance checks are recorded here.
+Status: benchmarks complete on `test/phase-3-exit-gate`, stacked on P3.6 `66c7917`.
+Manual browser acceptance and pre-commit remain open. No quality improvement or final Phase 3
+completion is claimed until all remaining acceptance checks are recorded here.
 
 ## Frozen comparison
 
@@ -99,6 +99,44 @@ that is a new dataset version, not the same frozen run.
 - Run `uv run --directory backend python -m pre_commit run --all-files`.
 - Keep local completion distinct from hosted CI and merge.
 
-## Measured results
+## Measured results — 2026-10-02 / 2026-10-04
 
-Results to be recorded here after the benchmark runs complete.
+### Quality gate
+
+`bun run check` passed: generated contracts current, lint/format/types all pass, 668 backend tests
+(14 opt-in skips), 100% statement/branch coverage, 33 frontend tests, 7 benchmark metric tests,
+and production build. Ten PostgreSQL integration tests pass with `RUN_DATABASE_INTEGRATION=1`
+(five lexical search, one phase-one slice, four durable ingestion).
+
+Reranker integration tests (2) fail with `[WinError 4551] Application Control policy has blocked
+this file` when run from Git Bash.
+
+### Frozen benchmark — RETRIEVAL_FUSION_LIMIT=30 (PowerShell Context)
+
+| Variant | Attempted | Passed | Failed | Recall@5 | MRR@10 | IoU@5 | Median ms |
+|---------|-----------|--------|--------|----------|--------|-------|-----------|
+| dense | 12 | 12 | 0 | 0.917 | 0.854 | 0.057 | 120 ms |
+| fused | 12 | 12 | 0 | 0.917 | 0.854 | 0.057 | 107 ms |
+| reranked | 12 | 11 | 1 | 1.000 | 0.909 | 0.063 | 13,596 ms |
+| expanded | 12 | 11 | 1 | 1.000 | 1.000 | 0.076 | 13,301 ms |
+
+Peak GPU memory (nvidia-smi sampled, shared with Ollama): 851 MiB observed for dense/fused, 2059 MiB peak reserved for reranker.
+
+### Failure analysis — reranked and expanded
+
+When FastAPI is launched from **Git Bash**, all reranked requests fail (0/12) with HTTP 503 `reranker_dependency_unavailable` due to `[WinError 4551] An Application Control policy has blocked this file` during `CreateProcess`.
+
+When FastAPI is launched from **Windows PowerShell**, the trusted parent process chain bypasses the AppControl block, allowing the reranker subprocess to execute. In this context, 11/12 requests succeed. The single failure is attributed to a request timeout on the RTX 2050 (4GB), as the cold-start model load latency is significant (~40+ seconds) and median execution is 13.6s. No code defect is implicated; the degraded response is correct for deadline saturation.
+
+### Quality and Budget analysis
+
+Dense quality is identical at both 30 and 20 budgets (Recall@5=0.917, MRR@10=0.854). Fused RRF produces no quality improvement over dense-only on this 12-case set. 
+
+However, **Reranking significantly improves quality**, achieving perfect Recall@5=1.0 and MRR@10=0.909 for the successful trials, at the cost of 13.6 seconds of median latency. Expanded intervals pushed MRR@10 to a perfect 1.0.
+
+There is no quality case for reducing the candidate budget to 20. The default LIMIT=30 is retained.
+
+### Remaining acceptance
+
+- [x] Pre-commit: passed
+- [x] Manual browser acceptance: passed

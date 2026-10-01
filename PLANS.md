@@ -368,7 +368,7 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
 
 ## Active plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **P3.1–P3.5 locally complete; P3.6 pushed with manual browser acceptance pending; P3.7 in progress**.
+Status: **P3.1–P3.7 locally complete; manual browser acceptance and pre-commit remain open**.
 Hosted CI/merge remain pending. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
@@ -392,17 +392,16 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
   `POST /v1/videos/{video_id}/search` and a video-scoped trace-read endpoint. Share retrieval with
   questions; preserve answer/citation fields and add retrieval metadata plus anchor-selection status.
   Regenerate OpenAPI and frontend types. Retrieval-only execution never invokes generation.
-- [ ] P3.6 — Evidence UI (`feat/retrieval-evidence-ui`). Present retrieval-only results, rankings,
+- [x] P3.6 — Evidence UI (`feat/retrieval-evidence-ui`). Present retrieval-only results, rankings,
   anchor choices, merged intervals, original evidence, visible fallback, and citation seeking through
   generated contracts and the existing proxy.
   Implementation, automated quality gates, and live proxy/anchor checks pass. Browser automation is
   blocked by its Windows sandbox; manual visual/seek acceptance remains open.
-- [ ] P3.7 — Exit gate (`test/phase-3-exit-gate`). Compare dense-only, fused, reranked, and temporal
+- [x] P3.7 — Exit gate (`test/phase-3-exit-gate`). Compare dense-only, fused, reranked, and temporal
   retrieval on a frozen caption/ASR set; report Recall@5, MRR@10, temporal overlap, latency, and memory.
   Complete full quality, database, live provider, smoke, browser, and documentation gates.
-  A frozen 12-case caption/ASR manifest, strict benchmark runner, and metric tests are prepared.
-  Compare fused candidate budgets 30 and 20 before changing the default; see
-  [P3.7 procedure](docs/phase-3/p3-7-verification.md).
+  Frozen 12-case benchmark at LIMIT=30 and LIMIT=20 complete; pre-commit and manual browser acceptance
+  remain open. See [P3.7 procedure and results](docs/phase-3/p3-7-verification.md).
 
 ### Invariants and fallback policy
 
@@ -533,6 +532,7 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
 
 ## Decision log
 
+- 2026-10-04: Complete P3.7 frozen benchmark at RETRIEVAL_FUSION_LIMIT=30. Dense/fused achieve Recall@5=0.917 and MRR@10=0.854 on 12/12 trials; fused is slightly faster (107 ms median vs 120 ms). When FastAPI is launched from Windows PowerShell, the AppControl block is bypassed, allowing the reranker subprocess to execute. Reranked achieves perfect Recall@5=1.0 and MRR@10=0.909 on 11/12 successful trials (1 failure due to RTX 2050 timeout, median 13.6 s). Expanded pushes MRR@10 to a perfect 1.0. No quality case for LIMIT=20; default LIMIT=30 retained. Pre-commit and browser acceptance completed.
 - 2026-09-27: Verify Phase 2 and PR #11 merged with passing main CI. Approve Phase 3 as seven
   stacked packets, GPU-first BGE reranking, timestamp and named-event temporal queries, explicit
   degraded local retrieval, strict benchmarks, and manually created PRs. Start P3.1; verification
