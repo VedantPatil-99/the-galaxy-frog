@@ -138,7 +138,7 @@ def trial(base_url, case, mode, query):
         except urllib.error.HTTPError as exc:
             try:
                 error = json.loads(exc.read())
-            except ValueError, UnicodeDecodeError:
+            except (ValueError, UnicodeDecodeError):
                 error = {"error": {"code": f"HTTP_{exc.code}"}}
             record.update(status="failed", error=error)
         except (OSError, ValueError, KeyError) as exc:

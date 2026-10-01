@@ -40,6 +40,13 @@ It is recorded in trace configuration. A 20-candidate comparison does not alter 
 The seven-unit ASR sample cannot distinguish those candidate budgets; use caption results for that
 part of the comparison. Startup/model-loading overhead remains even when fewer passages are scored.
 
+## Script fix applied — 2026-10-02
+
+`scripts/phase_3_benchmark.py` contained Python 2 multi-exception syntax on the HTTP error handler
+(`except ValueError, UnicodeDecodeError:`) that causes a `SyntaxError` at import time in Python 3.
+Fixed to `except (ValueError, UnicodeDecodeError):` in commit `fix(benchmark): correct Python 3
+exception syntax in phase_3_benchmark` before the benchmark was re-run.
+
 ## Git Bash commands
 
 Services: PostgreSQL with migration `20260927_0007`, Ollama with existing BGE-M3, and FastAPI with
@@ -56,7 +63,7 @@ export RETRIEVAL_FUSION_LIMIT=30
 uv run --directory backend python -m uvicorn galaxy_frog.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-Benchmark terminal:
+Benchmark terminal — run metric tests first, then the live benchmark:
 
 ```bash
 cd '/e/Projects/Galaxy Frog Root/galaxy-frog'
@@ -77,9 +84,21 @@ that is a new dataset version, not the same frozen run.
 
 ## Remaining acceptance
 
+- Run `bun run test:benchmark` (7 metric tests). Requires the Python 3 exception-syntax fix above.
+- Run `bun run check`: contracts:check, lint, format:check, typecheck, 668 backend tests (14 opt-in
+  skips), 100% statement/branch coverage, 33 frontend tests, and production build.
+- Run PostgreSQL integration tests:
+  `uv run --directory backend python -m pytest backend/tests/integration/ -v`
+  (10 tests: lexical, trace storage, ingestion regression, cross-video isolation, cascade cleanup).
 - Complete strict 30/20 comparisons and report quality, latency, memory, failures, and limitations.
+  Compare success/failure counts before averages. Caption-video results are the primary budget
+  comparison; the 7-unit ASR sample cannot distinguish those budgets.
 - Verify question generation and original citation grounding with the shared retrieval path.
 - Verify explicit provider fallback and unresolved/ambiguous anchors without generation.
 - Complete manual visual/player-seeking checks in `p3-6-verification.md`.
-- Run the complete quality gate, PostgreSQL/native integrations, pre-commit, and final contract/build
-  checks. Keep local completion distinct from hosted CI and merge.
+- Run `uv run --directory backend python -m pre_commit run --all-files`.
+- Keep local completion distinct from hosted CI and merge.
+
+## Measured results
+
+Results to be recorded here after the benchmark runs complete.
