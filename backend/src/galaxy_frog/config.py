@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     asr_max_concurrency: int = Field(default=1, ge=1, le=4)
     reranker_python: Path | None = None
     reranker_timeout_seconds: float = Field(default=120, gt=0, le=600)
+    retrieval_fusion_limit: int = Field(default=30, ge=1, le=30)
 
     @field_validator("reranker_python")
     @classmethod

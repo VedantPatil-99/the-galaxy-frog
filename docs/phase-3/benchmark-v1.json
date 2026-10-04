@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "frozen_at": "2026-09-28",
+  "label_method": "Transcript-derived interval labels chosen before benchmark scoring; all original units overlapping each labeled answer interval are relevant. These are acceptance labels, not independently judged exhaustive relevance.",
+  "videos": [
+    {
+      "video_id": "a982b566-e047-4a2e-a4c4-8d93ad84f1c0",
+      "source_url": "https://www.youtube.com/watch?v=eMlx5fFNoYc",
+      "origin": "caption",
+      "transcript_sha256": "12e130f1b27eb4355f7602b27503281a1f94e132fc94e001539226f7f0391eb5",
+      "unit_count": 38,
+      "cue_count": 423
+    },
+    {
+      "video_id": "f9105498-3906-43f8-9f9c-399c4c638472",
+      "source_url": "https://www.youtube.com/watch?v=_TJ61eCWQvQ",
+      "origin": "asr",
+      "transcript_sha256": "a9146bbefe7ec7f6b12ad29e8236821bc430afc2a2e6d4627275ee7d58f0f8f8",
+      "unit_count": 7,
+      "cue_count": 59
+    }
+  ],
+  "cases": [
+    {
+      "id": "caption-paper",
+      "video_id": "a982b566-e047-4a2e-a4c4-8d93ad84f1c0",
+      "origin": "caption",
+      "kind": "exact",
+      "baseline_query": "\"Attention is All You Need\"",
+      "query": "\"Attention is All You Need\"",
+      "gold_intervals_ms": [
+        [
+          10980,
+          15520
+        ]
+      ],
+      "gold_unit_ids": [
+        "168a3f2c8d9fea0f21fb9467a3290878e3910ee414af8e1a35528405a9706b89"
+      ]
+    },
+    {
+      "id": "caption-eiffel",
+      "video_id": "a982b566-e047-4a2e-a4c4-8d93ad84f1c0",
+      "origin": "caption",
+      "kind": "name",
+      "baseline_query": "How does mentioning the Paris landmark refine the meaning of tower?",
+      "query": "How does mentioning the Paris landmark refine the meaning of tower?",
+      "gold_intervals_ms": [
+        [
+          184020,
+          199000
+        ]
+      ],
+      "gold_unit_ids": [
+        "5f2c9c49698c8518553bea45c1e122dcdff62ed81560f84c69b14b74368fd5f1"
+      ]
+    },
+    {
+      "id": "caption-scaling",
+      "video_id": "a982b566-e047-4a2e-a4c4-8d93ad84f1c0",
+      "origin": "caption",
+      "kind": "spoken",
+      "baseline_query": "What quantity divides the attention dot products?",
+      "query": "What quantity divides the attention dot products?",
+      "gold_intervals_ms": [
+        [
+          646000,
+          653960
+        ]
+      ],
+      "gold_unit_ids": [
+        "f7f0ec01ffad8475937991a50c1e0e2e5678943d8d1f33fb8f089fe929a426fb"
+      ]
+    },
+    {
+      "id": "caption-mask",
+      "video_id": "a982b566-e047-4a2e-a4c4-8d93ad84f1c0",
+      "origin": "caption",
+      "kind": "paraphrase",
+      "baseline_query": "How does training avoid information leaking backwards from later words?",
+      "query": "How does training avoid information leaking backwards from later words?",
+      "gold_intervals_ms": [
+        [
+          733120,
+          761460
+        ]
+      ],
+      "gold_unit_ids": [
+        "60e7959cd3117b2121fc7eb419ebed7a313e0a1c5e3a1acd3d74d022f975f73d",
+        "12ccd91f1158bee844718e8bc6514efc792edd65c94122bb0c3b3d112bf5eca7"
+      ]
+    },
+    {
+      "id": "asr-present",
+      "video_id": "f9105498-3906-43f8-9f9c-399c4c638472",
+      "origin": "asr",
+      "kind": "exact",
+      "baseline_query": "\"today is a gift\"",
+      "query": "\"today is a gift\"",
+      "gold_intervals_ms": [
+        [
+          24040,
+          31400
+        ]
+      ],
+      "gold_unit_ids": [
+        "a15efa1cd381c037367ef4b8775870048804d06ecf56a3ec48853671a81b6630"
+      ]
+    },
+    {
+      "id": "asr-practice",
+      "video_id": "f9105498-3906-43f8-9f9c-399c4c638472",
+      "origin": "asr",
+      "kind": "paraphrase",
+      "baseline_query": "Why does maintaining a daily habit become less difficult?",
+      "query": "Why does maintaining a daily habit become less difficult?",
+      "gold_intervals_ms": [
+        [
+          106100,
+          119090
+        ]
+      ],
+      "gold_unit_ids": [
+        "3cdbf1598edb20779d024d8f53246e898224b8b77da84ed9f6f56166e524713d"
+      ]
+    },
+    {
+      "id": "asr-control",
+      "video_id": "f9105498-3906-43f8-9f9c-399c4c638472",
+      "origin": "asr",
+      "kind": "spoken",
+      "baseline_query": "What must the panda and his teacher let go of to fulfill their destiny?",
+      "query": "What must the panda and his teacher let go of to fulfill their destiny?",
+      "gold_intervals_ms": [
+        [
+          176060,
+          183760
+        ]
+      ],
+      "gold_unit_ids": [
+        "ddf9ecf9fcb11b2fc0039e8bdb7fd469de6fd52f87eda46f1cb8f38f07e23996",
+        "3172fd91c91ec3ccf27c2fed5c5ac98835319e85f1b980d869e904b4d147d662"
+      ]
+    },
+    {
+      "id": "asr-peach",
+      "video_id": "f9105498-3906-43f8-9f9c-399c4c638472",
+      "origin": "asr",
+      "kind": "exact",
+      "baseline_query": "\"peach tree\"",
+      "query": "\"peach tree\"",
+      "gold_intervals_ms": [
+        [
+          214140,
+          227280
+        ]
+      ],
+      "gold_unit_ids": [
+        "3172fd91c91ec3ccf27c2fed5c5ac98835319e85f1b980d869e904b4d147d662",
+        "c5faba14cfbb400a0c585029b1efc1a3f38f511ed95e6ff4a11520081624d521"
+      ]
+    },
+    {
+      "id": "caption-eiffel-time",
+      "video_id": "a982b566-e047-4a2e-a4c4-8d93ad84f1c0",
+      "origin": "caption",
+      "kind": "timestamp",
+      "baseline_query": "Eiffel tower",
+      "query": "Eiffel tower before 04:00",
+      "gold_intervals_ms": [
+        [
+          184020,
+          199000
+        ]
+      ],
+      "gold_unit_ids": [
+        "5f2c9c49698c8518553bea45c1e122dcdff62ed81560f84c69b14b74368fd5f1"
+      ]
+    },
+    {
+      "id": "caption-match-time",
+      "video_id": "a982b566-e047-4a2e-a4c4-8d93ad84f1c0",
+      "origin": "caption",
+      "kind": "timestamp",
+      "baseline_query": "How are keys matched to queries?",
+      "query": "How are keys matched to queries between 08:00 and 09:00",
+      "gold_intervals_ms": [
+        [
+          492200,
+          514000
+        ]
+      ],
+      "gold_unit_ids": [
+        "9694a67426778cde10d6b93ed5280a33baccb1ec7e45a14c676526e12c56aa06",
+        "f82d0821eaf8f4ce121e28ac0fb98fad8a81f8622d66cc2a9b12796e64e26e76"
+      ]
+    },
+    {
+      "id": "asr-past-time",
+      "video_id": "f9105498-3906-43f8-9f9c-399c4c638472",
+      "origin": "asr",
+      "kind": "timestamp",
+      "baseline_query": "What can someone do when their past hurts?",
+      "query": "What can someone do when their past hurts before 02:00",
+      "gold_intervals_ms": [
+        [
+          92860,
+          103760
+        ]
+      ],
+      "gold_unit_ids": [
+        "3cdbf1598edb20779d024d8f53246e898224b8b77da84ed9f6f56166e524713d"
+      ]
+    },
+    {
+      "id": "asr-peach-time",
+      "video_id": "f9105498-3906-43f8-9f9c-399c4c638472",
+      "origin": "asr",
+      "kind": "timestamp",
+      "baseline_query": "Why can the seed not become an apple or orange tree?",
+      "query": "Why can the seed not become an apple or orange tree after 03:00",
+      "gold_intervals_ms": [
+        [
+          214140,
+          227280
+        ]
+      ],
+      "gold_unit_ids": [
+        "3172fd91c91ec3ccf27c2fed5c5ac98835319e85f1b980d869e904b4d147d662",
+        "c5faba14cfbb400a0c585029b1efc1a3f38f511ed95e6ff4a11520081624d521"
+      ]
+    }
+  ]
+}
