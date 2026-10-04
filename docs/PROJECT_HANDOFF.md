@@ -27,6 +27,7 @@ evidence and produce timestamp-grounded answers.
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
 - Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.5 locally verified, CI/merge pending
+- P3.6 — Evidence UI implemented; automated/live HTTP checks pass, manual browser acceptance pending
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -179,6 +180,22 @@ fresh-session reads, foreign-video rejection, size/version constraints, and casc
 See [P3.5 verification](phase-3/p3-5-verification.md) for exact Git Bash procedures. The next packet is
 P3.6 presentation-only evidence/anchor/trace controls using regenerated contracts. Hosted CI/merge,
 live browser acceptance, and real-model quality/coexistence remain pending.
+
+### P3.6 evidence UI — 2026-09-28
+
+Branch `feat/retrieval-evidence-ui` adds retrieval-only mode, server-validated anchor submission,
+merged versus original intervals, caption/ASR provenance, separate ranking scores, warnings,
+trace inspection, and existing player-seek integration. FastAPI remains the sole retrieval owner.
+The full gate passes: 33 frontend tests, 664 backend tests, 14 opt-in skips, 100% statement/branch
+coverage, contracts, lint/types, and production build. Pre-commit also passes. Three blocked Windows
+web CLI shims now run through Bun's installed JavaScript entrypoints.
+
+Live lexical search/trace reads through the proxy and real hybrid semantic-anchor selection pass.
+A scoped CUDA request passed, but two broad strict requests hit the 120-second deadline. Preserve
+those results for P3.7; do not claim reliable broad reranking or quality improvement yet.
+The browser automation sandbox cannot initialize, so manual visual/seek acceptance remains open.
+See [P3.6 verification and manual steps](phase-3/p3-6-verification.md). No PR created; CI/merge remain
+pending. P3.7 benchmark and full live exit gate are still outstanding.
 
 ### Historical checkpoint records
 

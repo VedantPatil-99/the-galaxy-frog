@@ -14,8 +14,11 @@ Temporal retrieval now resolves timestamps and named events, requires selection 
 suggestions, and expands evidence while preserving original cue/ASR lineage and bounded context.
 Search and questions now share retrieval and durable video-scoped traces. Questions wait for
 ambiguous/implied event selection before generation. Apply migration `20260927_0007` before use.
-Hosted CI and merge remain pending; the evidence/anchor browser controls arrive in P3.6.
-See [the latest API verification procedure](docs/phase-3/p3-5-verification.md).
+P3.6 adds retrieval-only mode, evidence/ranking inspection, anchor selection, warnings, and saved
+traces. Automated checks pass; manual browser/seek acceptance remains pending because the browser
+automation sandbox cannot start. Broad live reranker requests have also reached the 120-second
+deadline; the exit gate must measure this before claiming full-mode reliability or quality gains.
+Hosted CI and merge remain pending. See [P3.6 verification](docs/phase-3/p3-6-verification.md).
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
