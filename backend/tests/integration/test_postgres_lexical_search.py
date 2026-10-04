@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Callable
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from runpy import run_path
@@ -13,15 +14,24 @@ from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from galaxy_frog.api.app import create_app
 from galaxy_frog.application.retrieval.temporal import RetrieveTemporalEvidence
 from galaxy_frog.application.retrieval.text import RetrieveTranscript
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
-from galaxy_frog.db.models import EmbeddingCollectionRow, RetrievalUnitRow, VideoRow
+from galaxy_frog.db.models import (
+    EmbeddingCollectionRow,
+    RetrievalTraceRow,
+    RetrievalUnitRow,
+    VideoRow,
+)
+from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
 from galaxy_frog.db.transcript_lexical_search import PostgresTranscriptLexicalSearch
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
@@ -220,6 +230,59 @@ class FixtureEmbeddings:
             else (0.0, 1.0, *([0.0] * 1022))
             for text in texts
         )
+
+
+@pytest.mark.asyncio
+async def test_search_http_persists_traces_across_sessions_and_enforces_database_bounds() -> None:
+    engine = create_database_engine(Settings())
+    video_ids: list[UUID] = []
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            video_id, unit_ids = await _seed(session, ("quokka exact name",))
+            video_ids.append(video_id)
+        app = create_app()
+        app.state.database_engine = engine
+        app.state.embedding_provider_factory = FixtureEmbeddings
+
+        def forbidden_generator() -> None:
+            raise AssertionError("retrieval-only called generation")
+
+        app.state.generation_provider_factory = forbidden_generator
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                f"/v1/videos/{video_id}/search",
+                json={"query": "quokka", "mode": "lexical", "allow_fallback": False},
+            )
+            assert response.status_code == 200
+            trace_id = UUID(response.json()["trace_id"])
+            trace = await client.get(f"/v1/videos/{video_id}/retrieval-traces/{trace_id}")
+            assert trace.status_code == 200 and trace.json()["payload"]["status"] == "resolved"
+            foreign = await client.get(f"/v1/videos/{uuid4()}/retrieval-traces/{trace_id}")
+            assert foreign.status_code == 404
+        async with AsyncSession(engine) as session:
+            saved = await PostgresRetrievalTraces(session).get(video_id, trace_id)
+            assert saved is not None and unit_ids[0] in str(saved.payload)
+            for version, payload in ((2, {}), (1, {"x": "x" * 262144})):
+                with pytest.raises(IntegrityError):
+                    async with session.begin_nested():
+                        session.add(
+                            RetrievalTraceRow(
+                                id=uuid4(),
+                                video_id=video_id,
+                                version=version,
+                                created_at=datetime.now(UTC),
+                                payload=payload,
+                            )
+                        )
+                        await session.flush()
+            await session.execute(delete(VideoRow).where(VideoRow.id == video_id))
+            await session.commit()
+            assert await PostgresRetrievalTraces(session).get(video_id, trace_id) is None
+    finally:
+        async with AsyncSession(engine) as cleanup:
+            await cleanup.execute(delete(VideoRow).where(VideoRow.id.in_(video_ids)))
+            await cleanup.commit()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

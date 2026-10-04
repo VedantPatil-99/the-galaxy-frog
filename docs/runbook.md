@@ -505,7 +505,18 @@ Follow [P3.4 verification](phase-3/p3-4-verification.md) for the supported times
 observable boundary/context warnings, and repeatable Git Bash commands. Database acceptance needs
 only the existing PostgreSQL/pgvector service and deterministic fixture embeddings. It adds no
 migration, machine installation, or model download. Search/anchor browser controls arrive with the
-API/UI packets; the current question endpoint retains its earlier behavior until P3.5.
+UI packet. P3.5 now connects this retrieval behavior to the question/search endpoints.
+
+## Traced search API verification (P3.5)
+
+Apply revision `20260927_0007` before running search/questions. It adds bounded video-scoped trace
+rows; it does not change transcript or ingestion identities. See
+[P3.5 verification](phase-3/p3-5-verification.md) for migration, provider environment, HTTP examples,
+and database tests. Lexical search needs only PostgreSQL and FastAPI. Hybrid retrieval adds Ollama
+with BGE-M3; full reranking adds the already provisioned Python/model; questions add the existing
+generation model. Retrieval-only requests never call generation. Search/questions through the proxy
+have a five-minute timeout; provider deadlines still apply. Trace rows have a 256 KiB record limit
+and remain until explicit cleanup or their parent video's deletion.
 
 ## Deployment boundary
 

@@ -169,17 +169,20 @@ export async function proxyRequest(
     throw error
   }
 
-  const isLongRunningPhaseOneRequest =
+  const isVideoPost =
     request.method === "POST" &&
     path[0] === "v1" &&
-    path[1] === "videos" &&
-    (path[2] === "import" || path[3] === "questions")
+    path[1] === "videos"
+  const isRetrievalRequest = isVideoPost &&
+    (path[3] === "search" || path[3] === "questions")
+  const timeoutMs = isRetrievalRequest ? 300_000 :
+    isVideoPost && path[2] === "import" ? 120_000 : 10_000
   const init: StreamingRequestInit = {
     method: request.method,
     headers: forwardedRequestHeaders(request),
     cache: "no-store",
     redirect: "manual",
-    signal: AbortSignal.timeout(isLongRunningPhaseOneRequest ? 120_000 : 10_000),
+    signal: AbortSignal.timeout(timeoutMs),
   }
 
   if (!METHODS_WITHOUT_BODY.has(request.method) && request.body !== null) {

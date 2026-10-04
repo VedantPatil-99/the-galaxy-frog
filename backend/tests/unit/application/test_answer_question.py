@@ -164,9 +164,24 @@ async def test_rejects_evidence_owned_by_another_video() -> None:
 
 def test_validator_rejects_a_draft_without_usable_citations() -> None:
     item = evidence()
+    with pytest.raises(CitationValidationError, match="requested video"):
+        AnswerQuestion._validate(
+            uuid4(), GenerationDraft("Draft", AnswerConfidence.LOW, ()), (item,)
+        )
     with pytest.raises(CitationValidationError, match="usable citations"):
         AnswerQuestion._validate(
             item.video_id,
             GenerationDraft("Draft", AnswerConfidence.LOW, ()),
             (item,),
         )
+
+
+@pytest.mark.asyncio
+async def test_pre_retrieved_answer_requires_valid_question_and_explicit_execution() -> None:
+    service = AnswerQuestion(
+        provider=FakeGenerator(GenerationDraft("unused", AnswerConfidence.LOW, ()))
+    )
+    with pytest.raises(ValueError, match="search adapter"):
+        await service.execute(uuid4(), "query")
+    with pytest.raises(ValueError, match="empty"):
+        await service.execute_with_evidence(uuid4(), " ", ())

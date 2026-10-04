@@ -368,7 +368,7 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
 
 ## Active plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **P3.1–P3.4 locally complete; P3.5 is next**.
+Status: **P3.1–P3.5 locally complete; P3.6 is next**.
 Hosted CI/merge remain pending. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
@@ -388,7 +388,7 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
   and named-event anchors. Show up to five distinct anchor choices when ambiguous and validate the
   chosen source interval server-side. Expand by 15 seconds each way, merge overlaps/gaps under five
   seconds, deduplicate cues, bound context, and return at most eight diverse groups.
-- [ ] P3.5 — Traces/API (`feat/retrieval-traces-api`). Persist bounded, versioned traces; add
+- [x] P3.5 — Traces/API (`feat/retrieval-traces-api`). Persist bounded, versioned traces; add
   `POST /v1/videos/{video_id}/search` and a video-scoped trace-read endpoint. Share retrieval with
   questions; preserve answer/citation fields and add retrieval metadata plus anchor-selection status.
   Regenerate OpenAPI and frontend types. Retrieval-only execution never invokes generation.
@@ -488,6 +488,28 @@ passes with 646 backend tests, 13 opt-in skips, 100% statement/branch coverage, 
 generated contracts, lint/format/types, and production build. No migration or provider dependency
 was added. See [P3.4 verification](docs/phase-3/p3-4-verification.md). HTTP wiring and durable traces
 remain P3.5; hosted CI/merge and the real-model quality benchmark remain separate gates.
+
+### P3.5 local acceptance — 2026-09-28
+
+`feat/retrieval-traces-api` stacks on P3.4 `97a3a0b`. Revision `20260927_0007` adds video-scoped
+retrieval traces with version and 256 KiB limits enforced by Python and PostgreSQL. Search and
+questions use the same traced temporal retrieval service. Completed, degraded, anchor-selection,
+and known provider/integrity failures persist configuration, declared providers, rankings, timing,
+fallback reasons, selected anchors, and original evidence lineage. Stage/group trace copies omit
+transcript text; oversized records fail explicitly rather than silently losing lineage.
+
+`POST /v1/videos/{video_id}/search` and `GET /v1/videos/{video_id}/retrieval-traces/{trace_id}`
+are available. Search and question requests support mode, limit, selected anchor, and explicit
+fallback control. Questions retain answer/citation fields and add retrieval metadata/status;
+unresolved anchors return no answer and never construct a generator. Citation validation still
+resolves original units and rejects quotes outside overlapping cues for constrained queries.
+The app shares one reranker instance; the thin proxy permits five minutes for search/questions.
+
+Full quality gate passes with 664 backend tests, 14 opt-in skips, 100% statement/branch coverage,
+27 frontend tests, generated contracts, lint/types, and production build. Ten PostgreSQL integration
+checks pass, including HTTP-to-database trace persistence, new-session reads, cross-video isolation,
+database size/version constraints, and cascade cleanup. See [P3.5 verification](docs/phase-3/p3-5-verification.md).
+Provider-quality and browser acceptance remain later packet gates. Hosted CI/merge remain pending.
 
 ### Services, delivery, and non-goals
 

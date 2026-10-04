@@ -7,6 +7,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field, HttpUrl
 
 from galaxy_frog.api.job_schemas import IngestionJobResponse
+from galaxy_frog.api.retrieval_schemas import RetrievalOptions, SearchResponse
+from galaxy_frog.application.retrieval.temporal import RetrievalStatus
 
 
 class ImportVideoRequest(BaseModel):
@@ -96,7 +98,7 @@ class TranscriptResponse(BaseModel):
     transcription: TranscriptionRunResponse | None
 
 
-class QuestionRequest(BaseModel):
+class QuestionRequest(RetrievalOptions):
     """A non-empty transcript question."""
 
     question: str = Field(min_length=1, max_length=2000)
@@ -122,3 +124,5 @@ class AnswerResponse(BaseModel):
     evidence: list[EvidenceResponse]
     warnings: list[str]
     degraded_mode: bool
+    retrieval_status: RetrievalStatus = RetrievalStatus.RESOLVED
+    retrieval: SearchResponse | None = None
