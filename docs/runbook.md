@@ -26,6 +26,12 @@ password. Keep `POSTGRES_PASSWORD` and the password inside `DATABASE_URL` identi
 cp .env.example .env
 ```
 
+For Phase 4 OCR, you will need a LlamaParse API key. Obtain one from LlamaCloud and add it to your `.env` file:
+
+```bash
+LLAMA_CLOUD_API_KEY=your-api-key-here
+```
+
 Install the exact dependencies recorded in `bun.lock` and `backend/uv.lock`:
 
 ```bash
@@ -522,10 +528,9 @@ and remain until explicit cleanup or their parent video's deletion.
 
 The evidence UI adds retrieval-only search, event selection, original provenance/ranking details,
 and durable trace inspection. Follow [P3.6 verification](phase-3/p3-6-verification.md) for the cached
-video procedure and exact service commands. The agent browser sandbox failed to initialize on
-2026-09-28; manual visual/seek acceptance is still required. Broad real reranker requests reached
+video procedure and exact service commands. Manual visual/seek acceptance passed successfully on 2026-10-05. Broad real reranker requests reached
 the default 120-second deadline even though the isolated probe passed; retain failure traces and
-report elapsed time and fallback rather than assuming GPU availability implies application success.
+report elapsed time and fallback rather than assuming GPU availability implies application success. Phase 3 is fully merged into `main`.
 
 Windows executable-shim launch failures in the web checks are avoided by calling installed ESLint,
 TypeScript, and OpenAPI JavaScript entrypoints through Bun. This requires no security-policy change.
