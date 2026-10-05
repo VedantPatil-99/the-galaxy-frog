@@ -366,10 +366,9 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
   profiles, cloud-consent controls, live pricing configuration, and AWS deployment. P2.8 may display
   the provider decision that actually ran; Phase 8 owns changing that policy from the UI.
 
-## Active plan: Phase 3 — Hybrid text retrieval and reranking
+## Completed plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **P3.1–P3.7 locally complete; manual browser acceptance and pre-commit remain open**.
-Hosted CI/merge remain pending. Duration target: 5–7 focused days.
+Status: **complete and merged**. PR #18 is merged into `main` at `55591a0` with passing hosted CI. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
 ### Approved work packets
@@ -395,13 +394,12 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
 - [x] P3.6 — Evidence UI (`feat/retrieval-evidence-ui`). Present retrieval-only results, rankings,
   anchor choices, merged intervals, original evidence, visible fallback, and citation seeking through
   generated contracts and the existing proxy.
-  Implementation, automated quality gates, and live proxy/anchor checks pass. Browser automation is
-  blocked by its Windows sandbox; manual visual/seek acceptance remains open.
+  Implementation, automated quality gates, and live proxy/anchor checks passed. Manual visual/seek acceptance passed successfully.
 - [x] P3.7 — Exit gate (`test/phase-3-exit-gate`). Compare dense-only, fused, reranked, and temporal
   retrieval on a frozen caption/ASR set; report Recall@5, MRR@10, temporal overlap, latency, and memory.
   Complete full quality, database, live provider, smoke, browser, and documentation gates.
-  Frozen 12-case benchmark at LIMIT=30 and LIMIT=20 complete; pre-commit and manual browser acceptance
-  remain open. See [P3.7 procedure and results](docs/phase-3/p3-7-verification.md).
+  Frozen 12-case benchmark at LIMIT=30 complete. Pre-commit and manual browser acceptance
+  passed. See [P3.7 procedure and results](docs/phase-3/p3-7-verification.md).
 
 ### Invariants and fallback policy
 
@@ -609,3 +607,19 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
   yt-dlp EJS plus Node 22 challenge execution, CUDA `small` ASR, browser-rendered exact evidence,
   grounded citations, and duplicate-free live smoke. Keep Phase 2 marked unmerged until the stacked
   pull-request and GitHub Actions path reaches `main`; no Phase 3 capability is included.
+
+## Active plan: Phase 4 — Scene and OCR pipeline
+
+Status: **Planning complete. Starting implementation.**
+
+Duration: 7–10 days.
+
+### Approved work packets
+
+- P4.1 — Vision Pipeline Foundation: Define provider-independent `VisionProvider` and `OCRProvider` interfaces.
+- P4.2 — Scene detection: Add PySceneDetect (or similar) adapter and periodic frame sampling.
+- P4.3 — Frame Deduplication: Implement perceptual hashing (ImageHash) and deduplication.
+- P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
+- P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
+- P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
+- P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.

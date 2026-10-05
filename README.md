@@ -4,21 +4,9 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phases 0–2 are complete and merged. Phase 2 PRs #4–#10 and the caption-control-event fix in
-PR #11 are included in `main` at `3566a01`; all three hosted CI jobs passed on that merge.
-Phase 3 — Hybrid text retrieval and reranking — is approved. P3.1–P3.5 are locally verified:
-PostgreSQL FTS and a shared lexical/dense retrieval service with deterministic fusion and explicit
-embedding fallback pass the full quality gate. The pinned CUDA reranker also passes native execution,
-truncation, and timeout checks. Its process isolation releases VRAM but adds model-loading latency.
-Temporal retrieval now resolves timestamps and named events, requires selection for semantic anchor
-suggestions, and expands evidence while preserving original cue/ASR lineage and bounded context.
-Search and questions now share retrieval and durable video-scoped traces. Questions wait for
-ambiguous/implied event selection before generation. Apply migration `20260927_0007` before use.
-P3.6 adds retrieval-only mode, evidence/ranking inspection, anchor selection, warnings, and saved
-traces. Automated checks pass; manual browser/seek acceptance remains pending because the browser
-automation sandbox cannot start. Broad live reranker requests have also reached the 120-second
-deadline; the exit gate must measure this before claiming full-mode reliability or quality gains.
-Hosted CI and merge remain pending. See [P3.6 verification](docs/phase-3/p3-6-verification.md).
+Phases 0–3 are complete and merged. Phase 3 PR #18 is included in `main` at `55591a0`; all hosted CI jobs passed on that merge. Phase 3 added PostgreSQL FTS and a shared lexical/dense retrieval service with deterministic fusion, explicit embedding fallback, temporal constraint parsing, and video-scoped traces. The local CUDA reranker was proven but its broad timing profile is deferred to later benchmarking; retrieval now defaults to reranked mode with strict fallback. Search and questions share the exact trace, with question generation pausing for explicit user selection on ambiguous/implied anchors. The full suite, manual HTTP/database/browser checks, browser automation, and PR #18 CI all passed.
+
+Phase 4 — Scene and OCR pipeline — is approved and starting. P4.1–P4.3 will introduce the vision pipeline foundation (scene detection, hashing, and deduplication). P4.4 will introduce LlamaParse Cloud as the OCR adapter, bypassing local PaddleOCR Python 3.14 compatibility issues while retaining the FastAPI architecture boundary and `OCRProvider` interface.
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are

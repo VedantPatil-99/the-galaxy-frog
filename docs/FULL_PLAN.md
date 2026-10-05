@@ -941,8 +941,8 @@ Duration: 7–10 days.
 - Sample scene boundaries plus periodic frames.
 - Calculate perceptual hashes.
 - Deduplicate frames.
-- Integrate PaddleOCR/PP-OCRv5.
-- Store OCR text, boxes and confidence.
+- Integrate LlamaParse Cloud for OCR (bypassing PaddleOCR Python 3.14 limitations).
+- Store OCR text, bounding boxes, and confidence.
 - Associate OCR blocks with temporal scenes.
 - Add OCR FTS and embeddings.
 - Add OCR-specific query routing.
