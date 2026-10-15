@@ -21,13 +21,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  applicationName: "Galaxy Frog",
   title: {
     default: "Galaxy Frog",
     template: "%s | Galaxy Frog",
   },
   description:
     "Temporal multimodal retrieval for timestamp-grounded video answers.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Galaxy Frog",
+  },
 };
+
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
