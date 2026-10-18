@@ -610,16 +610,33 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
 
 ## Active plan: Phase 4 — Scene and OCR pipeline
 
-Status: **Planning complete. Starting implementation.**
+Status: **In progress (P4.1, P4.2 complete).**
 
 Duration: 7–10 days.
 
 ### Approved work packets
 
-- P4.1 — Vision Pipeline Foundation: Define provider-independent `VisionProvider` and `OCRProvider` interfaces.
-- P4.2 — Scene detection: Add PySceneDetect (or similar) adapter and periodic frame sampling.
-- P4.3 — Frame Deduplication: Implement perceptual hashing (ImageHash) and deduplication.
-- P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
-- P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
-- P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
-- P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
+- [x] P4.1 — Vision Pipeline Foundation: Define provider-independent `VisionProvider` and `OCRProvider` interfaces.
+- [x] P4.2 — Scene detection: Add PySceneDetect adapter and periodic frame sampling.
+- [ ] P4.3 — Frame Deduplication: Implement perceptual hashing (ImageHash) and deduplication.
+- [ ] P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
+- [ ] P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
+- [ ] P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
+- [ ] P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
+
+### P4.1 local acceptance — 2026-10-18
+
+`feat/scene-and-ocr-pipeline` commit `79a4583` establishes the pure-Python vision domain models and provider protocols under `galaxy_frog.domain.vision`.
+- Models: `FrameSample`, `FrameSource`, `SceneBoundary`, `SceneDetectionResult`, `PerceptualHash`, `DeduplicatedFrameSet`, `OCRProviderSpec`, `OCRBlock`, `OCRExtractionRequest`, `OCRExtractionResult`.
+- Protocols: `SceneDetector` and `OCRProvider` (`@runtime_checkable`).
+- Complete validation: half-open millisecond intervals, strict confidence ranges, UTC timestamps, hex perceptual hashes, contiguous non-empty invariant checks.
+- 100% statement and branch coverage with zero framework or I/O dependencies.
+
+### P4.2 local acceptance — 2026-10-18
+
+`feat/scene-and-ocr-pipeline` commit `1886852` implements `PySceneDetectAdapter` under `galaxy_frog.adapters.vision.scene_detect`.
+- PySceneDetect `AdaptiveDetector` identifies visual cuts; OpenCV extracts JPEG frame samples at boundary starts and periodic intervals (default 10s).
+- Execution runs synchronously in thread workers via `asyncio.to_thread` to prevent event-loop blocking.
+- Contiguous sequence indices, absolute frame output paths, and single-pass coupled boundary detection + frame extraction.
+- 98 unit tests passing across vision domain and adapters; 100% statement and branch coverage maintained across all 4,588 backend statements.
+
