@@ -1,9 +1,12 @@
-"""Application-facing protocols for scene detection and OCR extraction."""
+"""Application-facing protocols for scene detection, frame deduplication, and OCR extraction."""
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from galaxy_frog.domain.vision.models import (
+    DeduplicatedFrameSet,
+    FrameSample,
     OCRExtractionRequest,
     OCRExtractionResult,
     OCRProviderSpec,
@@ -21,6 +24,16 @@ class SceneDetector(Protocol):
         video_id: object,
         duration_ms: int,
     ) -> SceneDetectionResult: ...
+
+
+@runtime_checkable
+class FrameDeduplicator(Protocol):
+    """Filter sampled frames by perceptual hash to drop near-identical frames."""
+
+    async def deduplicate(
+        self,
+        frames: Sequence[FrameSample],
+    ) -> DeduplicatedFrameSet: ...
 
 
 @runtime_checkable
