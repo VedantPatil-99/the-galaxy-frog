@@ -95,6 +95,9 @@ class FrameSample:
         if not self.path.is_absolute():
             msg = "path must be absolute"
             raise ValueError(msg)
+        if not isinstance(self.source, FrameSource):  # pyright: ignore[reportUnnecessaryIsInstance]
+            msg = "source must be a FrameSource member"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,7 +217,9 @@ class OCRBlock:
         if self.source_frame_sequence < 0:
             msg = "source_frame_sequence must be non-negative"
             raise ValueError(msg)
-
+        if not isinstance(self.provider_spec, OCRProviderSpec):  # pyright: ignore[reportUnnecessaryIsInstance]
+            msg = "provider_spec must be an OCRProviderSpec"
+            raise ValueError(msg)
         _require_optional_score(self.confidence, self.confidence_method, field_name="confidence")
 
 
@@ -225,6 +230,11 @@ class OCRExtractionRequest:
     job_id: UUID
     video_id: UUID
     frame: FrameSample
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.frame, FrameSample):  # pyright: ignore[reportUnnecessaryIsInstance]
+            msg = "frame must be a FrameSample"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,3 +248,9 @@ class OCRExtractionResult:
 
     def __post_init__(self) -> None:
         _require_aware(self.extracted_at, "extracted_at")
+        if not isinstance(self.request, OCRExtractionRequest):  # pyright: ignore[reportUnnecessaryIsInstance]
+            msg = "request must be an OCRExtractionRequest"
+            raise ValueError(msg)
+        if not isinstance(self.provider_spec, OCRProviderSpec):  # pyright: ignore[reportUnnecessaryIsInstance]
+            msg = "provider_spec must be an OCRProviderSpec"
+            raise ValueError(msg)
