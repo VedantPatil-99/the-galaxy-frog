@@ -15,6 +15,7 @@ from galaxy_frog.domain.vision.models import (
     OCRExtractionResult,
     OCRProviderSpec,
     PerceptualHash,
+    RetrievedOCREvidence,
     SceneBoundary,
     SceneDetectionResult,
 )
@@ -576,3 +577,99 @@ class TestProtocolStructure:
                 raise NotImplementedError  # pragma: no cover
 
         assert isinstance(GoodDetector(), SceneDetector)
+
+
+# ---------------------------------------------------------------------------
+# RetrievedOCREvidence
+# ---------------------------------------------------------------------------
+
+
+class TestRetrievedOCREvidence:
+    def test_valid_without_image_path(self) -> None:
+        block = OCRBlock(
+            text="Hello world",
+            start_ms=0,
+            end_ms=1000,
+            source_frame_sequence=0,
+            provider_spec=_SPEC,
+        )
+        vid = uuid4()
+        bid = uuid4()
+        fid = uuid4()
+        evidence = RetrievedOCREvidence(
+            video_id=vid,
+            block_id=bid,
+            frame_id=fid,
+            block=block,
+            score=0.85,
+        )
+        assert evidence.video_id == vid
+        assert evidence.block_id == bid
+        assert evidence.frame_id == fid
+        assert evidence.block == block
+        assert evidence.score == 0.85
+        assert evidence.image_path is None
+
+    def test_valid_with_image_path(self) -> None:
+        block = OCRBlock(
+            text="Hello world",
+            start_ms=0,
+            end_ms=1000,
+            source_frame_sequence=0,
+            provider_spec=_SPEC,
+        )
+        evidence = RetrievedOCREvidence(
+            video_id=uuid4(),
+            block_id=uuid4(),
+            frame_id=uuid4(),
+            block=block,
+            score=1.0,
+            image_path=_ABS_PATH,
+        )
+        assert evidence.image_path == _ABS_PATH
+
+    @pytest.mark.parametrize("bad_score", [-0.1, 1.1, float("nan"), float("inf")])
+    def test_invalid_score_rejected(self, bad_score: float) -> None:
+        block = OCRBlock(
+            text="Hello world",
+            start_ms=0,
+            end_ms=1000,
+            source_frame_sequence=0,
+            provider_spec=_SPEC,
+        )
+        with pytest.raises(ValueError, match="retrieval score must be finite"):
+            RetrievedOCREvidence(
+                video_id=uuid4(),
+                block_id=uuid4(),
+                frame_id=uuid4(),
+                block=block,
+                score=bad_score,
+            )
+
+    def test_invalid_block_type_rejected(self) -> None:
+        with pytest.raises(ValueError, match="block must be an OCRBlock"):
+            RetrievedOCREvidence(
+                video_id=uuid4(),
+                block_id=uuid4(),
+                frame_id=uuid4(),
+                block="not a block",  # pyright: ignore[reportArgumentType]
+                score=0.5,
+            )
+
+    def test_relative_image_path_rejected(self) -> None:
+        block = OCRBlock(
+            text="Hello world",
+            start_ms=0,
+            end_ms=1000,
+            source_frame_sequence=0,
+            provider_spec=_SPEC,
+        )
+        with pytest.raises(ValueError, match="image_path must be absolute"):
+            RetrievedOCREvidence(
+                video_id=uuid4(),
+                block_id=uuid4(),
+                frame_id=uuid4(),
+                block=block,
+                score=0.5,
+                image_path=Path("relative/path.jpg"),
+            )

@@ -325,3 +325,96 @@ class TranscriptionRunCueRow(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float)
     confidence_method: Mapped[str | None] = mapped_column(String(64))
+
+
+class SceneRow(Base):
+    __tablename__ = "scenes"
+    __table_args__ = (
+        UniqueConstraint("video_id", "scene_order", name="uq_scenes_video_order"),
+        CheckConstraint("scene_order >= 0", name="ck_scenes_order_nonnegative"),
+        CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_scenes_interval"),
+        CheckConstraint("score >= 0.0 AND score <= 1.0", name="ck_scenes_score"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    video_id: Mapped[UUID] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), index=True)
+    scene_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    detector: Mapped[str] = mapped_column(String(64), nullable=False)
+    detector_revision: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class VideoFrameRow(Base):
+    __tablename__ = "video_frames"
+    __table_args__ = (
+        UniqueConstraint("video_id", "sequence", name="uq_video_frames_video_sequence"),
+        CheckConstraint("sequence >= 0", name="ck_video_frames_sequence_nonnegative"),
+        CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_video_frames_interval"),
+        CheckConstraint("source IN ('scene_boundary', 'periodic')", name="ck_video_frames_source"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    video_id: Mapped[UUID] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), index=True)
+    scene_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    dhash: Mapped[str | None] = mapped_column(String(64))
+    is_duplicate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    image_path: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class OCRBlockRow(Base):
+    __tablename__ = "ocr_blocks"
+    __table_args__ = (
+        CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_ocr_blocks_interval"),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="ck_ocr_blocks_confidence",
+        ),
+        CheckConstraint(
+            "(confidence IS NULL AND confidence_method IS NULL) OR "
+            "(confidence IS NOT NULL AND confidence_method IS NOT NULL)",
+            name="ck_ocr_blocks_confidence_method",
+        ),
+        Index("ix_ocr_blocks_search_vector", "search_vector", postgresql_using="gin"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    video_id: Mapped[UUID] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), index=True)
+    frame_id: Mapped[UUID] = mapped_column(
+        ForeignKey("video_frames.id", ondelete="CASCADE"), index=True
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float)
+    confidence_method: Mapped[str | None] = mapped_column(String(64))
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_revision: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('simple'::regconfig, text)", persisted=True),
+        nullable=False,
+    )
+
+
+class OCREmbeddingRow(Base):
+    __tablename__ = "ocr_embeddings"
+
+    block_id: Mapped[UUID] = mapped_column(
+        ForeignKey("ocr_blocks.id", ondelete="CASCADE"), primary_key=True
+    )
+    collection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("embedding_collections.id", ondelete="RESTRICT"), primary_key=True
+    )
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=False)

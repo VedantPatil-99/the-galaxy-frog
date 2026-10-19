@@ -10,6 +10,7 @@ from galaxy_frog.domain.vision.models import (
     OCRExtractionResult,
     OCRProviderSpec,
     PerceptualHash,
+    RetrievedOCREvidence,
     SceneBoundary,
     SceneDetectionResult,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "OCRProvider",
     "OCRProviderSpec",
     "PerceptualHash",
+    "RetrievedOCREvidence",
     "SceneBoundary",
     "SceneDetectionResult",
     "SceneDetector",

@@ -610,7 +610,7 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
 
 ## Active plan: Phase 4 — Scene and OCR pipeline
 
-Status: **In progress (P4.1, P4.2, P4.3, P4.4 complete).**
+Status: **In progress (P4.1, P4.2, P4.3, P4.4, P4.5 complete).**
 
 Duration: 7–10 days.
 
@@ -620,7 +620,7 @@ Duration: 7–10 days.
 - [x] P4.2 — Scene detection: Add PySceneDetect adapter and periodic frame sampling.
 - [x] P4.3 — Frame Deduplication: Implement perceptual hashing (dHash) and deduplication.
 - [x] P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
-- [ ] P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
+- [x] P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
 - [ ] P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
 - [ ] P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
 
@@ -655,6 +655,16 @@ Duration: 7–10 days.
 - Typed configuration: `llama_cloud_api_key`, `llama_cloud_base_url`, `ocr_timeout_seconds`, `ocr_poll_interval_seconds`, `ocr_max_poll_seconds` in `galaxy_frog.config.Settings`.
 - Async REST execution using `httpx`: multipart JPEG frame upload, resilient status polling, and structured JSON parsing into `OCRBlock` records preserving intervals and frame sequence lineage.
 - Full test suite passes (831 passed) with 100% statement and branch coverage across all 4,870 backend statements.
+
+### P4.5 local acceptance — 2026-10-20
+
+`feat/scene-and-ocr-pipeline` adds vision persistence and indexing under `galaxy_frog.db`:
+- Alembic migration `20261020_0008_scene_and_ocr_pipeline.py`: defines `scenes`, `video_frames`, `ocr_blocks` (with computed `search_vector` TSVECTOR and GIN index), and `ocr_embeddings` (with pgvector `Vector(1024)` HNSW cosine index).
+- ORM rows in `galaxy_frog.db.models`: `SceneRow`, `VideoFrameRow`, `OCRBlockRow`, and `OCREmbeddingRow` with full interval, confidence, and foreign key CASCADE/SET NULL constraints.
+- `SqlAlchemyVisionRepository` in `galaxy_frog.db.vision_repository`: atomic and idempotent persistence of scenes, deduplicated frames linked to scenes, and OCR blocks.
+- `PostgresOCRLexicalSearch` and `PgVectorOCRSearch` in `galaxy_frog.db.ocr_search`: video-scoped full-text search (tsvector/tsquery with rank normalization 32) and dense vector search (cosine distance via pgvector), returning typed `RetrievedOCREvidence`.
+- Full test suite passes (870 passed) with 100% statement and branch coverage across all 5,087 backend statements.
+
 
 
 

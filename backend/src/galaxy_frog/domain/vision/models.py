@@ -254,3 +254,26 @@ class OCRExtractionResult:
         if not isinstance(self.provider_spec, OCRProviderSpec):  # pyright: ignore[reportUnnecessaryIsInstance]
             msg = "provider_spec must be an OCRProviderSpec"
             raise ValueError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievedOCREvidence:
+    """One ranked OCR block returned from lexical or dense vector retrieval."""
+
+    video_id: UUID
+    block_id: UUID
+    frame_id: UUID
+    block: OCRBlock
+    score: float
+    image_path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.score) or not 0 <= self.score <= 1:
+            msg = "retrieval score must be finite and between zero and one"
+            raise ValueError(msg)
+        if not isinstance(self.block, OCRBlock):  # pyright: ignore[reportUnnecessaryIsInstance]
+            msg = "block must be an OCRBlock"
+            raise ValueError(msg)
+        if self.image_path is not None and not self.image_path.is_absolute():
+            msg = "image_path must be absolute"
+            raise ValueError(msg)
