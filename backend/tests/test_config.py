@@ -202,3 +202,59 @@ def test_qstash_dispatch_requires_complete_secret_configuration() -> None:
 def test_settings_reject_invalid_qstash_callback_urls(value: str) -> None:
     with pytest.raises(ValidationError, match="QSTASH_CALLBACK_URL"):
         Settings.model_validate({"qstash_callback_url": value})
+
+
+def test_llama_cloud_configuration() -> None:
+    settings = Settings.model_validate(
+        {
+            "llama_cloud_api_key": "llx-test-key",
+            "llama_cloud_base_url": "https://api.cloud.llamaindex.ai/",
+            "ocr_timeout_seconds": 90.0,
+            "ocr_poll_interval_seconds": 2.0,
+            "ocr_max_poll_seconds": 180.0,
+        }
+    )
+    assert settings.llama_cloud_api_key is not None
+    assert settings.llama_cloud_api_key.get_secret_value() == "llx-test-key"
+    assert settings.llama_cloud_base_url == "https://api.cloud.llamaindex.ai"
+    assert settings.ocr_timeout_seconds == 90.0
+    assert settings.ocr_poll_interval_seconds == 2.0
+    assert settings.ocr_max_poll_seconds == 180.0
+
+
+def test_llama_cloud_api_key_empty_normalizes_to_none() -> None:
+    settings = Settings.model_validate({"llama_cloud_api_key": "   "})
+    assert settings.llama_cloud_api_key is None
+
+    settings_none = Settings.model_validate({"llama_cloud_api_key": None})
+    assert settings_none.llama_cloud_api_key is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "api.cloud.llamaindex.ai",
+        "ftp://api.cloud.llamaindex.ai",
+        "https://api.cloud.llamaindex.ai?query=1",
+        "https://api.cloud.llamaindex.ai#fragment",
+    ],
+)
+def test_settings_reject_invalid_llama_cloud_base_urls(url: str) -> None:
+    with pytest.raises(ValidationError, match="LLAMA_CLOUD_BASE_URL"):
+        Settings.model_validate({"llama_cloud_base_url": url})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ocr_timeout_seconds", 0),
+        ("ocr_timeout_seconds", 301),
+        ("ocr_poll_interval_seconds", 0),
+        ("ocr_poll_interval_seconds", 11),
+        ("ocr_max_poll_seconds", 0),
+        ("ocr_max_poll_seconds", 601),
+    ],
+)
+def test_settings_reject_invalid_ocr_timing_bounds(field: str, value: object) -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({field: value})

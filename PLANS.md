@@ -610,7 +610,7 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
 
 ## Active plan: Phase 4 — Scene and OCR pipeline
 
-Status: **In progress (P4.1, P4.2, P4.3 complete).**
+Status: **In progress (P4.1, P4.2, P4.3, P4.4 complete).**
 
 Duration: 7–10 days.
 
@@ -619,7 +619,7 @@ Duration: 7–10 days.
 - [x] P4.1 — Vision Pipeline Foundation: Define provider-independent `VisionProvider` and `OCRProvider` interfaces.
 - [x] P4.2 — Scene detection: Add PySceneDetect adapter and periodic frame sampling.
 - [x] P4.3 — Frame Deduplication: Implement perceptual hashing (dHash) and deduplication.
-- [ ] P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
+- [x] P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
 - [ ] P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
 - [ ] P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
 - [ ] P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
@@ -647,5 +647,14 @@ Duration: 7–10 days.
 - Consecutive frame comparison via Hamming distance with configurable threshold (default 4 bits out of 64).
 - Preserves scene boundary context (`always_keep_scene_boundary=True`), sorts temporally, and rejects cross-video frame mixing.
 - Full test suite passes (789 passed) with 100% statement and branch coverage across all 4,675 backend statements.
+
+### P4.4 local acceptance — 2026-10-20
+
+`feat/scene-and-ocr-pipeline` adds `LlamaParseOCRAdapter` under `galaxy_frog.adapters.vision.llamaparse` fulfilling `OCRProvider`.
+- Domain failure contracts: `VisionProviderError` and `OCRExtractionError` in `galaxy_frog.domain.vision.errors`.
+- Typed configuration: `llama_cloud_api_key`, `llama_cloud_base_url`, `ocr_timeout_seconds`, `ocr_poll_interval_seconds`, `ocr_max_poll_seconds` in `galaxy_frog.config.Settings`.
+- Async REST execution using `httpx`: multipart JPEG frame upload, resilient status polling, and structured JSON parsing into `OCRBlock` records preserving intervals and frame sequence lineage.
+- Full test suite passes (831 passed) with 100% statement and branch coverage across all 4,870 backend statements.
+
 
 

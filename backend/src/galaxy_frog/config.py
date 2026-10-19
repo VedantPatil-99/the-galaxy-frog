@@ -54,6 +54,34 @@ class Settings(BaseSettings):
     reranker_python: Path | None = None
     reranker_timeout_seconds: float = Field(default=120, gt=0, le=600)
     retrieval_fusion_limit: int = Field(default=30, ge=1, le=30)
+    llama_cloud_api_key: SecretStr | None = None
+    llama_cloud_base_url: str = "https://api.cloud.llamaindex.ai"
+    ocr_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    ocr_poll_interval_seconds: float = Field(default=1.0, gt=0, le=10)
+    ocr_max_poll_seconds: float = Field(default=120.0, gt=0, le=600)
+
+    @field_validator("llama_cloud_api_key")
+    @classmethod
+    def validate_llama_cloud_api_key(cls, value: SecretStr | None) -> SecretStr | None:
+        """Normalize empty or whitespace API key to None."""
+        if value is None:
+            return None
+        if not value.get_secret_value().strip():
+            return None
+        return value
+
+    @field_validator("llama_cloud_base_url")
+    @classmethod
+    def validate_llama_cloud_base_url(cls, value: str) -> str:
+        """Require an absolute HTTP(S) origin and discard trailing slash, query, or fragment."""
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+            msg = "LLAMA_CLOUD_BASE_URL must be an absolute HTTP(S) URL"
+            raise ValueError(msg)
+        if parsed.query or parsed.fragment:
+            msg = "LLAMA_CLOUD_BASE_URL must not include a query or fragment"
+            raise ValueError(msg)
+        return value.rstrip("/")
 
     @field_validator("reranker_python")
     @classmethod
