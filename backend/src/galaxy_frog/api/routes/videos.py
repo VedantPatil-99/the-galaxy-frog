@@ -1,5 +1,6 @@
 """Transcript-first video import and read endpoints."""
 
+import re
 from collections.abc import Callable
 from http import HTTPStatus
 from pathlib import Path
@@ -354,8 +355,20 @@ async def ask_question(
                 )
                 for item in evidence
             }
+
+            def _in_allowed(quote: str, unit_id: str) -> bool:
+                allowed_text = allowed.get(unit_id, "")
+                if quote in allowed_text:
+                    return True
+                norm_quote = " ".join(quote.split())
+                norm_allowed = " ".join(allowed_text.split())
+                no_tags_allowed = re.sub(r"\s*\[[A-Za-z\s]+\]\s*", " ", norm_allowed)
+                return bool(
+                    norm_quote and (norm_quote in norm_allowed or norm_quote in no_tags_allowed)
+                )
+
             if any(
-                citation.quote not in allowed[citation.retrieval_unit_id]
+                not _in_allowed(citation.quote, citation.retrieval_unit_id)
                 for citation in answer.evidence
             ):
                 raise CitationValidationError(

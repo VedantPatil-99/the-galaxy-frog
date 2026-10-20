@@ -280,6 +280,12 @@ export function TranscriptWorkspace() {
               </div>
               <p className="mt-2 text-xs text-muted-foreground">Try a name, a quoted phrase, “before 02:30”, or “after the introduction”.</p>
               {asking ? <p role="status" className="mt-3 text-sm text-muted-foreground">Retrieving evidence. This can take a few minutes.</p> : null}
+              {error ? (
+                <div role="alert" className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                  <p className="font-semibold">Unable to complete request</p>
+                  <p className="mt-1 leading-6">{error}</p>
+                </div>
+              ) : null}
 
               {answer ? (
                 <div className="mt-6 border-t pt-6">
