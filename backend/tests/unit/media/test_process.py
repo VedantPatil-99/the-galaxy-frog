@@ -148,3 +148,88 @@ async def test_runner_rejects_invalid_invocations(
 def test_runner_requires_a_positive_output_limit() -> None:
     with pytest.raises(ValueError, match="max_output_bytes"):
         AsyncSubprocessRunner(max_output_bytes=0)
+
+
+def _raise_not_implemented(*_args: object, **_kwargs: object) -> object:
+    raise NotImplementedError
+
+
+@pytest.mark.asyncio
+async def test_runner_fallback_returns_exit_status_and_bounded_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _raise_not_implemented)
+    runner = AsyncSubprocessRunner(max_output_bytes=4)
+    arguments = (
+        sys.executable,
+        "-c",
+        "import sys; print('abcdef', end=''); print('uvwxyz', end='', file=sys.stderr)",
+    )
+
+    result = await runner.run(arguments, cwd=tmp_path, timeout_seconds=5)
+
+    assert result.arguments == arguments
+    assert result.return_code == 0
+    assert result.stdout == "abcd"
+    assert result.stderr == "uvwx"
+
+
+@pytest.mark.asyncio
+async def test_runner_fallback_drains_output_after_the_retained_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _raise_not_implemented)
+    result = await AsyncSubprocessRunner(max_output_bytes=4).run(
+        (sys.executable, "-c", "print('x' * 100000, end='')"),
+        cwd=tmp_path,
+        timeout_seconds=5,
+    )
+
+    assert result.stdout == "xxxx"
+
+
+@pytest.mark.asyncio
+async def test_runner_fallback_returns_nonzero_process_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _raise_not_implemented)
+    result = await AsyncSubprocessRunner().run(
+        (sys.executable, "-c", "raise SystemExit(7)"),
+        cwd=tmp_path,
+        timeout_seconds=5,
+    )
+
+    assert result.return_code == 7
+
+
+@pytest.mark.asyncio
+async def test_runner_fallback_kills_a_process_at_its_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _raise_not_implemented)
+
+    with pytest.raises(CommandTimedOut, match=r"python.*"):
+        await AsyncSubprocessRunner().run(
+            (sys.executable, "-c", "import time; time.sleep(10)"),
+            cwd=tmp_path,
+            timeout_seconds=0.1,
+        )
+
+
+@pytest.mark.asyncio
+async def test_runner_fallback_kills_a_process_when_caller_is_cancelled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _raise_not_implemented)
+    task = asyncio.create_task(
+        AsyncSubprocessRunner().run(
+            (sys.executable, "-c", "import time; time.sleep(10)"),
+            cwd=tmp_path,
+            timeout_seconds=5,
+        )
+    )
+    await asyncio.sleep(0.05)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
