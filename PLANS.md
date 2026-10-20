@@ -610,7 +610,7 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
 
 ## Active plan: Phase 4 — Scene and OCR pipeline
 
-Status: **In progress (P4.1, P4.2, P4.3, P4.4, P4.5 complete).**
+Status: **In progress (P4.1, P4.2, P4.3, P4.4, P4.5, P4.6 complete).**
 
 Duration: 7–10 days.
 
@@ -621,7 +621,7 @@ Duration: 7–10 days.
 - [x] P4.3 — Frame Deduplication: Implement perceptual hashing (dHash) and deduplication.
 - [x] P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
 - [x] P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
-- [ ] P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
+- [x] P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
 - [ ] P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
 
 ### P4.1 local acceptance — 2026-10-18
@@ -664,6 +664,16 @@ Duration: 7–10 days.
 - `SqlAlchemyVisionRepository` in `galaxy_frog.db.vision_repository`: atomic and idempotent persistence of scenes, deduplicated frames linked to scenes, and OCR blocks.
 - `PostgresOCRLexicalSearch` and `PgVectorOCRSearch` in `galaxy_frog.db.ocr_search`: video-scoped full-text search (tsvector/tsquery with rank normalization 32) and dense vector search (cosine distance via pgvector), returning typed `RetrievedOCREvidence`.
 - Full test suite passes (870 passed) with 100% statement and branch coverage across all 5,087 backend statements.
+
+### P4.6 local acceptance — 2026-10-20
+
+`feat/scene-and-ocr-pipeline` adds multimodal query routing, evidence modeling, and reciprocal rank fusion:
+- Pure-Python domain models in `galaxy_frog.domain.retrieval.multimodal`: `EvidenceModality`, `QueryModality`, `QueryRoutingAnalysis`, `MultimodalEvidence`, `analyze_multimodal_query`, `fuse_multimodal_rankings`.
+- Added `OCRRetriever` protocol in `galaxy_frog.domain.retrieval.ports`.
+- `MultimodalSearchService` in `galaxy_frog.application.retrieval.multimodal`: coordinates transcript and OCR retrievers, routing queries and gracefully degrading to single-modality results if one provider fails.
+- Cross-modal temporal co-occurrence bonus in RRF scoring strengthens results where both spoken and visual evidence align.
+- Full test suite passes (914 passed) with 100% statement and branch coverage across all 5,264 backend statements.
+
 
 
 
