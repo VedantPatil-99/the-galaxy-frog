@@ -507,3 +507,57 @@ def test_caption_helpers_handle_missing_maps_and_fallbacks() -> None:
         CaptionTrack("automatic:de", "de", CaptionKind.AUTOMATIC),
     )
     assert YouTubeSource.select_caption_track(tracks, ("en",)).track_id == "manual:fr"
+
+
+def test_tracks_from_mapping_filters_synthetic_auto_translated_tracks() -> None:
+    # Synthetic translation with only tlang formats should be ignored
+    synthetic_mapping = {
+        "en": [{"ext": "json3", "url": "https://www.youtube.com/api/timedtext?lang=hi&tlang=en"}],
+        "hi": [{"ext": "json3", "url": "https://www.youtube.com/api/timedtext?lang=hi"}],
+    }
+    tracks = YouTubeSource._tracks_from_mapping(synthetic_mapping, CaptionKind.AUTOMATIC)
+    assert len(tracks) == 1
+    assert tracks[0].language_code == "hi"
+
+    # Manual mapping retains all tracks regardless of query params
+    manual_tracks = YouTubeSource._tracks_from_mapping(synthetic_mapping, CaptionKind.MANUAL)
+    assert len(manual_tracks) == 2
+
+
+def test_rank_caption_format_prefers_native_before_translated_and_json3() -> None:
+    native_json3 = {"ext": "json3", "url": "https://www.youtube.com/api/timedtext?lang=en"}
+    native_vtt = {"ext": "vtt", "url": "https://www.youtube.com/api/timedtext?lang=en"}
+    translated_json3 = {
+        "ext": "json3",
+        "url": "https://www.youtube.com/api/timedtext?lang=ar&tlang=en",
+    }
+    translated_vtt = {"ext": "vtt", "url": "https://www.youtube.com/api/timedtext?lang=ar&tlang=en"}
+
+    formats = [translated_vtt, translated_json3, native_vtt, native_json3]
+    ranked = sorted(formats, key=lambda f: YouTubeSource._rank_caption_format(f, "en"))
+
+    assert ranked == [native_json3, native_vtt, translated_json3, translated_vtt]
+
+
+@pytest.mark.asyncio
+async def test_recovers_when_primary_caption_format_loader_fails() -> None:
+    payload = info_payload()
+    payload["subtitles"] = {
+        "en": [
+            {"ext": "json3", "url": "https://example.com/fail.json3"},
+            {"ext": "vtt", "url": "https://example.com/ok.vtt"},
+        ]
+    }
+
+    async def caption_loader(url: str) -> str:
+        if "fail" in url:
+            raise RuntimeError("HTTP Error 429: Too Many Requests")
+        return "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nRecovered."
+
+    source = YouTubeSource(info_loader=lambda _url: payload, caption_loader=caption_loader)
+    reference = source.canonicalize(f"https://youtu.be/{VIDEO_ID}")
+    track = (await source.list_caption_tracks(reference))[0]
+
+    cues = await source.fetch_caption_cues(reference, track)
+    assert len(cues) == 1
+    assert cues[0].text == "Recovered."
