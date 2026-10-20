@@ -31,6 +31,8 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
     }
   }
 
+  const keptFrames = (result.visual_frames ?? []).filter((frame) => !frame.is_duplicate)
+
   return (
     <section aria-label="Retrieved evidence" className="mt-6 space-y-4 border-t pt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -55,7 +57,71 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
         </div>)}
       </div> : null}
       {result.status === "anchor_unresolved" ? <p role="status" className="rounded-xl border p-4 text-sm">No matching event was found. Try a phrase spoken in the video or an explicit timestamp such as “before 02:30”.</p> : null}
-      {result.status === "resolved" && result.evidence.length === 0 ? <p className="text-sm text-muted-foreground">No transcript evidence matched this query and time range.</p> : null}
+      {result.status === "resolved" && result.evidence.length === 0 && keptFrames.length === 0 ? <p className="text-sm text-muted-foreground">No transcript evidence matched this query and time range.</p> : null}
+
+      {keptFrames.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold">Visual Evidence & Slides</h4>
+            <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+              {keptFrames.length} {keptFrames.length === 1 ? "slide" : "slides"}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {keptFrames.map((frame) => {
+              const src = frame.image_url.startsWith("/api/proxy")
+                ? frame.image_url
+                : `/api/proxy${frame.image_url}`
+              return (
+                <div
+                  key={frame.frame_id}
+                  className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm"
+                >
+                  <div className="relative aspect-video w-full bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`Visual frame at ${timestamp(frame.start_ms)}`}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute bottom-2 left-2 rounded-md bg-black/75 px-2 py-0.5 font-mono text-xs text-white">
+                      {timestamp(frame.start_ms)}–{timestamp(frame.end_ms)}
+                    </div>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    {frame.ocr_text ? (
+                      <div>
+                        <p className="line-clamp-3 text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
+                          {frame.ocr_text}
+                        </p>
+                        {frame.confidence != null ? (
+                          <p className="mt-1 text-[0.65rem] text-muted-foreground font-mono">
+                            OCR confidence: {(frame.confidence * 100).toFixed(0)}%
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-xs italic text-muted-foreground">No extracted text</p>
+                    )}
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs"
+                        onClick={() => onSeek(frame.start_ms)}
+                      >
+                        Jump to {timestamp(frame.start_ms)}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {result.evidence.map((group, index) => <article key={`${group.start_ms}-${group.end_ms}`} className="rounded-2xl border p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

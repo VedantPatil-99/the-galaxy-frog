@@ -17,6 +17,7 @@ from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
 from galaxy_frog.db.transcript_lexical_search import PostgresTranscriptLexicalSearch
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.domain.retrieval.pipeline import RetrievalConfig
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.retrieval.reranking import TextReranker
@@ -125,3 +126,17 @@ async def get_ingestion_repository(
     )
     async with factory() as session:
         yield PostgresIngestionRepository(session)
+
+
+async def get_vision_repository(
+    request: Request,
+) -> AsyncGenerator[SqlAlchemyVisionRepository]:
+    """Yield a request-scoped vision repository without exposing sessions to route handlers."""
+
+    factory = async_sessionmaker(
+        _database_engine(request),
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    async with factory() as session:
+        yield SqlAlchemyVisionRepository(session)

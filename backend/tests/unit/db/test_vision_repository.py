@@ -42,6 +42,11 @@ class FakeSession:
         self.statements.append(statement)
         return AllResult(self.scalars_values.popleft())
 
+    async def scalar(self, statement: object) -> object | None:
+        self.statements.append(statement)
+        vals = self.scalars_values.popleft()
+        return vals[0] if vals else None
+
     def add_all(self, values: Iterable[object]) -> None:
         self.added_groups.append(tuple(values))
 
@@ -272,6 +277,33 @@ async def test_get_frames_all_vs_only_kept(
     assert len(kept_frames) == 1
     stmt_kept = str(session.statements[-1])
     assert "video_frames.is_duplicate is false" in stmt_kept.lower()
+
+
+@pytest.mark.asyncio
+async def test_get_frame_found_and_not_found(
+    repo: SqlAlchemyVisionRepository, session: FakeSession
+) -> None:
+    video_id = uuid4()
+    f0 = VideoFrameRow(
+        id=uuid4(),
+        video_id=video_id,
+        scene_id=None,
+        sequence=0,
+        start_ms=0,
+        end_ms=1000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path="/tmp/0.jpg",
+        created_at=datetime.now(UTC),
+    )
+    session.scalars_values.append([f0])
+    frame = await repo.get_frame(video_id, 0)
+    assert frame == f0
+
+    session.scalars_values.append([])
+    not_found = await repo.get_frame(video_id, 99)
+    assert not_found is None
 
 
 @pytest.mark.asyncio

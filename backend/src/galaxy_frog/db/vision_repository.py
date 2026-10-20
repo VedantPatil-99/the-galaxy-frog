@@ -134,6 +134,20 @@ class SqlAlchemyVisionRepository:
             stmt = stmt.where(VideoFrameRow.is_duplicate.is_(False))
         return tuple((await self._session.scalars(stmt)).all())
 
+    async def get_frame(
+        self,
+        video_id: UUID,
+        sequence: int,
+    ) -> VideoFrameRow | None:
+        """Fetch a single sampled frame by video ID and sequence number."""
+
+        return await self._session.scalar(
+            select(VideoFrameRow).where(
+                VideoFrameRow.video_id == video_id,
+                VideoFrameRow.sequence == sequence,
+            )
+        )
+
     async def save_ocr_results(
         self,
         video_id: UUID,

@@ -48,8 +48,8 @@
 
 ## Acceptance Checks
 
-- [ ] Frame images are served securely with bounds checking on video ID and frame sequence.
-- [ ] Multimodal evidence includes visual frame URLs and OCR text.
-- [ ] Frontend displays frame images and seeks on click.
-- [ ] Duplicate frames are cleanly suppressed.
-- [ ] 100% backend coverage and 0 frontend type/lint/build errors.
+- [x] Frame images are served securely with bounds checking on video ID and frame sequence.
+- [x] Multimodal evidence includes visual frame URLs and OCR text.
+- [x] Frontend displays frame images and seeks on click.
+- [x] Duplicate frames are cleanly suppressed.
+- [x] 100% backend coverage and 0 frontend type/lint/build errors.

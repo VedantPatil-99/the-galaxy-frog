@@ -136,7 +136,9 @@ function forwardedRequestHeaders(request: Request): Headers {
 }
 
 function forwardedResponseHeaders(response: Response): Headers {
-  const headers = new Headers({ "Cache-Control": "no-store" })
+  const headers = new Headers({
+    "Cache-Control": response.headers.get("cache-control") ?? "no-store",
+  })
   for (const name of RESPONSE_HEADERS) {
     const value = response.headers.get(name)
     if (value !== null) {

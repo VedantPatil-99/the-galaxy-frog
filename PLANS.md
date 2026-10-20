@@ -610,7 +610,7 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
 
 ## Active plan: Phase 4 — Scene and OCR pipeline
 
-Status: **In progress (P4.1, P4.2, P4.3, P4.4, P4.5, P4.6 complete).**
+Status: **Complete (P4.1, P4.2, P4.3, P4.4, P4.5, P4.6, P4.7 complete).**
 
 Duration: 7–10 days.
 
@@ -622,7 +622,7 @@ Duration: 7–10 days.
 - [x] P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
 - [x] P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
 - [x] P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
-- [ ] P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
+- [x] P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
 
 ### P4.1 local acceptance — 2026-10-18
 
@@ -674,7 +674,11 @@ Duration: 7–10 days.
 - Cross-modal temporal co-occurrence bonus in RRF scoring strengthens results where both spoken and visual evidence align.
 - Full test suite passes (914 passed) with 100% statement and branch coverage across all 5,264 backend statements.
 
+### P4.7 local acceptance — 2026-10-20
 
-
-
-
+`feat/scene-and-ocr-pipeline` adds frame image delivery, retrieval-evidence visual presentation, duplicate suppression, and completes the Phase 4 Exit Gate:
+- Backend Frame Endpoint: Added `GET /v1/videos/{video_id}/frames/{sequence}/image` returning `FileResponse` with `image/jpeg` and `Cache-Control: public, max-age=86400, immutable`. Added `get_frame` to `SqlAlchemyVisionRepository` and `get_vision_repository` dependency.
+- Retrieval Schemas & Search Blending: Added `VisualFrameResponse` (`frame_id`, `sequence`, `start_ms`, `end_ms`, `image_url`, `ocr_text`, `confidence`, `is_duplicate`) to `SearchResponse`. Blended relevant visual frames overlapping temporal windows or matching OCR text into `search_video`.
+- Generated Contracts & Proxy: Synchronized `backend/openapi.json` and `apps/web/lib/api/generated/schema.d.ts` verified by `bun run contracts:check`. Forwarded `Cache-Control` header in `apps/web/lib/api/proxy.ts`.
+- Evidence UI: `apps/web/components/retrieval-evidence.tsx` displays visual frame slides with `/api/proxy` image URLs, time interval badges, OCR text, confidence scores, duplicate suppression (`!frame.is_duplicate`), and click-to-seek `onSeek` callbacks.
+- Phase 4 Exit Gate: Complete quality checks passing locally: 923 backend tests with 100.00% statement and branch coverage across 5,321 statements and 1,294 branches. 34 frontend tests passing. Pyright (0 errors), Ruff (0 errors, formatted), ESLint (0 errors, 0 warnings), and Next.js production build passing.

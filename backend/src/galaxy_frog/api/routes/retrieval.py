@@ -1,9 +1,11 @@
 """Retrieval-only search and video-scoped durable trace inspection."""
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from galaxy_frog.api.dependencies import get_vision_repository
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.retrieval import (
     SearchDependency,
@@ -15,12 +17,17 @@ from galaxy_frog.api.retrieval_schemas import (
     RetrievalTraceResponse,
     SearchRequest,
     SearchResponse,
+    VisualFrameResponse,
     search_response,
     trace_response,
 )
 from galaxy_frog.api.schemas import ErrorResponse
+from galaxy_frog.db.models import OCRBlockRow, VideoFrameRow
+from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 
 router = APIRouter(prefix="/v1/videos", tags=["retrieval"])
+
+VisionRepositoryDependency = Annotated[SqlAlchemyVisionRepository, Depends(get_vision_repository)]
 
 
 @router.post(
@@ -37,9 +44,54 @@ async def search_video(
     body: SearchRequest,
     repository: VideoRepositoryDependency,
     service: SearchDependency,
+    vision_repository: VisionRepositoryDependency,
 ) -> SearchResponse:
     execution = await run_search(video_id, body.query, body, repository, service)
-    return search_response(execution, body.mode)
+    frames = await vision_repository.get_frames(video_id, only_kept=True)
+    visual_frames: list[VisualFrameResponse] = []
+    if frames:
+        ocr_blocks = await vision_repository.get_ocr_blocks(video_id)
+        ocr_by_frame: dict[UUID, list[OCRBlockRow]] = {}
+        for block in ocr_blocks:
+            ocr_by_frame.setdefault(block.frame_id, []).append(block)
+
+        window = execution.result.window
+        groups = execution.result.groups
+        matching_frames: list[VideoFrameRow] = []
+
+        for frame in frames:
+            frame_blocks = ocr_by_frame.get(frame.id, [])
+            query_lower = body.query.lower()
+            text_matches = any(query_lower in b.text.lower() for b in frame_blocks)
+            time_matches = (
+                window.overlaps(frame.start_ms, frame.end_ms)
+                if window is not None
+                else any(
+                    max(frame.start_ms, g.start_ms) < min(frame.end_ms, g.end_ms) for g in groups
+                )
+            )
+            if time_matches or text_matches:
+                matching_frames.append(frame)
+
+        for frame in matching_frames:
+            blocks = ocr_by_frame.get(frame.id, [])
+            combined_text = "\n".join(b.text for b in blocks) if blocks else None
+            confidences = [b.confidence for b in blocks if b.confidence is not None]
+            avg_confidence = sum(confidences) / len(confidences) if confidences else None
+            visual_frames.append(
+                VisualFrameResponse(
+                    frame_id=frame.id,
+                    sequence=frame.sequence,
+                    start_ms=frame.start_ms,
+                    end_ms=frame.end_ms,
+                    image_url=f"/v1/videos/{video_id}/frames/{frame.sequence}/image",
+                    ocr_text=combined_text,
+                    confidence=avg_confidence,
+                    is_duplicate=frame.is_duplicate,
+                )
+            )
+
+    return search_response(execution, body.mode, visual_frames=visual_frames)
 
 
 @router.get(

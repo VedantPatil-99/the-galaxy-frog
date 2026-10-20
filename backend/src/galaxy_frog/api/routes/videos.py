@@ -2,10 +2,13 @@
 
 from collections.abc import Callable
 from http import HTTPStatus
+from pathlib import Path
 from typing import Annotated, cast
 from uuid import UUID
 
+from anyio import Path as AnyPath
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import FileResponse
 
 from galaxy_frog.adapters.generation.ollama import GenerationProviderError
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
@@ -13,6 +16,7 @@ from galaxy_frog.api.dependencies import (
     get_ingestion_repository,
     get_job_dispatcher,
     get_video_repository,
+    get_vision_repository,
 )
 from galaxy_frog.api.dispatching import dispatch_ingestion_job
 from galaxy_frog.api.errors import ApiError
@@ -42,6 +46,7 @@ from galaxy_frog.application.retrieval.temporal import RetrievalStatus
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.domain.generation.ports import GenerationProvider
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
@@ -51,6 +56,7 @@ from galaxy_frog.domain.videos.source import VideoSource, VideoSourceError, Vide
 router = APIRouter(prefix="/v1/videos", tags=["videos"])
 
 RepositoryDependency = Annotated[SqlAlchemyVideoRepository, Depends(get_video_repository)]
+VisionRepositoryDependency = Annotated[SqlAlchemyVisionRepository, Depends(get_vision_repository)]
 IngestionRepositoryDependency = Annotated[
     PostgresIngestionRepository,
     Depends(get_ingestion_repository),
@@ -240,6 +246,56 @@ async def get_transcript(
         )
     index_ready = await _transcript_search(request, repository).is_indexed(video_id)
     return _transcript_response(transcript, index_ready=index_ready)
+
+
+@router.get(
+    "/{video_id}/frames/{sequence}/image",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"image/jpeg": {}},
+            "description": "The binary JPEG frame image.",
+        },
+        404: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+)
+async def get_frame_image(
+    video_id: UUID,
+    sequence: int,
+    repository: RepositoryDependency,
+    vision_repository: VisionRepositoryDependency,
+) -> FileResponse:
+    """Return an extracted frame image with caching headers."""
+
+    video = await repository.get_video(video_id)
+    if video is None:
+        raise ApiError(
+            status_code=HTTPStatus.NOT_FOUND,
+            code="VIDEO_NOT_FOUND",
+            message="The requested video does not exist.",
+            retryable=False,
+        )
+    frame = await vision_repository.get_frame(video_id, sequence)
+    if frame is None:
+        raise ApiError(
+            status_code=HTTPStatus.NOT_FOUND,
+            code="FRAME_NOT_FOUND",
+            message="The requested video frame does not exist.",
+            retryable=False,
+        )
+    if not await AnyPath(frame.image_path).is_file():
+        raise ApiError(
+            status_code=HTTPStatus.NOT_FOUND,
+            code="FRAME_IMAGE_NOT_FOUND",
+            message="The requested frame image file is missing on disk.",
+            retryable=False,
+        )
+    return FileResponse(
+        Path(frame.image_path),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400, immutable"},
+    )
 
 
 @router.post(

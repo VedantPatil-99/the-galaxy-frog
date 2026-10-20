@@ -144,6 +144,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/videos/{video_id}/frames/{sequence}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Frame Image
+         * @description Return an extracted frame image with caching headers.
+         */
+        get: operations["get_frame_image_v1_videos__video_id__frames__sequence__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/videos/{video_id}/questions": {
         parameters: {
             query?: never;
@@ -704,6 +724,8 @@ export interface components {
              * Format: uuid
              */
             video_id: string;
+            /** Visual Frames */
+            visual_frames?: components["schemas"]["VisualFrameResponse"][];
             /** Warnings */
             warnings: components["schemas"]["RetrievalWarning"][];
             window: components["schemas"]["TimeWindow"] | null;
@@ -932,6 +954,31 @@ export interface components {
          * @enum {string}
          */
         VideoSourceKind: "youtube" | "local_file";
+        /** VisualFrameResponse */
+        VisualFrameResponse: {
+            /** Confidence */
+            confidence?: number | null;
+            /** End Ms */
+            end_ms: number;
+            /**
+             * Frame Id
+             * Format: uuid
+             */
+            frame_id: string;
+            /** Image Url */
+            image_url: string;
+            /**
+             * Is Duplicate
+             * @default false
+             */
+            is_duplicate: boolean;
+            /** Ocr Text */
+            ocr_text?: string | null;
+            /** Sequence */
+            sequence: number;
+            /** Start Ms */
+            start_ms: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -1240,6 +1287,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_frame_image_v1_videos__video_id__frames__sequence__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence: number;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The binary JPEG frame image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
                 };
             };
             /** @description Not Found */

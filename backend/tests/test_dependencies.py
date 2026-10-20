@@ -12,6 +12,7 @@ from galaxy_frog.api.dependencies import (
     get_database_probe,
     get_ingestion_repository,
     get_video_repository,
+    get_vision_repository,
 )
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.retrieval import get_retrieval_traces, get_search_service
@@ -20,6 +21,7 @@ from galaxy_frog.config import Settings
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.domain.retrieval.pipeline import RetrievalConfig
 
 
@@ -97,6 +99,14 @@ async def test_ingestion_repository_requires_database_engine() -> None:
 
 
 @pytest.mark.asyncio
+async def test_vision_repository_requires_database_engine() -> None:
+    generator = get_vision_repository(make_request(None))
+
+    with pytest.raises(ApiError, match="database dependency"):
+        await anext(generator)
+
+
+@pytest.mark.asyncio
 async def test_video_repository_owns_a_request_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -157,6 +167,40 @@ async def test_ingestion_repository_owns_a_request_session(
 
     repository = await anext(generator)
     assert isinstance(repository, PostgresIngestionRepository)
+    with pytest.raises(StopAsyncIteration):
+        await anext(generator)
+    assert exited is True
+
+
+@pytest.mark.asyncio
+async def test_vision_repository_owns_a_request_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = cast(AsyncEngine, object())
+    session = cast(AsyncSession, object())
+    exited = False
+
+    class SessionContext:
+        async def __aenter__(self) -> AsyncSession:
+            return session
+
+        async def __aexit__(self, *_args: object) -> None:
+            nonlocal exited
+            exited = True
+
+    class SessionFactory:
+        def __call__(self) -> SessionContext:
+            return SessionContext()
+
+    def session_factory(*_args: object, **_kwargs: object) -> SessionFactory:
+        return SessionFactory()
+
+    monkeypatch.setattr(dependencies, "async_sessionmaker", session_factory)
+    generator = get_vision_repository(make_request(engine))
+
+    repository = await anext(generator)
+    assert isinstance(repository, SqlAlchemyVisionRepository)
+    assert repository.session is session
     with pytest.raises(StopAsyncIteration):
         await anext(generator)
     assert exited is True

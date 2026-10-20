@@ -16,6 +16,7 @@ export type SearchResponse = components["schemas"]["SearchResponse"]
 export type QuestionRequest = components["schemas"]["QuestionRequest"]
 export type RetrievalTraceResponse = components["schemas"]["RetrievalTraceResponse"]
 export type RetrievalMode = components["schemas"]["RetrievalMode"]
+export type VisualFrameResponse = components["schemas"]["VisualFrameResponse"]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -305,6 +306,20 @@ function isOriginalUnit(value: unknown): boolean {
   return isInterval(value) && typeof value.unit_id === "string" && typeof value.text === "string" && isStringArray(value.cue_ids)
 }
 
+function isVisualFrame(value: unknown): value is VisualFrameResponse {
+  return (
+    isRecord(value) &&
+    typeof value.frame_id === "string" &&
+    typeof value.sequence === "number" &&
+    typeof value.start_ms === "number" &&
+    typeof value.end_ms === "number" &&
+    typeof value.image_url === "string" &&
+    (value.ocr_text === null || value.ocr_text === undefined || typeof value.ocr_text === "string") &&
+    (value.confidence === null || value.confidence === undefined || typeof value.confidence === "number") &&
+    typeof value.is_duplicate === "boolean"
+  )
+}
+
 export function isSearchResponse(value: unknown): value is SearchResponse {
   return isRecord(value) && typeof value.video_id === "string" && typeof value.trace_id === "string" &&
     retrievalStatuses.has(String(value.status)) && retrievalModes.has(String(value.mode)) &&
@@ -324,7 +339,8 @@ export function isSearchResponse(value: unknown): value is SearchResponse {
         (hit.rerank_rank == null || typeof hit.rerank_rank === "number") &&
         (hit.rerank_score == null || typeof hit.rerank_score === "number") &&
         Array.isArray(hit.stages) && hit.stages.every(stage => isRecord(stage) && retrievalModes.has(String(stage.stage)) &&
-          typeof stage.rank === "number" && typeof stage.score === "number")))
+          typeof stage.rank === "number" && typeof stage.score === "number"))) &&
+    (value.visual_frames === undefined || (Array.isArray(value.visual_frames) && value.visual_frames.every(isVisualFrame)))
 }
 
 export function isRetrievalTraceResponse(value: unknown): value is RetrievalTraceResponse {

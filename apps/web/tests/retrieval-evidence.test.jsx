@@ -39,3 +39,39 @@ test("renders ASR lineage, rerank scores, explicit fallback and unresolved state
   expect(render({ ...retrievalFixture, status: "anchor_unresolved", evidence: [] })).toContain("No matching event was found")
   expect(render({ ...retrievalFixture, evidence: [] })).toContain("No transcript evidence matched")
 })
+
+test("renders visual frames with OCR text and suppresses near-duplicate frames", () => {
+  const keptFrame = {
+    frame_id: "11111111-1111-1111-1111-111111111111",
+    sequence: 0,
+    start_ms: 5000,
+    end_ms: 10000,
+    image_url: "/v1/videos/327d444a-fd80-4a58-aedd-80bcdbe8964f/frames/0/image",
+    ocr_text: "System Architecture Diagram",
+    confidence: 0.95,
+    is_duplicate: false,
+  }
+  const dupFrame = {
+    frame_id: "22222222-2222-2222-2222-222222222222",
+    sequence: 1,
+    start_ms: 10000,
+    end_ms: 15000,
+    image_url: "/v1/videos/327d444a-fd80-4a58-aedd-80bcdbe8964f/frames/1/image",
+    ocr_text: "Duplicate Slide Text",
+    confidence: 0.95,
+    is_duplicate: true,
+  }
+  const markup = render({
+    ...retrievalFixture,
+    visual_frames: [keptFrame, dupFrame],
+  })
+
+  expect(markup).toContain("Visual Evidence &amp; Slides")
+  expect(markup).toContain("1 slide")
+  expect(markup).toContain("/api/proxy/v1/videos/327d444a-fd80-4a58-aedd-80bcdbe8964f/frames/0/image")
+  expect(markup).toContain("00:05–00:10")
+  expect(markup).toContain("System Architecture Diagram")
+  expect(markup).toContain("OCR confidence: 95%")
+  expect(markup).toContain("Jump to 00:05")
+  expect(markup).not.toContain("Duplicate Slide Text")
+})

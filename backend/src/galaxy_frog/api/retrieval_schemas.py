@@ -1,5 +1,6 @@
 """FastAPI-owned retrieval contracts, retaining domain evidence intervals verbatim."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
@@ -27,6 +28,17 @@ class SearchRequest(RetrievalOptions):
     query: str = Field(min_length=1, max_length=2000)
 
 
+class VisualFrameResponse(BaseModel):
+    frame_id: UUID
+    sequence: int
+    start_ms: int
+    end_ms: int
+    image_url: str
+    ocr_text: str | None = None
+    confidence: float | None = None
+    is_duplicate: bool = False
+
+
 class SearchResponse(BaseModel):
     video_id: UUID
     trace_id: UUID
@@ -37,6 +49,7 @@ class SearchResponse(BaseModel):
     anchors: list[AnchorChoice]
     selected_anchor: str | None
     evidence: list[EvidenceGroup]
+    visual_frames: list[VisualFrameResponse] = Field(default_factory=list[VisualFrameResponse])
     context_chars: int
     warnings: list[RetrievalWarning]
     degraded: bool
@@ -50,7 +63,11 @@ class RetrievalTraceResponse(BaseModel):
     payload: dict[str, JsonValue]
 
 
-def search_response(execution: SearchExecution, mode: RetrievalMode) -> SearchResponse:
+def search_response(
+    execution: SearchExecution,
+    mode: RetrievalMode,
+    visual_frames: Sequence[VisualFrameResponse] | None = None,
+) -> SearchResponse:
     result = execution.result
     return SearchResponse(
         video_id=execution.trace.video_id,
@@ -62,6 +79,7 @@ def search_response(execution: SearchExecution, mode: RetrievalMode) -> SearchRe
         anchors=list(result.anchors),
         selected_anchor=result.selected_anchor,
         evidence=list(result.groups),
+        visual_frames=list(visual_frames or ()),
         context_chars=result.context_chars,
         warnings=list(result.warnings),
         degraded=result.degraded,

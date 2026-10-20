@@ -5,6 +5,7 @@
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -17,15 +18,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from galaxy_frog.adapters.embeddings.ollama import EmbeddingProviderError
 from galaxy_frog.adapters.generation.ollama import GenerationProviderError
 from galaxy_frog.api.app import create_app
-from galaxy_frog.api.dependencies import get_video_repository
+from galaxy_frog.api.dependencies import get_video_repository, get_vision_repository
 from galaxy_frog.api.retrieval import get_retrieval_traces, get_search_service
 from galaxy_frog.api.routes import videos as video_routes
 from galaxy_frog.application.retrieval.search import SearchTranscript
 from galaxy_frog.application.retrieval.temporal import RetrieveTemporalEvidence
 from galaxy_frog.application.retrieval.text import RetrieveTranscript
 from galaxy_frog.application.videos.import_video import ImportVideo
+from galaxy_frog.db.models import OCRBlockRow, VideoFrameRow
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch, TranscriptIndexError
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.domain.generation.models import (
     AnswerConfidence,
     GenerationCitation,
@@ -80,6 +83,27 @@ class MemoryRepository:
 
     async def get_transcript(self, video_id: UUID) -> TranscriptRecord | None:
         return self.transcript if self.record and self.record.video_id == video_id else None
+
+
+class MemoryVisionRepository:
+    def __init__(self) -> None:
+        self.frames: dict[tuple[UUID, int], VideoFrameRow] = {}
+        self.ocr_blocks: dict[UUID, list[OCRBlockRow]] = {}
+
+    async def get_frame(self, video_id: UUID, sequence: int) -> VideoFrameRow | None:
+        return self.frames.get((video_id, sequence))
+
+    async def get_frames(
+        self, video_id: UUID, *, only_kept: bool = False
+    ) -> tuple[VideoFrameRow, ...]:
+        rows = [f for (v_id, _), f in self.frames.items() if v_id == video_id]
+        if only_kept:
+            rows = [f for f in rows if not f.is_duplicate]
+        rows.sort(key=lambda f: f.sequence)
+        return tuple(rows)
+
+    async def get_ocr_blocks(self, video_id: UUID) -> tuple[OCRBlockRow, ...]:
+        return tuple(self.ocr_blocks.get(video_id, ()))
 
 
 class FixtureSource:
@@ -165,12 +189,18 @@ class FixtureGeneration:
 def api(monkeypatch: pytest.MonkeyPatch) -> tuple[FastAPI, MemoryRepository]:
     application = create_app()
     repository = MemoryRepository()
+    vision_repository = MemoryVisionRepository()
     search = MemorySearch(repository)
 
     async def repository_dependency() -> AsyncGenerator[SqlAlchemyVideoRepository]:
         yield cast(SqlAlchemyVideoRepository, repository)
 
+    async def vision_dependency() -> AsyncGenerator[SqlAlchemyVisionRepository]:
+        yield cast(SqlAlchemyVisionRepository, vision_repository)
+
     application.dependency_overrides[get_video_repository] = repository_dependency
+    application.dependency_overrides[get_vision_repository] = vision_dependency
+    application.state.vision_repository = vision_repository
     application.state.video_sources = (FixtureSource(),)
     application.state.generation_provider_factory = FixtureGeneration
     traces = MemoryTraces()
@@ -622,3 +652,261 @@ async def test_search_response_and_trace_keep_asr_run_and_confidence(
         lineage = trace.json()["payload"]["groups"][0]["cues"][0]
         assert lineage["origin"] == "asr" and lineage["transcription_run_id"] == str(run_id)
         assert lineage["confidence"] == 0.91 and lineage["track_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_frame_image_success(
+    api: tuple[FastAPI, MemoryRepository], tmp_path: Path
+) -> None:
+    application, repository = api
+    video_id = await seed_api(repository)
+    image_file = tmp_path / "frame_0.jpg"
+    image_data = (
+        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00"
+    )
+    image_file.write_bytes(image_data)
+
+    vision_repo: MemoryVisionRepository = application.state.vision_repository
+    frame_row = VideoFrameRow(
+        id=uuid4(),
+        video_id=video_id,
+        scene_id=None,
+        sequence=0,
+        start_ms=0,
+        end_ms=2000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path=str(image_file),
+        created_at=datetime.now(UTC),
+    )
+    vision_repo.frames[(video_id, 0)] = frame_row
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/v1/videos/{video_id}/frames/0/image")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/jpeg"
+        assert response.headers["cache-control"] == "public, max-age=86400, immutable"
+        assert response.content == image_data
+
+
+@pytest.mark.asyncio
+async def test_get_frame_image_video_not_found(
+    api: tuple[FastAPI, MemoryRepository],
+) -> None:
+    application, _ = api
+    missing_video_id = uuid4()
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/v1/videos/{missing_video_id}/frames/0/image")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "VIDEO_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_get_frame_image_frame_not_found(
+    api: tuple[FastAPI, MemoryRepository],
+) -> None:
+    application, repository = api
+    video_id = await seed_api(repository)
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/v1/videos/{video_id}/frames/99/image")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "FRAME_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_get_frame_image_missing_disk_file(
+    api: tuple[FastAPI, MemoryRepository],
+) -> None:
+    application, repository = api
+    video_id = await seed_api(repository)
+    vision_repo: MemoryVisionRepository = application.state.vision_repository
+    frame_row = VideoFrameRow(
+        id=uuid4(),
+        video_id=video_id,
+        scene_id=None,
+        sequence=1,
+        start_ms=2000,
+        end_ms=4000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path="/nonexistent/missing_frame.jpg",
+        created_at=datetime.now(UTC),
+    )
+    vision_repo.frames[(video_id, 1)] = frame_row
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/v1/videos/{video_id}/frames/1/image")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "FRAME_IMAGE_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_search_includes_visual_frames_matching_evidence(
+    api: tuple[FastAPI, MemoryRepository],
+) -> None:
+    application, repository = api
+    video_id = await seed_api(repository)
+    vision_repo: MemoryVisionRepository = application.state.vision_repository
+
+    f0_id = uuid4()
+    f1_id = uuid4()
+    frame0 = VideoFrameRow(
+        id=f0_id,
+        video_id=video_id,
+        scene_id=None,
+        sequence=0,
+        start_ms=1000,
+        end_ms=4000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path="/tmp/0.jpg",
+        created_at=datetime.now(UTC),
+    )
+    frame1 = VideoFrameRow(
+        id=f1_id,
+        video_id=video_id,
+        scene_id=None,
+        sequence=1,
+        start_ms=2000,
+        end_ms=5000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=True,
+        image_path="/tmp/1.jpg",
+        created_at=datetime.now(UTC),
+    )
+    frame2 = VideoFrameRow(
+        id=uuid4(),
+        video_id=video_id,
+        scene_id=None,
+        sequence=2,
+        start_ms=3000,
+        end_ms=4500,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path="/tmp/2.jpg",
+        created_at=datetime.now(UTC),
+    )
+    frame3 = VideoFrameRow(
+        id=uuid4(),
+        video_id=video_id,
+        scene_id=None,
+        sequence=3,
+        start_ms=80000,
+        end_ms=90000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path="/tmp/3.jpg",
+        created_at=datetime.now(UTC),
+    )
+    vision_repo.frames[(video_id, 0)] = frame0
+    vision_repo.frames[(video_id, 1)] = frame1
+    vision_repo.frames[(video_id, 2)] = frame2
+    vision_repo.frames[(video_id, 3)] = frame3
+
+    ocr_block = OCRBlockRow(
+        id=uuid4(),
+        video_id=video_id,
+        frame_id=f0_id,
+        text="Introduction to Architecture",
+        start_ms=1000,
+        end_ms=4000,
+        confidence=0.96,
+        confidence_method="average",
+        provider="llamaparse",
+        provider_revision="1",
+        created_at=datetime.now(UTC),
+    )
+    vision_repo.ocr_blocks[video_id] = [ocr_block]
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": "grounded", "mode": "lexical"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["visual_frames"]) == 2
+        vf = data["visual_frames"][0]
+        assert vf["sequence"] == 0
+        assert vf["image_url"] == f"/v1/videos/{video_id}/frames/0/image"
+        assert vf["ocr_text"] == "Introduction to Architecture"
+        assert vf["confidence"] == 0.96
+        assert vf["is_duplicate"] is False
+        vf2 = data["visual_frames"][1]
+        assert vf2["sequence"] == 2
+        assert vf2["ocr_text"] is None
+        assert vf2["confidence"] is None
+
+
+@pytest.mark.asyncio
+async def test_search_visual_frames_fallback_query_match_and_window(
+    api: tuple[FastAPI, MemoryRepository],
+) -> None:
+    application, repository = api
+    video_id = await seed_api(repository)
+    vision_repo: MemoryVisionRepository = application.state.vision_repository
+
+    f0_id = uuid4()
+    frame0 = VideoFrameRow(
+        id=f0_id,
+        video_id=video_id,
+        scene_id=None,
+        sequence=5,
+        start_ms=20000,
+        end_ms=25000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path="/tmp/5.jpg",
+        created_at=datetime.now(UTC),
+    )
+    vision_repo.frames[(video_id, 5)] = frame0
+
+    ocr_block = OCRBlockRow(
+        id=uuid4(),
+        video_id=video_id,
+        frame_id=f0_id,
+        text="Unique Slide Keyword",
+        start_ms=20000,
+        end_ms=25000,
+        confidence=0.9,
+        confidence_method="average",
+        provider="llamaparse",
+        provider_revision="1",
+        created_at=datetime.now(UTC),
+    )
+    vision_repo.ocr_blocks[video_id] = [ocr_block]
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": "keyword", "mode": "lexical"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["visual_frames"]) == 1
+        assert data["visual_frames"][0]["sequence"] == 5
+        assert data["visual_frames"][0]["ocr_text"] == "Unique Slide Keyword"
+
+        window_response = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": "after 00:15", "mode": "lexical"}
+        )
+        assert window_response.status_code == 200
+        window_data = window_response.json()
+        assert any(f["sequence"] == 5 for f in window_data["visual_frames"])

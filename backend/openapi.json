@@ -1058,6 +1058,13 @@
             "title": "Video Id",
             "type": "string"
           },
+          "visual_frames": {
+            "items": {
+              "$ref": "#/components/schemas/VisualFrameResponse"
+            },
+            "title": "Visual Frames",
+            "type": "array"
+          },
           "warnings": {
             "items": {
               "$ref": "#/components/schemas/RetrievalWarning"
@@ -1687,6 +1694,67 @@
         ],
         "title": "VideoSourceKind",
         "type": "string"
+      },
+      "VisualFrameResponse": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "frame_id": {
+            "format": "uuid",
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string"
+          },
+          "is_duplicate": {
+            "default": false,
+            "title": "Is Duplicate",
+            "type": "boolean"
+          },
+          "ocr_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Text"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "frame_id",
+          "sequence",
+          "start_ms",
+          "end_ms",
+          "image_url"
+        ],
+        "title": "VisualFrameResponse",
+        "type": "object"
       }
     }
   },
@@ -2157,6 +2225,75 @@
           }
         },
         "summary": "Get Video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/frames/{sequence}/image": {
+      "get": {
+        "description": "Return an extracted frame image with caching headers.",
+        "operationId": "get_frame_image_v1_videos__video_id__frames__sequence__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sequence",
+            "required": true,
+            "schema": {
+              "title": "Sequence",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {}
+            },
+            "description": "The binary JPEG frame image."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Frame Image",
         "tags": [
           "videos"
         ]
