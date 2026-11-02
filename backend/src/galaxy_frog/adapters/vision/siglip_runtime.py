@@ -26,7 +26,7 @@ def execute(payload: Mapping[str, Any]) -> dict[str, object]:
         raise ValueError("requested device unavailable")
     kwargs = {"revision": payload["revision"], "local_files_only": True, "trust_remote_code": False}
     processor = transformers.AutoProcessor.from_pretrained(
-        payload["model"], use_fast=True, **kwargs
+        payload["model"], backend="pil", **kwargs
     )
     model = (
         transformers.SiglipModel.from_pretrained(payload["model"], use_safetensors=True, **kwargs)
@@ -43,7 +43,7 @@ def execute(payload: Mapping[str, Any]) -> dict[str, object]:
                 max_length=64,
                 return_tensors="pt",
             ).to(device)
-            features = model.get_text_features(**inputs)
+            features = model.get_text_features(**inputs, return_dict=True).pooler_output
             vectors.append(
                 torch.nn.functional.normalize(features, dim=-1).float().cpu().tolist()[0]
             )
@@ -55,7 +55,7 @@ def execute(payload: Mapping[str, Any]) -> dict[str, object]:
                     if image.width * image.height > 16_777_216:
                         raise ValueError("frame pixel budget exceeded")
                     inputs = processor(images=image.convert("RGB"), return_tensors="pt").to(device)
-                    features = model.get_image_features(**inputs)
+                    features = model.get_image_features(**inputs, return_dict=True).pooler_output
                 vectors.append(
                     torch.nn.functional.normalize(features, dim=-1).float().cpu().tolist()[0]
                 )

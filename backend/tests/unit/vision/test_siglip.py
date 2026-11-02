@@ -143,6 +143,10 @@ def test_runtime_offline_query_and_frames(tmp_path: Path, monkeypatch: pytest.Mo
     _, transformers, _ = native(monkeypatch)
     assert siglip_runtime.execute(payload())["vectors"] == [[1.0, 0.0]]
     options = transformers.SiglipModel.from_pretrained.call_args.kwargs
+    assert transformers.AutoProcessor.from_pretrained.call_args.kwargs["backend"] == "pil"
+    transformers.SiglipModel.from_pretrained.return_value.to.return_value.eval.return_value.get_text_features.assert_called_once_with(
+        return_dict=True
+    )
     assert (
         options["local_files_only"]
         and options["use_safetensors"]

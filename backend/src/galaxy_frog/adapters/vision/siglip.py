@@ -53,7 +53,8 @@ class SiglipEmbeddingProvider:
         self._device = device
         self._python = python or Path(sys.executable)
         self._deadline = timeout_seconds
-        self._runner = runner or AsyncSubprocessRunner()
+        # Four 768-dimensional float32 vectors can exceed 64 KiB as JSON floats.
+        self._runner = runner or AsyncSubprocessRunner(max_output_bytes=131072)
         self._lock = asyncio.Lock()
 
     async def embed_query(self, query: str) -> tuple[float, ...]:
