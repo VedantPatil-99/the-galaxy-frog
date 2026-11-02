@@ -539,6 +539,13 @@ def test_rank_caption_format_prefers_native_before_translated_and_json3() -> Non
     assert ranked == [native_json3, native_vtt, translated_json3, translated_vtt]
 
 
+def test_caption_formats_skip_non_mapping_and_rank_other_native_language() -> None:
+    assert YouTubeSource._has_native_automatic_format([None, {"url": "https://example.com"}])
+    assert YouTubeSource._rank_caption_format(
+        {"ext": "json3", "url": "https://example.com?lang=fr"}, "en"
+    ) == (1, 0)
+
+
 @pytest.mark.asyncio
 async def test_recovers_when_primary_caption_format_loader_fails() -> None:
     payload = info_payload()
