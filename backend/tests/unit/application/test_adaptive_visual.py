@@ -58,7 +58,12 @@ def temporal(
 
 def ocr(video: UUID, text: str = "chart text") -> RetrievedOCREvidence:
     return RetrievedOCREvidence(
-        video, uuid4(), uuid4(), OCRBlock(text, 0, 1000, 0, OCRProviderSpec("fake", "v1")), 0.5
+        video,
+        uuid4(),
+        uuid4(),
+        OCRBlock(text, 0, 1000, 0, OCRProviderSpec("fake", "v1")),
+        0.5,
+        capture_ms=0,
     )
 
 
@@ -183,7 +188,7 @@ async def test_provider_lineage_scope_and_budgets_are_enforced(kind: str) -> Non
         lexical.search.return_value = (replace(item, video_id=uuid4()),)
     elif kind == "ocr_time":
         lexical.search.return_value = (
-            replace(item, block=replace(item.block, start_ms=1000, end_ms=2000)),
+            replace(item, block=replace(item.block, start_ms=1000, end_ms=2000), capture_ms=1000),
         )
     elif kind == "ocr_budget":
         lexical.search.return_value = (item,) * 31

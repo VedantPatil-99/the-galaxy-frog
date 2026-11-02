@@ -87,6 +87,7 @@ class PostgresOCRLexicalSearch:
                 ),
                 score=float(score_val),
                 image_path=Path(frame_row.image_path),
+                capture_ms=frame_row.capture_ms,
             )
             for block_row, frame_row, score_val in rows
         )
@@ -242,6 +243,7 @@ class PgVectorOCRSearch:
                 ),
                 score=max(0.0, min(1.0, 1.0 - float(distance_val))),
                 image_path=Path(frame_row.image_path),
+                capture_ms=frame_row.capture_ms,
             )
             for block_row, frame_row, distance_val in rows
         )

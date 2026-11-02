@@ -187,6 +187,7 @@ class VisualRetrievalResult:
                     "video_id": str(hit.video_id),
                     "start_ms": hit.block.start_ms,
                     "end_ms": hit.block.end_ms,
+                    "capture_ms": hit.capture_ms,
                     "sequence": hit.block.source_frame_sequence,
                     "provider": asdict(hit.block.provider_spec),
                     "score": hit.score,
@@ -295,7 +296,14 @@ class AdaptiveVisualRetrieval:
                 for index, item in enumerate(candidates, 1):
                     if item.video_id != video_id or (
                         text.window is not None
-                        and not text.window.overlaps(item.block.start_ms, item.block.end_ms)
+                        and (
+                            item.capture_ms is None
+                            or item.capture_ms < text.window.start_ms
+                            or (
+                                text.window.end_ms is not None
+                                and item.capture_ms >= text.window.end_ms
+                            )
+                        )
                     ):
                         raise RetrievalIntegrityError(
                             "OCR retrieval violated video or temporal scope."

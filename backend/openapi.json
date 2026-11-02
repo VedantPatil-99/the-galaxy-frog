@@ -745,6 +745,17 @@
             "title": "Block Id",
             "type": "string"
           },
+          "capture_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Ms"
+          },
           "confidence": {
             "anyOf": [
               {

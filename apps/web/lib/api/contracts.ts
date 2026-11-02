@@ -276,6 +276,7 @@ export function isAnswerResponse(value: unknown): value is AnswerResponse {
     ["low", "medium", "high"].includes(String(value.confidence)) &&
     typeof value.degraded_mode === "boolean" &&
     (value.retrieval == null || isSearchResponse(value.retrieval)) &&
+    (value.visual_evidence === undefined || (Array.isArray(value.visual_evidence) && value.visual_evidence.every(isVisualFrame))) &&
     (value.retrieval_status === undefined || retrievalStatuses.has(String(value.retrieval_status))) &&
     isStringArray(value.warnings) &&
     Array.isArray(value.evidence) &&
@@ -308,12 +309,15 @@ function isOriginalUnit(value: unknown): boolean {
 
 function isVisualFrame(value: unknown): value is VisualFrameResponse {
   return (
-    isRecord(value) &&
+    isInterval(value) &&
     typeof value.frame_id === "string" &&
     typeof value.sequence === "number" &&
     typeof value.start_ms === "number" &&
     typeof value.end_ms === "number" &&
     typeof value.image_url === "string" &&
+    /^\/v1\/videos\/[^/]+\/frames\/\d+\/image$/.test(value.image_url) &&
+    (value.capture_ms == null || (typeof value.capture_ms === "number" && value.capture_ms >= value.start_ms && value.capture_ms < value.end_ms)) &&
+    (value.collection == null || (isRecord(value.collection) && typeof value.collection.model === "string" && typeof value.collection.provider === "string" && typeof value.collection.revision === "string" && typeof value.collection.dimension === "number" && typeof value.collection.normalization === "string")) &&
     (value.ocr_text === null || value.ocr_text === undefined || typeof value.ocr_text === "string") &&
     (value.confidence === null || value.confidence === undefined || typeof value.confidence === "number") &&
     typeof value.is_duplicate === "boolean"
@@ -340,7 +344,10 @@ export function isSearchResponse(value: unknown): value is SearchResponse {
         (hit.rerank_score == null || typeof hit.rerank_score === "number") &&
         Array.isArray(hit.stages) && hit.stages.every(stage => isRecord(stage) && retrievalModes.has(String(stage.stage)) &&
           typeof stage.rank === "number" && typeof stage.score === "number"))) &&
-    (value.visual_frames === undefined || (Array.isArray(value.visual_frames) && value.visual_frames.every(isVisualFrame)))
+    (value.visual_frames === undefined || (Array.isArray(value.visual_frames) && value.visual_frames.every(isVisualFrame))) &&
+    (value.ocr_evidence === undefined || (Array.isArray(value.ocr_evidence) && value.ocr_evidence.every(block => isInterval(block) && block.video_id === value.video_id && typeof block.block_id === "string" && typeof block.frame_id === "string" && typeof block.sequence === "number" && typeof block.text === "string" && isRecord(block.provider) && typeof block.provider.provider === "string" && typeof block.provider.provider_revision === "string"))) &&
+    (value.visual_decisions === undefined || (Array.isArray(value.visual_decisions) && value.visual_decisions.every(decision => isRecord(decision) && typeof decision.decision === "string" && typeof decision.reason === "string"))) &&
+    (value.visual_reasoning == null || (isRecord(value.visual_reasoning) && typeof value.visual_reasoning.reason === "string" && typeof value.visual_reasoning.cache_hit === "boolean" && typeof value.visual_reasoning.elapsed_ms === "number" && isStringArray(value.visual_reasoning.examined_frame_ids) && isStringArray(value.visual_reasoning.cited_frame_ids) && (value.visual_reasoning.provider == null || (isRecord(value.visual_reasoning.provider) && typeof value.visual_reasoning.provider.model === "string" && typeof value.visual_reasoning.provider.location === "string"))))
 }
 
 export function isRetrievalTraceResponse(value: unknown): value is RetrievalTraceResponse {

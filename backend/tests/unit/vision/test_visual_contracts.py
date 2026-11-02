@@ -64,6 +64,10 @@ def test_valid_contracts_preserve_original_frame() -> None:
     assert request.frames[0].scene_id == original.scene_id
     assert result.cited_frame_ids == (original.frame_id,)
     assert str(VisualProviderError(VisualFailureCode.BUSY)) == "visual_busy"
+    assert (
+        decide_visual(visual_signals("Read the text"), EvidenceSufficiency(0, 0)).decision
+        == VisualDecision.RETRIEVE
+    )
 
 
 @pytest.mark.parametrize(

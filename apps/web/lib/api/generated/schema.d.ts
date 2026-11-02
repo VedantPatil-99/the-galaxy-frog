@@ -586,6 +586,8 @@ export interface components {
              * Format: uuid
              */
             block_id: string;
+            /** Capture Ms */
+            capture_ms?: number | null;
             /** Confidence */
             confidence: number | null;
             /** Confidence Method */

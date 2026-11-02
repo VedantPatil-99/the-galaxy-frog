@@ -161,6 +161,7 @@ class AdaptiveVisualReasoning:
                     {
                         "block_id": str(item.block_id),
                         "frame_id": str(item.frame_id),
+                        "capture_ms": item.capture_ms,
                         "provider": asdict(item.block.provider_spec),
                         "start_ms": item.block.start_ms,
                         "end_ms": item.block.end_ms,

@@ -185,7 +185,7 @@ export function TranscriptWorkspace() {
     setAnswer(null)
     setRetrieval(null)
     try {
-      const options = { mode: retrievalMode, selected_anchor: selectedAnchor, limit: 8, allow_fallback: true }
+      const options = { mode: retrievalMode, selected_anchor: selectedAnchor, limit: 8, allow_fallback: true, allow_external_frames: false }
       if (evidenceOnly) {
         setRetrieval(await searchVideo(transcript.video.video_id, { ...options, query: question }))
       } else {
@@ -291,11 +291,15 @@ export function TranscriptWorkspace() {
                 <div className="mt-6 border-t pt-6">
                   <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">{answer.confidence} confidence</span>
-                    <span>{answer.evidence.length} citation{answer.evidence.length === 1 ? "" : "s"}</span>
+                    <span>{answer.evidence.length + (answer.visual_evidence?.length ?? 0)} citations</span>
                   </div>
                   <p className="text-base leading-7">{answer.answer}</p>
                   {answer.warnings.map((warning) => <p key={warning} className="mt-3 text-sm text-muted-foreground">{warning}</p>)}
                   <div className="mt-5 space-y-3">
+                    {answer.visual_evidence?.map(frame => <button key={frame.frame_id} type="button" onClick={() => seekTo(frame.capture_ms ?? frame.start_ms)} className="block w-full rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left hover:border-primary/45">
+                      <span className="font-mono text-xs font-semibold text-primary">{timestamp(frame.start_ms)}–{timestamp(frame.end_ms)} · visual citation{frame.capture_ms != null ? ` · captured ${timestamp(frame.capture_ms)}` : ""}</span>
+                      <span className="mt-2 block break-all text-xs">Frame {frame.frame_id}</span>
+                    </button>)}
                     {answer.evidence.map((item) => (
                       <button key={item.retrieval_unit_id} type="button" onClick={() => seekTo(item.start_ms)} className="block w-full rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left transition hover:border-primary/45 hover:bg-primary/10">
                         <span className="font-mono text-xs font-semibold text-primary">{timestamp(item.start_ms)}–{timestamp(item.end_ms)} · transcript</span>

@@ -68,6 +68,17 @@ class TestOCRProviderSpec:
 
 
 class TestFrameSample:
+    def test_ocr_capture_must_belong_to_source_interval(self) -> None:
+        with pytest.raises(ValueError, match="OCR capture"):
+            RetrievedOCREvidence(
+                _VIDEO_ID,
+                uuid4(),
+                uuid4(),
+                OCRBlock("text", 0, 1000, 0, _SPEC),
+                0.5,
+                capture_ms=1000,
+            )
+
     def test_exact_capture_preserves_scene_interval(self) -> None:
         from dataclasses import replace
 

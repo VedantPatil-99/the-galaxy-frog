@@ -57,14 +57,31 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
         </div>)}
       </div> : null}
       {result.status === "anchor_unresolved" ? <p role="status" className="rounded-xl border p-4 text-sm">No matching event was found. Try a phrase spoken in the video or an explicit timestamp such as “before 02:30”.</p> : null}
-      {result.status === "resolved" && result.evidence.length === 0 && keptFrames.length === 0 ? <p className="text-sm text-muted-foreground">No transcript evidence matched this query and time range.</p> : null}
+      {result.status === "resolved" && result.evidence.length === 0 && keptFrames.length === 0 && !result.ocr_evidence?.length ? <p className="text-sm text-muted-foreground">No transcript evidence matched this query and time range.</p> : null}
+
+      {result.visual_decisions?.length ? <div className="rounded-xl border p-3 text-sm space-y-2" aria-label="Visual processing decisions">
+        {result.visual_decisions.map((decision, index) => <p key={index}>{decision.decision.replaceAll("_", " ")} · {decision.reason.replaceAll("_", " ")}</p>)}
+        {result.visual_reasoning ? <p className="text-xs text-muted-foreground">Reasoning: {result.visual_reasoning.provider?.model ?? "unavailable"} · {result.visual_reasoning.provider?.location ?? "disabled"} · {result.visual_reasoning.cache_hit ? "cached result" : `${Math.round(result.visual_reasoning.elapsed_ms)} ms`} · {result.visual_reasoning.examined_frame_ids.length} frame examined</p> : null}
+      </div> : null}
+
+      {result.ocr_evidence?.length ? <div aria-label="OCR evidence" className="space-y-3">
+        <h4 className="text-sm font-semibold">OCR evidence</h4>
+        {result.ocr_evidence.map(block => <article key={block.block_id} className="rounded-xl border p-3 space-y-2">
+          <p className="whitespace-pre-wrap text-sm">{block.text}</p>
+          <p className="text-xs text-muted-foreground">{block.provider.provider} · {block.provider.provider_revision}{block.confidence != null ? ` · OCR confidence ${Math.round(block.confidence * 100)}% (${block.confidence_method})` : ""}</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => onSeek(block.capture_ms ?? block.start_ms)}>{timestamp(block.start_ms)}–{timestamp(block.end_ms)}{block.capture_ms != null ? ` · Captured ${timestamp(block.capture_ms)}` : ""}</Button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="max-h-48 rounded-lg" loading="lazy" alt={`OCR source frame ${block.sequence}`} src={`/api/proxy/v1/videos/${block.video_id}/frames/${block.sequence}/image`} />
+          <p className="break-all font-mono text-[0.65rem]">Block {block.block_id} · Frame {block.frame_id}</p>
+        </article>)}
+      </div> : null}
 
       {keptFrames.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold">Visual Evidence & Slides</h4>
+            <h4 className="text-sm font-semibold">Visual frame evidence</h4>
             <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
-              {keptFrames.length} {keptFrames.length === 1 ? "slide" : "slides"}
+              {keptFrames.length} {keptFrames.length === 1 ? "frame" : "frames"}
             </span>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -81,7 +98,7 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={src}
-                      alt={`Visual frame at ${timestamp(frame.start_ms)}`}
+                      alt={`Visual frame at ${timestamp(frame.capture_ms ?? frame.start_ms)}`}
                       className="h-full w-full object-cover"
                       loading="lazy"
                     />
@@ -90,6 +107,8 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
                     </div>
                   </div>
                   <div className="p-3 space-y-2">
+                    <p className="text-xs font-medium">{frame.modality === "visual" ? "Visual similarity" : "OCR frame"}{frame.capture_ms != null ? ` · Captured ${timestamp(frame.capture_ms)}` : " · Capture time unknown"}</p>
+                    {frame.collection ? <p className="text-xs text-muted-foreground">{frame.collection.model} · {frame.collection.provider}{frame.rank != null ? ` · Rank ${frame.rank}` : ""}</p> : null}
                     {frame.ocr_text ? (
                       <div>
                         <p className="line-clamp-3 text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
@@ -110,11 +129,12 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
                         variant="outline"
                         size="sm"
                         className="w-full text-xs"
-                        onClick={() => onSeek(frame.start_ms)}
+                        onClick={() => onSeek(frame.capture_ms ?? frame.start_ms)}
                       >
-                        Jump to {timestamp(frame.start_ms)}
+                        Jump to {timestamp(frame.capture_ms ?? frame.start_ms)}
                       </Button>
                     </div>
+                    <details className="text-xs break-all"><summary className="cursor-pointer">Frame provenance</summary><p>Frame {frame.frame_id} · Scene {frame.scene_id ?? "unknown"}</p><p>Source {frame.source ?? "unknown"} · pHash {frame.perceptual_hash ?? "unknown"}</p><p>SHA-256 {frame.content_sha256 ?? "unknown"}</p>{frame.collection ? <p>Collection {frame.collection_id} · Revision {frame.collection.revision} · {frame.collection.dimension} dimensions · {frame.collection.normalization}</p> : null}</details>
                   </div>
                 </div>
               )
@@ -125,7 +145,7 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
 
       {result.evidence.map((group, index) => <article key={`${group.start_ms}-${group.end_ms}`} className="rounded-2xl border p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold">Evidence {index + 1}</h4>
+          <h4 className="text-sm font-semibold">Transcript evidence {index + 1}</h4>
           <Button type="button" variant="outline" size="sm" onClick={() => onSeek(group.start_ms)}>{timestamp(group.start_ms)}–{timestamp(group.end_ms)}</Button>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">Expanded display window. Original cue and citation intervals are preserved below.</p>

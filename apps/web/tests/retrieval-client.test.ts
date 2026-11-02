@@ -10,7 +10,7 @@ test("sends retrieval-only and selected-anchor contracts to FastAPI through the 
     calls.push({ path: String(input), body: init?.body ? JSON.parse(String(init.body)) : null })
     return Response.json(retrievalFixture)
   }
-  const options = { query: "before the introduction", mode: "hybrid" as const, limit: 8, allow_fallback: true, selected_anchor: "c".repeat(64) }
+  const options = { query: "before the introduction", mode: "hybrid" as const, limit: 8, allow_fallback: true, allow_external_frames: false, selected_anchor: "c".repeat(64) }
   const result = await searchVideo(retrievalFixture.video_id, options, fetcher)
   expect(result.trace_id).toBe(retrievalFixture.trace_id)
   expect(calls).toEqual([{ path: `/api/proxy/v1/videos/${retrievalFixture.video_id}/search`, body: options }])
@@ -24,9 +24,9 @@ test("reads a video-scoped durable trace and carries question retrieval options"
   })
   const answer = { answer: "", confidence: "low", evidence: [], warnings: [], degraded_mode: false, retrieval_status: "anchor_selection_required", retrieval: { ...retrievalFixture, status: "anchor_selection_required", evidence: [] } }
   const result = await askVideoQuestion(trace.video_id, "before intro", async (_input, init) => {
-    expect(JSON.parse(String(init?.body))).toEqual({ question: "before intro", mode: "lexical", limit: 3, allow_fallback: false, selected_anchor: "c".repeat(64) })
+    expect(JSON.parse(String(init?.body))).toEqual({ question: "before intro", mode: "lexical", limit: 3, allow_fallback: false, allow_external_frames: false, selected_anchor: "c".repeat(64) })
     return Response.json(answer)
-  }, { mode: "lexical", limit: 3, allow_fallback: false, selected_anchor: "c".repeat(64) })
+  }, { mode: "lexical", limit: 3, allow_fallback: false, allow_external_frames: false, selected_anchor: "c".repeat(64) })
   expect(result.retrieval_status).toBe("anchor_selection_required")
 })
 

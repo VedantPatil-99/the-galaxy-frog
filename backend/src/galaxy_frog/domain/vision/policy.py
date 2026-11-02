@@ -41,6 +41,12 @@ _VISUAL = frozenset(
         "turtle",
         "panda",
         "shirt",
+        "text",
+        "caption",
+        "captions",
+        "written",
+        "label",
+        "labels",
     ]
 )
 _REASON = frozenset(

@@ -269,11 +269,17 @@ class RetrievedOCREvidence:
     block: OCRBlock
     score: float
     image_path: Path | None = None
+    capture_ms: int | None = None
 
     def __post_init__(self) -> None:
         if not isfinite(self.score) or not 0 <= self.score <= 1:
             msg = "retrieval score must be finite and between zero and one"
             raise ValueError(msg)
+        if (
+            self.capture_ms is not None
+            and not self.block.start_ms <= self.capture_ms < self.block.end_ms
+        ):
+            raise ValueError("OCR capture must lie within its source interval")
         if not isinstance(self.block, OCRBlock):  # pyright: ignore[reportUnnecessaryIsInstance]
             msg = "block must be an OCRBlock"
             raise ValueError(msg)

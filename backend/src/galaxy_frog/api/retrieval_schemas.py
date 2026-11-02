@@ -62,6 +62,7 @@ class OCREvidenceResponse(BaseModel):
     sequence: int
     start_ms: int
     end_ms: int
+    capture_ms: int | None = None
     text: str
     provider: OCRProviderSpec
     confidence: float | None
@@ -153,6 +154,7 @@ def search_response(
                 start_ms=item.block.start_ms,
                 end_ms=item.block.end_ms,
                 text=item.block.text,
+                capture_ms=item.capture_ms,
                 provider=item.block.provider_spec,
                 confidence=item.block.confidence,
                 confidence_method=item.block.confidence_method,
