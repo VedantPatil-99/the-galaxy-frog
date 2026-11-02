@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -83,6 +84,78 @@ class MemoryRepository:
 
     async def get_transcript(self, video_id: UUID) -> TranscriptRecord | None:
         return self.transcript if self.record and self.record.video_id == video_id else None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ocr_only", [False, True])
+async def test_adaptive_visual_http_citations_and_ocr_extract(
+    api: tuple[FastAPI, MemoryRepository], ocr_only: bool
+) -> None:
+    from tests.unit.application.test_adaptive_visual import ocr, temporal
+    from tests.unit.application.test_cached_visual_reasoning import visual_result
+
+    from galaxy_frog.application.retrieval.reasoning import ReasoningExecution
+    from galaxy_frog.application.retrieval.search import SearchExecution
+    from galaxy_frog.domain.vision.policy import EscalationDecision, VisualDecision
+    from galaxy_frog.domain.vision.visual import VisualReasoningResult
+
+    application, repository = api
+    imported = await ImportVideo(
+        sources=(FixtureSource(),),
+        repository=repository,
+        transcript_search=MemorySearch(repository),
+    ).execute("https://youtu.be/dQw4w9WgXcQ")
+    video_id = imported.video.video_id
+    visual = visual_result()
+    assert visual.provider is not None
+    original = replace(visual.hits[0].frame, video_id=video_id, capture_ms=200)
+    visual = replace(visual, hits=(replace(visual.hits[0], frame=original),), ocr=(ocr(video_id),))
+    assert visual.provider is not None
+    reasoning = ReasoningExecution(
+        VisualDecision.REASON,
+        "visual_attributes",
+        visual.provider,
+        (original,),
+        VisualReasoningResult("blue", (original.frame_id,), visual.provider, 3),
+        False,
+        "a" * 64,
+        False,
+        3,
+    )
+    if ocr_only:
+        visual = replace(
+            visual,
+            decisions=(
+                EscalationDecision(VisualDecision.TEXT_SUFFICIENT, "ocr_covers_requested_text"),
+            ),
+        )
+        reasoning = None
+    execution = SearchExecution(
+        RetrievalTrace(uuid4(), video_id, datetime.now(UTC), {}), temporal(), visual, reasoning
+    )
+    service = AsyncMock(spec=SearchTranscript)
+    service.execute.return_value = execution
+    application.dependency_overrides[get_search_service] = lambda: service
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        answer = await client.post(
+            f"/v1/videos/{video_id}/questions", json={"question": "Which color is shown?"}
+        )
+        assert answer.status_code == 200, answer.text
+        value = answer.json()
+        assert value["answer"] == ("chart text" if ocr_only else "blue")
+        if not ocr_only:
+            assert value["visual_evidence"][0]["frame_id"] == str(original.frame_id)
+            assert value["visual_evidence"][0]["capture_ms"] == 200
+        assert value["retrieval"]["ocr_evidence"][0]["block_id"] == str(visual.ocr[0].block_id)
+        assert service.execute.call_args.kwargs["reason"] is True
+        response = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": "find diagram"}
+        )
+        assert response.status_code == 200
+        assert service.execute.call_args.kwargs["reason"] is False
+        assert "image_path" not in response.text and "frame.jpg" not in response.text
 
 
 class MemoryVisionRepository:

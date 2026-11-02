@@ -302,7 +302,7 @@ class PySceneDetectAdapter:
             )
 
         samples: list[FrameSample] = []
-        for sequence, (_capture_ms, start_ms, end_ms, source) in enumerate(sample_points):
+        for sequence, (capture_ms, start_ms, end_ms, source) in enumerate(sample_points):
             samples.append(
                 FrameSample(
                     video_id=video_id,
@@ -311,6 +311,7 @@ class PySceneDetectAdapter:
                     end_ms=end_ms,
                     path=self._frame_path(video_id, sequence),
                     source=source,
+                    capture_ms=capture_ms,
                 )
             )
         return tuple(samples)

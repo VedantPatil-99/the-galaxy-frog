@@ -106,6 +106,7 @@ class SqlAlchemyVisionRepository:
                     sequence=frame.sequence,
                     start_ms=frame.start_ms,
                     end_ms=frame.end_ms,
+                    capture_ms=frame.capture_ms,
                     source=frame.source.value,
                     dhash=frame_dhash,
                     is_duplicate=is_dup,

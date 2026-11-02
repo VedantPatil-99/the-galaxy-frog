@@ -31,6 +31,16 @@ _VISUAL = frozenset(
         "red",
         "blue",
         "green",
+        "frame",
+        "visible",
+        "appear",
+        "appears",
+        "animated",
+        "animation",
+        "animal",
+        "turtle",
+        "panda",
+        "shirt",
     ]
 )
 _REASON = frozenset(
@@ -53,7 +63,22 @@ _REASON = frozenset(
         "arrow",
     ]
 )
-_OCR = frozenset(["read", "text", "written", "label", "labels", "title", "says", "code", "table"])
+_OCR = frozenset(
+    [
+        "read",
+        "quote",
+        "caption",
+        "captions",
+        "text",
+        "written",
+        "label",
+        "labels",
+        "title",
+        "says",
+        "code",
+        "table",
+    ]
+)
 
 
 class VisualDecision(StrEnum):
@@ -76,8 +101,11 @@ def visual_signals(query: str) -> QuerySignals:
     if not query.strip() or len(query) > 2000:
         raise ValueError("query must contain one to 2000 characters")
     words = set(re.findall(r"\b\w+\b", query.casefold()))
+    reasoning = words & _REASON
+    if words & _VISUAL and not words & _OCR:
+        reasoning |= words & {"what", "which", "who", "is", "are"}
     return QuerySignals(
-        tuple(sorted(words & _VISUAL)), tuple(sorted(words & _REASON)), tuple(sorted(words & _OCR))
+        tuple(sorted(words & _VISUAL)), tuple(sorted(reasoning)), tuple(sorted(words & _OCR))
     )
 
 
@@ -116,7 +144,7 @@ def decide_visual(
         return EscalationDecision(VisualDecision.RETRIEVE, "visual_content_not_established_by_text")
     if evidence.visual_hits == 0:
         return EscalationDecision(VisualDecision.INSUFFICIENT, "no_relevant_visual_frames", True)
-    if signals.reasoning_terms:
+    if signals.reasoning_terms or (signals.ocr_terms and evidence.ocr_coverage < 0.75):
         return EscalationDecision(
             VisualDecision.REASON, "retrieval_cannot_resolve_visual_attributes_or_relations"
         )

@@ -23,7 +23,7 @@ from galaxy_frog.api.dispatching import dispatch_ingestion_job
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.job_schemas import ingestion_job_response
 from galaxy_frog.api.retrieval import SearchDependency, run_search
-from galaxy_frog.api.retrieval_schemas import search_response
+from galaxy_frog.api.retrieval_schemas import search_response, visual_frame_response
 from galaxy_frog.api.schemas import ErrorResponse
 from galaxy_frog.api.video_schemas import (
     AnswerResponse,
@@ -313,7 +313,9 @@ async def ask_question(
 ) -> AnswerResponse:
     """Retrieve transcript evidence and return a deterministically validated answer."""
 
-    execution = await run_search(video_id, body.question, body, repository, retrieval_service)
+    execution = await run_search(
+        video_id, body.question, body, repository, retrieval_service, reason=True
+    )
     metadata = search_response(execution, body.mode)
     if execution.result.status != RetrievalStatus.RESOLVED:
         return AnswerResponse(
@@ -326,6 +328,41 @@ async def ask_question(
                 else "No matching event anchor was found."
             ],
             degraded_mode=metadata.degraded,
+            retrieval_status=metadata.status,
+            retrieval=metadata,
+        )
+    reasoning = execution.reasoning
+    if reasoning is not None and reasoning.result is not None:
+        visual_answer = reasoning.result
+        return AnswerResponse(
+            answer=visual_answer.answer,
+            confidence="low" if visual_answer.insufficient_evidence else "medium",
+            evidence=[],
+            visual_evidence=[
+                visual_frame_response(frame)
+                for frame in reasoning.frames
+                if frame.frame_id in visual_answer.cited_frame_ids
+            ],
+            warnings=[warning.message for warning in execution.result.warnings],
+            degraded_mode=execution.result.degraded,
+            retrieval_status=metadata.status,
+            retrieval=metadata,
+        )
+    if (
+        execution.visual is not None
+        and execution.visual.ocr
+        and execution.visual.decisions[-1].reason == "ocr_covers_requested_text"
+    ):
+        return AnswerResponse(
+            answer="\n\n".join(item.block.text for item in execution.visual.ocr),
+            confidence="low",
+            evidence=[],
+            visual_evidence=[],
+            warnings=[
+                "This answer is an extract from retrieved OCR evidence.",
+                *(warning.message for warning in execution.result.warnings),
+            ],
+            degraded_mode=execution.result.degraded,
             retrieval_status=metadata.status,
             retrieval=metadata,
         )

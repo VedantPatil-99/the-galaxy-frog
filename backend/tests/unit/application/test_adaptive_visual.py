@@ -110,7 +110,9 @@ async def test_visual_retrieval_deduplication_then_bounded_expansion() -> None:
     lexical, _, visual = ports()
     original = frame()
     duplicate = replace(original, frame_id=uuid4())
-    neighbor = replace(original, frame_id=uuid4(), sequence=1, start_ms=1000, end_ms=2000)
+    neighbor = replace(
+        original, frame_id=uuid4(), sequence=1, start_ms=1000, end_ms=2000, capture_ms=1000
+    )
     visual.search.return_value = (
         VisualHit(original, SPEC, 0.8, 1),
         VisualHit(duplicate, SPEC, 0.7, 2),
@@ -191,14 +193,16 @@ async def test_provider_lineage_scope_and_budgets_are_enforced(kind: str) -> Non
         visual.search.return_value = (VisualHit(replace(original, video_id=uuid4()), SPEC, 0.8, 1),)
     elif kind == "visual_time":
         visual.search.return_value = (
-            VisualHit(replace(original, start_ms=1000, end_ms=2000), SPEC, 0.8, 1),
+            VisualHit(replace(original, start_ms=1000, end_ms=2000, capture_ms=1000), SPEC, 0.8, 1),
         )
     elif kind == "visual_budget":
         visual.search.return_value = visual.search.return_value * 13
     elif kind == "nearby_video":
         visual.nearby.return_value = (replace(original, video_id=uuid4()),)
     elif kind == "nearby_time":
-        visual.nearby.return_value = (replace(original, start_ms=1000, end_ms=2000),)
+        visual.nearby.return_value = (
+            replace(original, start_ms=1000, end_ms=2000, capture_ms=1000),
+        )
     else:
         visual.nearby.return_value = (original,) * 5
     with pytest.raises(RetrievalIntegrityError):
@@ -249,3 +253,12 @@ async def test_transcript_ranks_and_durable_visual_decisions() -> None:
         await service.execute(record.video.video_id, "find diagram", allow_fallback=False)
     assert error.value.code == "VISUAL_UNAVAILABLE"
     create_app(Settings(visual_embedding_enabled=True))
+
+
+@pytest.mark.asyncio
+async def test_strict_visual_mode_rejects_disabled_provider() -> None:
+    lexical, _, _ = ports()
+    with pytest.raises(VisualProviderError):
+        await AdaptiveVisualRetrieval(ocr_lexical=lexical).execute(
+            uuid4(), "find diagram", temporal(), allow_fallback=False
+        )

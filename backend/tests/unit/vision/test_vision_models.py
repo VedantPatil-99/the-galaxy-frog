@@ -68,6 +68,14 @@ class TestOCRProviderSpec:
 
 
 class TestFrameSample:
+    def test_exact_capture_preserves_scene_interval(self) -> None:
+        from dataclasses import replace
+
+        assert replace(_FRAME, capture_ms=500).start_ms == 0
+        for capture in (-1, 1000):
+            with pytest.raises(ValueError, match="capture_ms"):
+                replace(_FRAME, capture_ms=capture)
+
     def test_valid_scene_boundary(self) -> None:
         f = FrameSample(
             video_id=_VIDEO_ID,

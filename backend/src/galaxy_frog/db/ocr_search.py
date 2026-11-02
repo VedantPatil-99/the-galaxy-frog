@@ -63,9 +63,9 @@ class PostgresOCRLexicalSearch:
             .limit(limit)
         )
         if window is not None:
-            statement = statement.where(OCRBlockRow.end_ms > window.start_ms)
+            statement = statement.where(VideoFrameRow.capture_ms >= window.start_ms)
             if window.end_ms is not None:
-                statement = statement.where(OCRBlockRow.start_ms < window.end_ms)
+                statement = statement.where(VideoFrameRow.capture_ms < window.end_ms)
 
         rows = (await self._session.execute(statement)).all()
         return tuple(
@@ -189,6 +189,19 @@ class PgVectorOCRSearch:
         if window is not None and window.start_ms == window.end_ms:
             return ()
 
+        # Empty videos need no query embedding or model load. Scope this check before top-k.
+        available = (
+            select(OCRBlockRow.id)
+            .join(VideoFrameRow, VideoFrameRow.id == OCRBlockRow.frame_id)
+            .where(OCRBlockRow.video_id == video_id)
+            .limit(1)
+        )
+        if window is not None:
+            available = available.where(VideoFrameRow.capture_ms >= window.start_ms)
+            if window.end_ms is not None:
+                available = available.where(VideoFrameRow.capture_ms < window.end_ms)
+        if await self._session.scalar(available) is None:
+            return ()
         collection_id = await self.ensure_indexed(video_id)
         vectors = await self._provider.embed((query,))
         query_vector = list(vectors[0])
@@ -205,9 +218,9 @@ class PgVectorOCRSearch:
             .limit(limit)
         )
         if window is not None:
-            statement = statement.where(OCRBlockRow.end_ms > window.start_ms)
+            statement = statement.where(VideoFrameRow.capture_ms >= window.start_ms)
             if window.end_ms is not None:
-                statement = statement.where(OCRBlockRow.start_ms < window.end_ms)
+                statement = statement.where(VideoFrameRow.capture_ms < window.end_ms)
 
         rows = (await self._session.execute(statement)).all()
         return tuple(

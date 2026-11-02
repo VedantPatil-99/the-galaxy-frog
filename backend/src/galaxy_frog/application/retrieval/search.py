@@ -8,6 +8,7 @@ from time import perf_counter
 from typing import cast
 from uuid import UUID, uuid4
 
+from galaxy_frog.application.retrieval.reasoning import AdaptiveVisualReasoning, ReasoningExecution
 from galaxy_frog.application.retrieval.temporal import (
     InvalidAnchor,
     RetrieveTemporalEvidence,
@@ -36,6 +37,7 @@ class SearchExecution:
     trace: RetrievalTrace
     result: TemporalRetrievalResult
     visual: VisualRetrievalResult | None = None
+    reasoning: ReasoningExecution | None = None
 
 
 class TracedRetrievalFailure(RuntimeError):
@@ -100,6 +102,7 @@ class SearchTranscript:
         traces: RetrievalTraceRepository,
         embedding_spec: EmbeddingCollectionSpec,
         visual: AdaptiveVisualRetrieval | None = None,
+        reasoning: AdaptiveVisualReasoning | None = None,
         clock: Callable[[], float] = perf_counter,
     ) -> None:
         self._retrieval = retrieval
@@ -107,6 +110,7 @@ class SearchTranscript:
         self._embedding_spec = embedding_spec
         self._clock = clock
         self._visual = visual
+        self._reasoning = reasoning
 
     async def execute(
         self,
@@ -117,6 +121,8 @@ class SearchTranscript:
         limit: int = 8,
         selected_anchor: str | None = None,
         allow_fallback: bool = True,
+        reason: bool = False,
+        external_permission: bool = False,
     ) -> SearchExecution:
         started = self._clock()
         payload: dict[str, object] = {
@@ -138,8 +144,12 @@ class SearchTranscript:
             },
         }
         visual_result = None
+        reasoning_result = None
         if self._visual is not None:
             payload["visual_configuration"] = self._visual.configuration
+        if reason and self._reasoning is not None:
+            payload["reasoning_configuration"] = self._reasoning.configuration
+            payload["external_permission"] = external_permission
         try:
             result = await self._retrieval.execute(
                 video_id,
@@ -158,6 +168,20 @@ class SearchTranscript:
                     warnings=(*result.warnings, *visual_result.warnings),
                     degraded=result.degraded or visual_result.degraded,
                 )
+                if reason and self._reasoning is not None:
+                    reasoning_result = await self._reasoning.execute(
+                        video_id,
+                        query,
+                        result,
+                        visual_result,
+                        external_permission=external_permission,
+                        allow_fallback=allow_fallback,
+                    )
+                    result = replace(
+                        result,
+                        warnings=(*result.warnings, *reasoning_result.warnings),
+                        degraded=result.degraded or reasoning_result.degraded,
+                    )
         except (
             EmbeddingProviderError,
             RerankerError,
@@ -222,7 +246,11 @@ class SearchTranscript:
         )
         if visual_result is not None:
             payload["visual"] = visual_result.trace_payload()
-        return SearchExecution(await self._persist(video_id, payload), result, visual_result)
+        if reasoning_result is not None:
+            payload["visual_reasoning"] = reasoning_result.trace_payload()
+        return SearchExecution(
+            await self._persist(video_id, payload), result, visual_result, reasoning_result
+        )
 
     async def _persist(self, video_id: UUID, payload: dict[str, object]) -> RetrievalTrace:
         # Convert UUIDs/enums/tuples to a portable JSON value tree. Transcript text

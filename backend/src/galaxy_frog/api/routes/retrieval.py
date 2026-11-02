@@ -47,6 +47,8 @@ async def search_video(
     vision_repository: VisionRepositoryDependency,
 ) -> SearchResponse:
     execution = await run_search(video_id, body.query, body, repository, service)
+    if execution.visual is not None:
+        return search_response(execution, body.mode)
     frames = await vision_repository.get_frames(video_id, only_kept=True)
     visual_frames: list[VisualFrameResponse] = []
     if frames:

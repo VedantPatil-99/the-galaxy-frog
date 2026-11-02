@@ -18,6 +18,7 @@ from tests.unit.db.test_visual_search import Provider, row
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
 from galaxy_frog.db.models import EmbeddingCollectionRow, VideoRow
+from galaxy_frog.db.reasoning_cache import PostgresVisualReasoningCache
 from galaxy_frog.db.visual_models import VisualEmbeddingRow
 from galaxy_frog.db.visual_search import PgVectorVisualSearch
 from galaxy_frog.domain.retrieval.temporal import TimeWindow
@@ -26,6 +27,7 @@ from galaxy_frog.domain.vision.visual import (
     VisualFailureCode,
     VisualFrame,
     VisualProviderError,
+    VisualReasoningResult,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -93,6 +95,18 @@ async def test_visual_index_restart_boundaries_and_video_isolation(tmp_path: Pat
             hits = await search.search(videos[0], "diagram", window=TimeWindow(1000, 2000))
             assert len(hits) == 1 and hits[0].frame.start_ms == 1000
             assert hits[0].frame.video_id == videos[0]
+            # A periodic sample represents the same scene but lies outside the requested window.
+            periodic = row(tmp_path, videos[0], 10)
+            periodic.start_ms, periodic.end_ms, periodic.capture_ms = 1000, 19000, 11000
+            periodic.scene_id = None
+            unknown = row(tmp_path, videos[0], 11)
+            unknown.start_ms, unknown.end_ms, unknown.capture_ms = 1000, 19000, None
+            unknown.scene_id = None
+            db.add_all([periodic, unknown])
+            await db.commit()
+            await search.ensure_indexed(videos[0])
+            scoped = await search.search(videos[0], "diagram", window=TimeWindow(1000, 2000))
+            assert [hit.frame.sequence for hit in scoped] == [1]
             assert await search.search(videos[0], "diagram", window=TimeWindow(5000, 6000)) == ()
             assert all(f.video_id == videos[0] for f in await search.nearby(videos[0], hits))
             provider.collection = replace(provider.collection, revision="incompatible-v2")
@@ -105,5 +119,31 @@ async def test_visual_index_restart_boundaries_and_video_isolation(tmp_path: Pat
                 await db.execute(
                     delete(EmbeddingCollectionRow).where(EmbeddingCollectionRow.id == collection)
                 )
+            await db.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_real_reasoning_cache_is_durable_and_video_scoped() -> None:
+    engine = create_database_engine(Settings())
+    videos: list[UUID] = []
+    key = uuid4().hex * 2
+    result = VisualReasoningResult("Transport fixture answer", (uuid4(),), Provider.identity, 1)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            for _ in range(2):
+                video, _ = await _seed(db, ("Cache fixture",))
+                videos.append(video)
+            await PostgresVisualReasoningCache(db).put(videos[0], key, result)
+        async with AsyncSession(engine) as db:
+            cache = PostgresVisualReasoningCache(db)
+            assert await cache.get(videos[0], key) == result
+            assert await cache.get(videos[1], key) is None
+            await db.execute(delete(VideoRow).where(VideoRow.id == videos[0]))
+            await db.commit()
+            assert await cache.get(videos[0], key) is None
+    finally:
+        async with AsyncSession(engine) as db:
+            await db.execute(delete(VideoRow).where(VideoRow.id.in_(videos)))
             await db.commit()
         await engine.dispose()

@@ -58,6 +58,7 @@ def row(tmp_path: Path, video: UUID | None = None, sequence: int = 0) -> VideoFr
         sequence=sequence,
         start_ms=sequence * 1000,
         end_ms=(sequence + 1) * 1000,
+        capture_ms=sequence * 1000,
         source="periodic",
         image_path=str(path),
         dhash="0" * 16,
@@ -144,12 +145,18 @@ async def test_search_scope_and_nearby_preserve_ids(tmp_path: Path) -> None:
     statement = db.execute.call_args.args[0]
     sql = str(statement.compile(dialect=postgresql.dialect()))
     assert "video_frames.video_id =" in sql and "visual_embeddings.collection_id =" in sql
-    assert "video_frames.start_ms <" in sql and "video_frames.end_ms >" in sql
+    assert "video_frames.capture_ms <" in sql and "video_frames.capture_ms >=" in sql
     db.scalars.return_value = Mock(all=lambda: [original])
     assert (await adapter.nearby(original.video_id, hits, window=TimeWindow(0)))[
         0
     ].frame_id == original.id
     assert await adapter.nearby(original.video_id, ()) == ()
+    assert (
+        await adapter.nearby(
+            original.video_id, (replace(hits[0], frame=replace(hits[0].frame, capture_ms=None)),)
+        )
+        == ()
+    )
     with pytest.raises(RetrievalIntegrityError):
         await adapter.nearby(uuid4(), hits)
     original.content_sha256 = None

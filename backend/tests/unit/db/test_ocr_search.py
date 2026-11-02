@@ -91,6 +91,16 @@ _SPEC = EmbeddingCollectionSpec(
 )
 
 
+@pytest.mark.asyncio
+async def test_empty_scoped_ocr_skips_model_load() -> None:
+    session = FakeSession()
+    session.scalar_values.append(None)
+    embedder = FakeEmbedder(_SPEC)
+    searcher = PgVectorOCRSearch(session=session, provider=embedder)  # pyright: ignore[reportArgumentType]
+    assert await searcher.search(uuid4(), "text", window=TimeWindow(100, 200)) == ()
+    assert not embedder.embedded
+
+
 # ---------------------------------------------------------------------------
 # Lexical Search Tests
 # ---------------------------------------------------------------------------
@@ -194,8 +204,8 @@ async def test_lexical_matches_with_and_without_window() -> None:
     assert evidence.image_path == Path("C:/tmp/frame_003.jpg")
 
     stmt = str(session.statements[-1])
-    assert "ocr_blocks.end_ms >" in stmt
-    assert "ocr_blocks.start_ms <" in stmt
+    assert "video_frames.capture_ms >=" in stmt
+    assert "video_frames.capture_ms <" in stmt
 
 
 @pytest.mark.asyncio
@@ -212,8 +222,8 @@ async def test_lexical_open_ended_window() -> None:
     )
 
     stmt = str(session.statements[-1])
-    assert "ocr_blocks.end_ms >" in stmt
-    assert "ocr_blocks.start_ms <" not in stmt
+    assert "video_frames.capture_ms >=" in stmt
+    assert "video_frames.capture_ms <" not in stmt
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +426,7 @@ async def test_vector_search_success() -> None:
     now = datetime.now(UTC)
 
     session = FakeSession()
+    session.scalar_values.append(uuid4())  # Scoped OCR availability before loading a model.
     # ensure_indexed:
     # 1. _find_collection -> coll
     coll = EmbeddingCollectionRow(
@@ -483,8 +494,8 @@ async def test_vector_search_success() -> None:
     assert res.image_path == Path("C:/tmp/frame_002.jpg")
 
     stmt = str(session.statements[-1])
-    assert "ocr_blocks.end_ms >" in stmt
-    assert "ocr_blocks.start_ms <" in stmt
+    assert "video_frames.capture_ms >=" in stmt
+    assert "video_frames.capture_ms <" in stmt
 
 
 @pytest.mark.asyncio
@@ -566,6 +577,7 @@ async def test_vector_search_without_window_and_open_ended_window() -> None:
 
     # 1. search without window
     session = FakeSession()
+    session.scalar_values.append(uuid4())
     session.scalar_values.append(coll)
     session.scalars_values.append([])
     session.execute_values.append([(block_row, frame_row, 0.1)])
@@ -575,11 +587,12 @@ async def test_vector_search_without_window_and_open_ended_window() -> None:
     res = await searcher.search(video_id, "test", window=None)
     assert len(res) == 1
     stmt_no_win = str(session.statements[-1])
-    assert "ocr_blocks.end_ms >" not in stmt_no_win
-    assert "ocr_blocks.start_ms <" not in stmt_no_win
+    assert "video_frames.capture_ms >=" not in stmt_no_win
+    assert "video_frames.capture_ms <" not in stmt_no_win
 
     # 2. search with open-ended window
     session = FakeSession()
+    session.scalar_values.append(uuid4())
     session.scalar_values.append(coll)
     session.scalars_values.append([])
     session.execute_values.append([(block_row, frame_row, 0.1)])
@@ -589,5 +602,5 @@ async def test_vector_search_without_window_and_open_ended_window() -> None:
     res2 = await searcher2.search(video_id, "test", window=TimeWindow(500))
     assert len(res2) == 1
     stmt_open = str(session.statements[-1])
-    assert "ocr_blocks.end_ms >" in stmt_open
-    assert "ocr_blocks.start_ms <" not in stmt_open
+    assert "video_frames.capture_ms >=" in stmt_open
+    assert "video_frames.capture_ms <" not in stmt_open

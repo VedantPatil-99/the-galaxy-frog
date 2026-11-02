@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     visual_timeout_seconds: float = Field(default=120, gt=0, le=600)
     external_frame_processing_enabled: bool = False
     ocr_external_frames_permitted: bool = False
+    vlm_provider: Literal["disabled", "ollama", "gemini"] = "disabled"
+    vlm_timeout_seconds: float = Field(default=120, gt=0, le=300)
+    qwen_visual_revision: str = "afc393e3572c07db0bc84aa460d928a16c75f3fbb9ca9e0dccc4fbd2dafb573e"
+    gemini_api_key: SecretStr | None = None
+    gemini_visual_model: str | None = None
+    gemini_visual_revision: str | None = None
 
     @field_validator("llama_cloud_api_key")
     @classmethod

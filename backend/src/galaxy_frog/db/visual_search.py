@@ -29,9 +29,9 @@ from galaxy_frog.domain.vision.visual_ports import VisualEmbeddingProvider
 
 def _scope[*Ts](statement: Select[tuple[*Ts]], window: TimeWindow | None) -> Select[tuple[*Ts]]:
     if window is not None:
-        statement = statement.where(VideoFrameRow.end_ms > window.start_ms)
+        statement = statement.where(VideoFrameRow.capture_ms >= window.start_ms)
         if window.end_ms is not None:
-            statement = statement.where(VideoFrameRow.start_ms < window.end_ms)
+            statement = statement.where(VideoFrameRow.capture_ms < window.end_ms)
     return statement
 
 
@@ -49,6 +49,7 @@ def _frame(row: VideoFrameRow) -> VisualFrame:
         row.content_sha256,
         FrameSource(row.source),
         Path(row.image_path),
+        capture_ms=row.capture_ms,
     )
 
 
@@ -180,6 +181,7 @@ class PgVectorVisualSearch:
                 self._provider.collection,
                 max(-1.0, min(1.0, 1 - float(distance))),
                 rank,
+                collection_id=collection,
             )
             for rank, (row, distance) in enumerate(rows, 1)
         )
@@ -193,19 +195,21 @@ class PgVectorVisualSearch:
             raise RetrievalIntegrityError("Nearby-frame seeds belong to another video.")
         # Only the best initial seed can open a bounded +/-15s expansion window.
         seed = seeds[0].frame
-        start, end = max(0, seed.start_ms - 15000), seed.end_ms + 15000
+        if seed.capture_ms is None:
+            return ()
+        start, end = max(0, seed.capture_ms - 15000), seed.capture_ms + 15000
         statement = _scope(
             select(VideoFrameRow)
             .where(
                 VideoFrameRow.video_id == video_id,
                 VideoFrameRow.is_duplicate.is_(False),
-                VideoFrameRow.end_ms > start,
-                VideoFrameRow.start_ms < end,
+                VideoFrameRow.capture_ms >= start,
+                VideoFrameRow.capture_ms < end,
                 VideoFrameRow.content_sha256.is_not(None),
                 VideoFrameRow.dhash.is_not(None),
                 VideoFrameRow.id.not_in([hit.frame.frame_id for hit in seeds]),
             )
-            .order_by(VideoFrameRow.start_ms, VideoFrameRow.id)
+            .order_by(VideoFrameRow.capture_ms, VideoFrameRow.id)
             .limit(4),
             window,
         )

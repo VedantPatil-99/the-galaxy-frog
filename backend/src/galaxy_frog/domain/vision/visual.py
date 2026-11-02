@@ -46,10 +46,13 @@ class VisualFrame:
     content_sha256: str
     source: FrameSource
     path: Path
+    capture_ms: int | None = None
 
     def __post_init__(self) -> None:
         if self.sequence < 0 or self.start_ms < 0 or self.end_ms <= self.start_ms:
             raise ValueError("frame requires a sequence and half-open interval")
+        if self.capture_ms is not None and not self.start_ms <= self.capture_ms < self.end_ms:
+            raise ValueError("capture_ms must lie within the frame interval")
         if len(self.content_sha256) != 64 or any(
             c not in "0123456789abcdef" for c in self.content_sha256
         ):
@@ -85,6 +88,7 @@ class VisualHit:
     score: float
     rank: int
     expanded: bool = False
+    collection_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if not isfinite(self.score) or not -1 <= self.score <= 1 or self.rank < 1:
@@ -100,8 +104,14 @@ class VisualReasoningRequest:
     prompt_version: str = "visual-grounding-v1"
     schema_version: str = "visual-answer-v1"
     external_permitted: bool = False
+    evidence_fingerprint: str = ""
 
     def __post_init__(self) -> None:
+        if self.evidence_fingerprint and (
+            len(self.evidence_fingerprint) != 64
+            or any(char not in "0123456789abcdef" for char in self.evidence_fingerprint)
+        ):
+            raise ValueError("reasoning evidence fingerprint must be lowercase SHA-256")
         if not self.question.strip() or len(self.question) > 2000 or len(self.evidence) > 12000:
             raise ValueError("reasoning input exceeds the query/evidence budget")
         if not 1 <= len(self.frames) <= 4 or len({f.frame_id for f in self.frames}) != len(

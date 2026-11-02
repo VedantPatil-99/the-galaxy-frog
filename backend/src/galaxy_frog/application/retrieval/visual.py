@@ -112,6 +112,7 @@ def frame_lineage(frame: VisualFrame) -> dict[str, object]:
         "sequence": frame.sequence,
         "start_ms": frame.start_ms,
         "end_ms": frame.end_ms,
+        "capture_ms": frame.capture_ms,
         "perceptual_hash": asdict(frame.perceptual_hash),
         "content_sha256": frame.content_sha256,
         "source": frame.source,
@@ -172,6 +173,7 @@ class VisualRetrievalResult:
                 {
                     **frame_lineage(hit.frame),
                     "collection": asdict(hit.collection),
+                    "collection_id": str(hit.collection_id) if hit.collection_id else None,
                     "score": hit.score,
                     "rank": hit.rank,
                 }
@@ -332,6 +334,10 @@ class AdaptiveVisualRetrieval:
             decisions.append(decide_visual(signals, sufficiency))
             if decisions[-1].decision == VisualDecision.RETRIEVE:
                 if self._visual is None:
+                    if not allow_fallback:
+                        from galaxy_frog.domain.vision.visual import VisualFailureCode
+
+                        raise VisualProviderError(VisualFailureCode.UNAVAILABLE)
                     decisions.append(
                         EscalationDecision(
                             VisualDecision.UNAVAILABLE, "visual_embedding_not_configured", True
@@ -360,7 +366,14 @@ class AdaptiveVisualRetrieval:
                             item.frame.video_id != video_id
                             or (
                                 text.window is not None
-                                and not text.window.overlaps(item.frame.start_ms, item.frame.end_ms)
+                                and (
+                                    item.frame.capture_ms is None
+                                    or item.frame.capture_ms < text.window.start_ms
+                                    or (
+                                        text.window.end_ms is not None
+                                        and item.frame.capture_ms >= text.window.end_ms
+                                    )
+                                )
                             )
                             for item in initial
                         ):
@@ -394,7 +407,14 @@ class AdaptiveVisualRetrieval:
                                 frame.video_id != video_id
                                 or (
                                     text.window is not None
-                                    and not text.window.overlaps(frame.start_ms, frame.end_ms)
+                                    and (
+                                        frame.capture_ms is None
+                                        or frame.capture_ms < text.window.start_ms
+                                        or (
+                                            text.window.end_ms is not None
+                                            and frame.capture_ms >= text.window.end_ms
+                                        )
+                                    )
                                 )
                                 for frame in nearby
                             ):

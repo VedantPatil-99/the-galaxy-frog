@@ -43,6 +43,7 @@ def frame() -> VisualFrame:
         "a" * 64,
         FrameSource.PERIODIC,
         Path.cwd() / "frame.jpg",
+        capture_ms=0,
     )
 
 
@@ -71,6 +72,8 @@ def test_valid_contracts_preserve_original_frame() -> None:
         {"sequence": -1},
         {"start_ms": -1},
         {"end_ms": 0},
+        {"capture_ms": -1},
+        {"capture_ms": 1000},
         {"content_sha256": "a"},
         {"content_sha256": "z" * 64},
         {"path": Path("relative.jpg")},

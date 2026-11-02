@@ -354,6 +354,10 @@ class VideoFrameRow(Base):
         CheckConstraint("sequence >= 0", name="ck_video_frames_sequence_nonnegative"),
         CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="ck_video_frames_interval"),
         CheckConstraint("source IN ('scene_boundary', 'periodic')", name="ck_video_frames_source"),
+        CheckConstraint(
+            "capture_ms IS NULL OR (capture_ms >= start_ms AND capture_ms < end_ms)",
+            name="ck_video_frames_capture",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
@@ -367,6 +371,7 @@ class VideoFrameRow(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     dhash: Mapped[str | None] = mapped_column(String(64))
     content_sha256: Mapped[str | None] = mapped_column(String(64))
+    capture_ms: Mapped[int | None] = mapped_column(BigInteger)
     is_duplicate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     image_path: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

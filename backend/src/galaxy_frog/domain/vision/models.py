@@ -86,12 +86,15 @@ class FrameSample:
     end_ms: int
     path: Path
     source: FrameSource
+    capture_ms: int | None = None
 
     def __post_init__(self) -> None:
         if self.sequence < 0:
             msg = "sequence must be non-negative"
             raise ValueError(msg)
         _require_interval(self.start_ms, self.end_ms)
+        if self.capture_ms is not None and not self.start_ms <= self.capture_ms < self.end_ms:
+            raise ValueError("capture_ms must lie within the frame interval")
         if not self.path.is_absolute():
             msg = "path must be absolute"
             raise ValueError(msg)

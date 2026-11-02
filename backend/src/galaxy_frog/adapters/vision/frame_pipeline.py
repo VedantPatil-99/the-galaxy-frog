@@ -26,6 +26,7 @@ class _Frame(BaseModel):
     sequence: int = Field(ge=0)
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
+    capture_ms: int = Field(ge=0)
     source: str
     kept: bool
     dhash: str = Field(pattern="^[a-f0-9]{16}$")
@@ -131,6 +132,7 @@ class LocalFramePipeline:
                     frame.end_ms,
                     workspace / f"frame_{frame.sequence:05d}.jpg",
                     FrameSource(frame.source),
+                    capture_ms=frame.capture_ms,
                 )
                 for frame in parsed.frames
             )

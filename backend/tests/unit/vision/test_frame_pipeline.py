@@ -90,6 +90,7 @@ class FrameRunner:
                 {
                     "sequence": 1 if self.failure == "sequence" else 0,
                     "start_ms": 0,
+                    "capture_ms": 0,
                     "end_ms": 1001 if self.failure == "frame" else 1000,
                     "source": "periodic",
                     "kept": True,

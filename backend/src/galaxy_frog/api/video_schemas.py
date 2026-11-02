@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, HttpUrl
 
 from galaxy_frog.api.job_schemas import IngestionJobResponse
-from galaxy_frog.api.retrieval_schemas import RetrievalOptions, SearchResponse
+from galaxy_frog.api.retrieval_schemas import RetrievalOptions, SearchResponse, VisualFrameResponse
 from galaxy_frog.application.retrieval.temporal import RetrievalStatus
 
 
@@ -126,3 +126,4 @@ class AnswerResponse(BaseModel):
     degraded_mode: bool
     retrieval_status: RetrievalStatus = RetrievalStatus.RESOLVED
     retrieval: SearchResponse | None = None
+    visual_evidence: list[VisualFrameResponse] = Field(default_factory=list[VisualFrameResponse])

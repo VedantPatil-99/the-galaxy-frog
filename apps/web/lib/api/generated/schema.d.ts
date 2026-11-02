@@ -296,6 +296,8 @@ export interface components {
             retrieval?: components["schemas"]["SearchResponse"] | null;
             /** @default resolved */
             retrieval_status: components["schemas"]["RetrievalStatus"];
+            /** Visual Evidence */
+            visual_evidence?: components["schemas"]["VisualFrameResponse"][];
             /** Warnings */
             warnings: string[];
         };
@@ -305,6 +307,22 @@ export interface components {
          * @enum {string}
          */
         CaptionKind: "manual" | "automatic";
+        /**
+         * EmbeddingCollectionSpec
+         * @description Identity of one non-interchangeable embedding space.
+         */
+        EmbeddingCollectionSpec: {
+            /** Dimension */
+            dimension: number;
+            /** Model */
+            model: string;
+            /** Normalization */
+            normalization: string;
+            /** Provider */
+            provider: string;
+            /** Revision */
+            revision: string;
+        };
         /**
          * ErrorPayload
          * @description Stable, human-safe API error information.
@@ -331,6 +349,17 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorPayload"];
+        };
+        /** EscalationDecision */
+        EscalationDecision: {
+            decision: components["schemas"]["VisualDecision"];
+            /**
+             * Degraded
+             * @default false
+             */
+            degraded: boolean;
+            /** Reason */
+            reason: string;
         };
         /** EvidenceGroup */
         EvidenceGroup: {
@@ -372,6 +401,32 @@ export interface components {
              */
             video_id: string;
         };
+        /**
+         * EvidenceSufficiency
+         * @description Coverage is lexical support, never a calibrated answer confidence.
+         */
+        EvidenceSufficiency: {
+            /** Ocr Coverage */
+            ocr_coverage: number;
+            /** Transcript Coverage */
+            transcript_coverage: number;
+            /**
+             * Visual Hits
+             * @default 0
+             */
+            visual_hits: number;
+        };
+        /**
+         * ExecutionLocation
+         * @enum {string}
+         */
+        ExecutionLocation: "local" | "external";
+        /**
+         * FrameSource
+         * @description How a frame was selected from the video stream.
+         * @enum {string}
+         */
+        FrameSource: "scene_boundary" | "periodic";
         /**
          * HealthResponse
          * @description Liveness response independent of external dependencies.
@@ -524,6 +579,56 @@ export interface components {
          */
         IngestionStage: "source_resolution" | "metadata" | "caption_retrieval" | "audio_acquisition" | "transcription" | "chunking" | "persistence" | "embedding" | "indexing" | "cleanup" | "completed";
         JsonValue: unknown;
+        /** OCREvidenceResponse */
+        OCREvidenceResponse: {
+            /**
+             * Block Id
+             * Format: uuid
+             */
+            block_id: string;
+            /** Confidence */
+            confidence: number | null;
+            /** Confidence Method */
+            confidence_method: string | null;
+            /** End Ms */
+            end_ms: number;
+            /**
+             * Frame Id
+             * Format: uuid
+             */
+            frame_id: string;
+            /**
+             * Modality
+             * @default ocr
+             * @constant
+             */
+            modality: "ocr";
+            provider: components["schemas"]["OCRProviderSpec"];
+            /** Sequence */
+            sequence: number;
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+        };
+        /**
+         * OCRProviderSpec
+         * @description Identity and revision of one OCR provider instance.
+         *
+         *     Follows the same pattern as TranscriptionProviderSpec so persistence and
+         *     reporting layers can treat provider provenance uniformly.
+         */
+        OCRProviderSpec: {
+            /** Provider */
+            provider: string;
+            /** Provider Revision */
+            provider_revision: string;
+        };
         /** QueryAnalysis */
         QueryAnalysis: {
             /** Exact Phrases */
@@ -551,6 +656,11 @@ export interface components {
          * @description A non-empty transcript question.
          */
         QuestionRequest: {
+            /**
+             * Allow External Frames
+             * @default false
+             */
+            allow_external_frames: boolean;
             /**
              * Allow Fallback
              * @default true
@@ -683,6 +793,11 @@ export interface components {
         /** SearchRequest */
         SearchRequest: {
             /**
+             * Allow External Frames
+             * @default false
+             */
+            allow_external_frames: boolean;
+            /**
              * Allow Fallback
              * @default true
              */
@@ -711,6 +826,8 @@ export interface components {
             /** Evidence */
             evidence: components["schemas"]["EvidenceGroup"][];
             mode: components["schemas"]["RetrievalMode"];
+            /** Ocr Evidence */
+            ocr_evidence?: components["schemas"]["OCREvidenceResponse"][];
             /** Selected Anchor */
             selected_anchor: string | null;
             status: components["schemas"]["RetrievalStatus"];
@@ -724,8 +841,13 @@ export interface components {
              * Format: uuid
              */
             video_id: string;
+            /** Visual Decisions */
+            visual_decisions?: components["schemas"]["EscalationDecision"][];
             /** Visual Frames */
             visual_frames?: components["schemas"]["VisualFrameResponse"][];
+            visual_provider?: components["schemas"]["VisualProviderIdentity"] | null;
+            visual_reasoning?: components["schemas"]["VisualReasoningResponse"] | null;
+            visual_sufficiency?: components["schemas"]["EvidenceSufficiency"] | null;
             /** Warnings */
             warnings: components["schemas"]["RetrievalWarning"][];
             window: components["schemas"]["TimeWindow"] | null;
@@ -954,10 +1076,24 @@ export interface components {
          * @enum {string}
          */
         VideoSourceKind: "youtube" | "local_file";
+        /**
+         * VisualDecision
+         * @enum {string}
+         */
+        VisualDecision: "transcript_ocr_sufficient" | "visual_retrieval_required" | "vlm_reasoning_required" | "visual_provider_unavailable" | "external_processing_not_permitted" | "insufficient_evidence";
         /** VisualFrameResponse */
         VisualFrameResponse: {
+            /** Capture Ms */
+            capture_ms?: number | null;
+            collection?: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            /** Collection Id */
+            collection_id?: string | null;
             /** Confidence */
             confidence?: number | null;
+            /** Content Sha256 */
+            content_sha256?: string | null;
+            /** Cosine Score */
+            cosine_score?: number | null;
             /** End Ms */
             end_ms: number;
             /**
@@ -972,12 +1108,66 @@ export interface components {
              * @default false
              */
             is_duplicate: boolean;
+            /**
+             * Modality
+             * @default ocr
+             * @enum {string}
+             */
+            modality: "ocr" | "visual";
             /** Ocr Text */
             ocr_text?: string | null;
+            /** Perceptual Hash */
+            perceptual_hash?: string | null;
+            /** Rank */
+            rank?: number | null;
+            /** Scene Id */
+            scene_id?: string | null;
             /** Sequence */
             sequence: number;
+            source?: components["schemas"]["FrameSource"] | null;
             /** Start Ms */
             start_ms: number;
+            /** Video Id */
+            video_id?: string | null;
+        };
+        /** VisualProviderIdentity */
+        VisualProviderIdentity: {
+            location: components["schemas"]["ExecutionLocation"];
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+            /** Revision */
+            revision: string;
+        };
+        /** VisualReasoningResponse */
+        VisualReasoningResponse: {
+            /** Cache Hit */
+            cache_hit: boolean;
+            /** Cited Frame Ids */
+            cited_frame_ids: string[];
+            decision: components["schemas"]["VisualDecision"];
+            /** Elapsed Ms */
+            elapsed_ms: number;
+            /** Examined Frame Ids */
+            examined_frame_ids: string[];
+            /** External Permitted */
+            external_permitted: boolean;
+            /** Insufficient Evidence */
+            insufficient_evidence: boolean | null;
+            /**
+             * Prompt Version
+             * @default visual-grounding-v1
+             */
+            prompt_version: string;
+            provider: components["schemas"]["VisualProviderIdentity"] | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Schema Version
+             * @default visual-answer-v1
+             */
+            schema_version: string;
         };
     };
     responses: never;

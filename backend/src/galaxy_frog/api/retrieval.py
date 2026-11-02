@@ -41,6 +41,8 @@ async def run_search(
     options: RetrievalOptions,
     repository: SqlAlchemyVideoRepository,
     service: SearchTranscript,
+    *,
+    reason: bool = False,
 ) -> SearchExecution:
     try:
         if await repository.get_video(video_id) is None:
@@ -52,6 +54,8 @@ async def run_search(
             limit=options.limit,
             selected_anchor=options.selected_anchor,
             allow_fallback=options.allow_fallback,
+            reason=reason,
+            external_permission=options.allow_external_frames,
         )
     except RetrievalVideoNotFound as exc:
         raise ApiError(
