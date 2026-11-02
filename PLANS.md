@@ -608,7 +608,7 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
   grounded citations, and duplicate-free live smoke. Keep Phase 2 marked unmerged until the stacked
   pull-request and GitHub Actions path reaches `main`; no Phase 3 capability is included.
 
-## Active plan: Phase 4 — Scene and OCR pipeline
+## Completed plan: Phase 4 — Scene and OCR pipeline
 
 Status: **Complete (P4.1, P4.2, P4.3, P4.4, P4.5, P4.6, P4.7 complete).**
 
@@ -682,3 +682,39 @@ Duration: 7–10 days.
 - Generated Contracts & Proxy: Synchronized `backend/openapi.json` and `apps/web/lib/api/generated/schema.d.ts` verified by `bun run contracts:check`. Forwarded `Cache-Control` header in `apps/web/lib/api/proxy.ts`.
 - Evidence UI: `apps/web/components/retrieval-evidence.tsx` displays visual frame slides with `/api/proxy` image URLs, time interval badges, OCR text, confidence scores, duplicate suppression (`!frame.is_duplicate`), and click-to-seek `onSeek` callbacks.
 - Phase 4 Exit Gate: Complete quality checks passing locally: 923 backend tests with 100.00% statement and branch coverage across 5,321 statements and 1,294 branches. 34 frontend tests passing. Pyright (0 errors), Ruff (0 errors, formatted), ESLint (0 errors, 0 warnings), and Next.js production build passing.
+
+## Completed plan: Phase 5 — Visual retrieval and query-adaptive VLM
+
+Status: **locally complete, 2026-11-02**. Branch `feat/visual-retrieval-vlm` starts at the
+verified Phase 4 implementation `6a5a903`. Phase 4/5 hosted merge and Phase 5 hosted CI are
+not asserted. No PR or Notion page was created. Phase 6 is not started.
+
+- [x] P5.1 — Provider-independent visual contracts, identities, sufficiency, privacy and escalation decisions.
+- [x] P5.2 — Offline pinned SigLIP baseline with explicit CUDA/CPU selection, isolation and bounded batches.
+- [x] P5.3 — Versioned 768-dimensional vectors, video/collection isolation, resumable indexing and migrations.
+- [x] P5.4 — Query-adaptive OCR/visual retrieval, stage ranks, RRF, duplicate suppression and bounded nearby frames.
+- [x] P5.5 — Selective local Qwen3-VL and optional Gemini adapter, validated frame citations and explicit failure modes.
+- [x] P5.6 — Video/model/prompt/evidence-specific reasoning cache and bounded durable traces.
+- [x] P5.7 — Provider-independent opt-in pointwise VLM reranking experiment; measured and **not promoted**.
+- [x] P5.8 — Generated API/UI contracts, distinct evidence modalities, frozen evaluation and local exit gate.
+
+The approved integration gap is closed by a bounded worker indexing stage composing existing
+scene/frame/OCR components. Original scene intervals remain unchanged; additive `capture_ms`
+retains exact sampling time for temporal filtering and player seeking. Unknown legacy capture
+times cannot enter constrained frame/OCR searches. Migrations through `20261102_0012` are applied locally.
+
+Local gate: 1,121 backend tests, 16 opt-in skips, 100% statement/branch coverage across
+6,541 statements and 1,654 branches; 35 frontend tests; 11 real PostgreSQL integration checks;
+three Phase 5 benchmark integrity tests plus seven Phase 3 benchmark tests. Contracts, Ruff,
+Pyright, ESLint, TypeScript, production build and pre-commit pass.
+
+Real acceptance: 56 extracted/indexed frames, normalized CUDA SigLIP vectors, local Qwen caption
+and citation verification, durable cache reuse, browser trace inspection, player seek to 00:26,
+and VLM-disabled degradation with the frame retained. The eight-frame frozen closed pool has
+seven positive hit@1/hit@3 successes and one correct empty window; answer quality is evaluated
+separately and only the caption smoke is verified. Experimental reranking adds about 20–21s
+on two successful trials, produces no gain, and fails strict output validation on two others.
+
+Cloud live acceptance, general answer accuracy, larger retrieval datasets, Qwen3-VL Embedding,
+and general provider-selection UI remain unverified or deferred. See
+[the final plan and verification record](docs/phase-5/p5-verification.md).

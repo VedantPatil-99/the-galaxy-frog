@@ -4,6 +4,42 @@
 
 Galaxy Frog begins as a modular monolith in one repository. Deployment boundaries remain clear without paying the operational cost of microservices before load and failure measurements justify them.
 
+## Phase 5 visual evidence path
+
+The durable worker's bounded indexing stage composes the existing scene detector, periodic sampler,
+perceptual hash/deduplicator, persistence and optionally permitted OCR/visual indexing. Extraction
+uses a bounded local child process and low-resolution video acquisition. Visual indexing commits
+small batches and reuses existing frame/collection vectors after verifying source hashes.
+
+Frames retain original video/frame/scene identities, scene intervals, source selection, perceptual
+hash and SHA-256. `capture_ms` is separate from the original half-open scene interval. Temporal
+frame/OCR searches filter actual capture time before top-k, excluding unknown legacy captures.
+The 768-dimensional visual vector table is separate from 1,024-dimensional transcript/OCR vectors;
+full collection identity is required and incompatible revisions are never mixed.
+
+`SearchTranscript` shares temporal resolution and durable traces between search and questions.
+Its adaptive visual service uses deterministic signals and lexical coverage, which is explicitly
+not calibrated confidence. Ordinary transcript queries skip OCR, visual embedding and VLM work.
+Visual queries try bounded OCR evidence, retrieve up to 12 visual candidates when needed, suppress
+duplicates, return at most eight seeds, and expand at most four nearby frames within ±15 seconds
+of the best capture. Each modality retains its scores/ranks; RRF combines ranks rather than raw
+provider scores. Unresolved temporal events never open unrestricted visual search.
+
+Only the question path can invoke selective visual reasoning. The local baseline sends one best
+frame and at most 3,000 characters of evidence to pinned Qwen3-VL with a 2,048-token context,
+checks exact model digest/full GPU residency and validates cited frame IDs. Failure retains other
+evidence with explicit degradation; strict mode refuses provider fallback. Search has no generation
+dependency. The optional Gemini adapter requires server policy and current per-question permission
+before image reads or network calls. Credentials alone grant no frame permission.
+
+Reasoning cache keys include ordered frame identities/hashes/capture/scene intervals, query and
+evidence fingerprints, collection identity, provider/model revision and prompt/schema versions.
+Frames are reverified and current privacy policy is checked before cache reuse. Cache records
+are bounded to 64 KiB, retrieval traces to 256 KiB; neither contains credentials, frame payloads
+or local image paths. Next.js only presents generated FastAPI contracts, evidence and seek controls.
+The pointwise multimodal reranker is an opt-in experiment outside production defaults; it preserves
+the original candidate objects and fails strictly. See ADR 0007 and the final Phase 5 record.
+
 ```mermaid
 flowchart TD
     UI["Next.js web<br>presentation only"] -->|"thin proxy + generated types"| API["FastAPI<br>application boundary"]

@@ -5,7 +5,7 @@
 Galaxy Frog: A Video RAG
 
 Galaxy Frog is a provider-independent temporal multimodal retrieval
-system for YouTube videos. It will retrieve transcript, OCR, and visual
+system for YouTube videos. It retrieves transcript, OCR, and visual
 evidence and produce timestamp-grounded answers.
 
 ## Current status
@@ -27,7 +27,8 @@ evidence and produce timestamp-grounded answers.
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
 - Phase 3 — Hybrid text retrieval and reranking: complete and merged through PR #18
-- Phase 4 — Scene and OCR pipeline: approved and starting. Will use LlamaParse Cloud for OCR.
+- Phase 4 — Scene and OCR pipeline: locally implemented; hosted merge unverified.
+- Phase 5 — Visual retrieval and query-adaptive VLM: locally complete on `feat/visual-retrieval-vlm`; hosted CI/merge unverified.
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -54,8 +55,9 @@ evidence and produce timestamp-grounded answers.
 - Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
   operations, deterministic idempotency, a standalone local worker, and caption-first persisted
   stage handlers are implemented
-- Caption-to-ASR routing, durable ASR persistence, and generated-contract progress/recovery UI are
-  active; OCR, visual retrieval, reranking, and later-phase orchestration have not started
+- Caption-to-ASR routing, durable ASR persistence, text reranking, bounded scene/frame ingestion,
+  OCR adapters/retrieval, optional visual embeddings and selective VLM reasoning are implemented.
+  Cloud frame submission remains gated; later-phase orchestration has not started.
 - Provider-neutral dispatch uses PostgreSQL polling by default; optional QStash messages contain
   only a job identifier/action and terminate at a URL-bound signature-verified internal callback
 - FastAPI now exposes prompt durable import, job detail/events/retry/cancel, video detail,
@@ -92,7 +94,32 @@ PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
 ## Current state and next task
 
-### Phase 4 kickoff — 2026-10-05
+### Phase 5 handoff — 2026-11-02
+
+P5.1–P5.8 are locally complete, based on Phase 4 tip `6a5a903`. Read
+[`phase-5/p5-verification.md`](phase-5/p5-verification.md),
+[`adr/0007-query-adaptive-visual-retrieval.md`](adr/0007-query-adaptive-visual-retrieval.md),
+the Phase 5 section in `PLANS.md`, and the visual setup in `runbook.md` before continuing.
+No Phase 6 implementation is authorized by this closeout.
+
+The local gate passes with 1,121 backend tests at 100% statement/branch coverage, 35 frontend
+tests, 11 real database integrations, generated contracts, types, lint, build and pre-commit.
+Real local SigLIP and Qwen3-VL checks passed on Python 3.14.7 and the RTX 2050. Browser checks
+verified original visual citations, frame thumbnails/provenance, saved traces, 00:26 seeking,
+and VLM-disabled retrieval retention. Frozen pool results and failed experimental reranking
+trials are committed separately from answer-quality evidence. No live Gemini/cloud OCR test
+or general accuracy claim is made.
+
+Defaults remain `VISUAL_EMBEDDING_ENABLED=false`, `VLM_PROVIDER=disabled`, and external-frame
+processing disabled. Acceptance used process-local overrides and a manually provisioned isolated
+runtime, without changing `.env` or installing system software. Existing terminal ingestion jobs
+are not automatically reprocessed. New imports execute the bounded frame stage; source video
+downloads are removed after extraction while JPEG evidence remains available.
+
+Preserve the user's uncommitted `apps/web/app/page.tsx` and untracked `apps/web/public/logo.png`.
+Neither belongs to Phase 5. No PR or Notion page was created. Verify hosted status independently.
+
+### Historical Phase 4 kickoff — 2026-10-05
 
 Phase 3 PR #18 is merged into `main` at `55591a0` and passed all hosted CI jobs.
 Phase 4 — Scene and OCR pipeline is approved and starting. The plan is to use LlamaParse Cloud for OCR to avoid local PaddleOCR Python 3.14 compatibility issues, while retaining the FastAPI architecture boundary and `OCRProvider` interface.
