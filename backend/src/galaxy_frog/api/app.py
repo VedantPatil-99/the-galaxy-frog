@@ -13,6 +13,7 @@ from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
 from galaxy_frog.adapters.reranking.bge import BgeTranscriptReranker
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
+from galaxy_frog.adapters.vision.siglip import SiglipEmbeddingProvider
 from galaxy_frog.api.errors import register_error_handlers
 from galaxy_frog.api.middleware import correlation_id_middleware
 from galaxy_frog.api.routes.health import router as health_router
@@ -53,6 +54,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.reranker = BgeTranscriptReranker(
         python=resolved_settings.reranker_python,
         timeout_seconds=resolved_settings.reranker_timeout_seconds,
+    )
+    application.state.visual_embedding_provider = (
+        SiglipEmbeddingProvider(
+            device=resolved_settings.visual_device,
+            python=resolved_settings.visual_python,
+            timeout_seconds=resolved_settings.visual_timeout_seconds,
+        )
+        if resolved_settings.visual_embedding_enabled
+        else None
     )
     application.state.video_sources = (
         YouTubeSource(js_runtime=resolved_settings.yt_dlp_js_runtime),

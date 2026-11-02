@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import cast
@@ -13,6 +13,7 @@ from galaxy_frog.application.retrieval.temporal import (
     RetrieveTemporalEvidence,
     TemporalRetrievalResult,
 )
+from galaxy_frog.application.retrieval.visual import AdaptiveVisualRetrieval, VisualRetrievalResult
 from galaxy_frog.domain.retrieval.errors import (
     EmbeddingProviderError,
     RetrievalIntegrityError,
@@ -27,12 +28,14 @@ from galaxy_frog.domain.retrieval.reranking import (
     RerankerError,
 )
 from galaxy_frog.domain.retrieval.traces import RetrievalTrace, RetrievalTraceRepository, TraceValue
+from galaxy_frog.domain.vision.visual import VisualProviderError
 
 
 @dataclass(frozen=True, slots=True)
 class SearchExecution:
     trace: RetrievalTrace
     result: TemporalRetrievalResult
+    visual: VisualRetrievalResult | None = None
 
 
 class TracedRetrievalFailure(RuntimeError):
@@ -96,12 +99,14 @@ class SearchTranscript:
         retrieval: RetrieveTemporalEvidence,
         traces: RetrievalTraceRepository,
         embedding_spec: EmbeddingCollectionSpec,
+        visual: AdaptiveVisualRetrieval | None = None,
         clock: Callable[[], float] = perf_counter,
     ) -> None:
         self._retrieval = retrieval
         self._traces = traces
         self._embedding_spec = embedding_spec
         self._clock = clock
+        self._visual = visual
 
     async def execute(
         self,
@@ -132,6 +137,9 @@ class SearchTranscript:
                 },
             },
         }
+        visual_result = None
+        if self._visual is not None:
+            payload["visual_configuration"] = self._visual.configuration
         try:
             result = await self._retrieval.execute(
                 video_id,
@@ -141,12 +149,22 @@ class SearchTranscript:
                 selected_anchor=selected_anchor,
                 allow_fallback=allow_fallback,
             )
+            if self._visual is not None:
+                visual_result = await self._visual.execute(
+                    video_id, query, result, limit=limit, allow_fallback=allow_fallback
+                )
+                result = replace(
+                    result,
+                    warnings=(*result.warnings, *visual_result.warnings),
+                    degraded=result.degraded or visual_result.degraded,
+                )
         except (
             EmbeddingProviderError,
             RerankerError,
             TemporalResolutionRequired,
             InvalidAnchor,
             RetrievalIntegrityError,
+            VisualProviderError,
         ) as exc:
             code = (
                 "EMBEDDING_UNAVAILABLE"
@@ -158,6 +176,8 @@ class SearchTranscript:
                 else "INVALID_ANCHOR"
                 if isinstance(exc, InvalidAnchor)
                 else "RETRIEVAL_INTEGRITY_FAILED"
+                if isinstance(exc, RetrievalIntegrityError)
+                else "VISUAL_UNAVAILABLE"
             )
             payload.update(
                 status="failed", failure_code=code, elapsed_ms=(self._clock() - started) * 1000
@@ -200,7 +220,9 @@ class SearchTranscript:
             degraded=result.degraded,
             elapsed_ms=(self._clock() - started) * 1000,
         )
-        return SearchExecution(await self._persist(video_id, payload), result)
+        if visual_result is not None:
+            payload["visual"] = visual_result.trace_payload()
+        return SearchExecution(await self._persist(video_id, payload), result, visual_result)
 
     async def _persist(self, video_id: UUID, payload: dict[str, object]) -> RetrievalTrace:
         # Convert UUIDs/enums/tuples to a portable JSON value tree. Transcript text
