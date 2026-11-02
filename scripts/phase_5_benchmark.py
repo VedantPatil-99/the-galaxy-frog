@@ -30,6 +30,10 @@ from galaxy_frog.domain.vision.visual import VisualHit, VisualProviderError
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def dataset_fingerprint(data):
+    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
+
+
 def metrics(sequences, relevant):
     if not relevant:
         return {"empty_correct": not sequences}
@@ -50,7 +54,7 @@ async def run(args):
     engine = create_database_engine(settings)
     output = {
         "created_at": datetime.now(UTC).isoformat(),
-        "dataset_sha256": hashlib.sha256(dataset_bytes).hexdigest(),
+        "dataset_sha256": dataset_fingerprint(dataset_bytes),
         "scope": dataset["scope"],
         "embedding": asdict(provider.identity),
         "answer_generation_evaluated": False,

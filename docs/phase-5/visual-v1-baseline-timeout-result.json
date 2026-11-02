@@ -1,6 +1,6 @@
 {
   "created_at": "2026-11-02T11:29:18.730026+00:00",
-  "dataset_sha256": "337a368f7aa09fbdcafe65c7a9e69590c7eab3ec7496c996c877d2ff60192f6c",
+  "dataset_sha256": "8bd4de1a915dc39a1f74206f470ca744147ad5b94402fa94e953ab8425202b18",
   "scope": "Eight-frame closed pool from one public video. No general accuracy claim. Freeze before evaluating. Existing real SigLIP vectors only; no generated substitutes.",
   "embedding": {
     "provider": "transformers-siglip",
@@ -139,5 +139,7 @@
       },
       "baseline_ms": 0.13140000010025688
     }
-  ]
+  ],
+  "original_dataset_bytes_sha256": "337a368f7aa09fbdcafe65c7a9e69590c7eab3ec7496c996c877d2ff60192f6c",
+  "fingerprint_normalization": "CRLF to LF only; original annotation content and measurements unchanged"
 }

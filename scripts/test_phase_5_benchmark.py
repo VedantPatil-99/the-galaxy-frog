@@ -1,6 +1,5 @@
 """Frozen labels, capture boundaries, and metric semantics; no inference or network calls."""
 
-import hashlib
 import json
 import runpy
 import unittest
@@ -8,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 metrics = runpy.run_path(str(ROOT / "scripts/phase_5_benchmark.py"))["metrics"]
+fingerprint = runpy.run_path(str(ROOT / "scripts/phase_5_benchmark.py"))["dataset_fingerprint"]
 
 
 class VisualBenchmarkTests(unittest.TestCase):
@@ -40,7 +40,9 @@ class VisualBenchmarkTests(unittest.TestCase):
         self.assertNotEqual(frames[5]["capture_ms"], frames[6]["capture_ms"])
 
     def test_saved_measurements_match_the_frozen_dataset(self):
-        digest = hashlib.sha256((ROOT / "docs/phase-5/visual-v1.json").read_bytes()).hexdigest()
+        data = (ROOT / "docs/phase-5/visual-v1.json").read_bytes()
+        digest = fingerprint(data)
+        self.assertEqual(digest, fingerprint(data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")))
         baseline = json.loads((ROOT / "docs/phase-5/visual-v1-local-result.json").read_text())
         experiment = json.loads(
             (ROOT / "docs/phase-5/visual-v1-rerank-local-result.json").read_text()
