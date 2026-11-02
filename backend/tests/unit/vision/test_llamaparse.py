@@ -161,13 +161,14 @@ class TestExtractBlocksFromPayload:
 
 class TestLlamaParseOCRAdapterInit:
     def test_adapter_satisfies_ocr_provider_protocol(self) -> None:
-        adapter = LlamaParseOCRAdapter(api_key="test-key")
+        adapter = LlamaParseOCRAdapter(external_permitted=True, api_key="test-key")
         assert isinstance(adapter, OCRProvider)
         assert adapter.spec.provider == "llamaparse"
         assert adapter.spec.provider_revision == "llamaparse-cloud-v1"
 
     def test_custom_init_parameters(self) -> None:
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key=SecretStr("secret-key"),
             base_url="https://custom.api.cloud.llamaindex.ai/",
             timeout_seconds=30.0,
@@ -185,13 +186,13 @@ class TestLlamaParseOCRAdapterInit:
 class TestLlamaParseOCRAdapterExtract:
     @pytest.mark.asyncio
     async def test_missing_api_key_raises_error(self, ocr_request: OCRExtractionRequest) -> None:
-        adapter = LlamaParseOCRAdapter(api_key=None)
+        adapter = LlamaParseOCRAdapter(external_permitted=True, api_key=None)
         with pytest.raises(OCRExtractionError, match="LLAMA_CLOUD_API_KEY is not configured"):
             await adapter.extract(ocr_request)
 
     @pytest.mark.asyncio
     async def test_empty_api_key_raises_error(self, ocr_request: OCRExtractionRequest) -> None:
-        adapter = LlamaParseOCRAdapter(api_key=SecretStr("   "))
+        adapter = LlamaParseOCRAdapter(external_permitted=True, api_key=SecretStr("   "))
         with pytest.raises(OCRExtractionError, match="LLAMA_CLOUD_API_KEY must not be empty"):
             await adapter.extract(ocr_request)
 
@@ -208,7 +209,7 @@ class TestLlamaParseOCRAdapterExtract:
         req = OCRExtractionRequest(
             video_id=non_existent.video_id, frame=non_existent, job_id=uuid4()
         )
-        adapter = LlamaParseOCRAdapter(api_key="test-key")
+        adapter = LlamaParseOCRAdapter(external_permitted=True, api_key="test-key")
 
         with pytest.raises(FileNotFoundError, match="Frame image not found"):
             await adapter.extract(req)
@@ -218,7 +219,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.post.side_effect = httpx.ConnectError("Connection refused")
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="Network failure during LlamaParse frame upload"
         ):
@@ -233,7 +236,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.post.return_value = mock_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="bad-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="bad-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="LlamaParse authentication failed \\(HTTP 401\\)"
         ):
@@ -248,7 +253,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.post.return_value = mock_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="LlamaParse frame upload failed with HTTP 500"
         ):
@@ -263,7 +270,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.post.return_value = mock_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="LlamaParse returned invalid JSON from upload endpoint"
         ):
@@ -278,7 +287,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.post.return_value = mock_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(OCRExtractionError, match="LlamaParse upload response missing job 'id'"):
             await adapter.extract(ocr_request)
 
@@ -291,7 +302,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.post.return_value = mock_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="LlamaParse upload response is not a JSON object"
         ):
@@ -309,6 +322,7 @@ class TestLlamaParseOCRAdapterExtract:
 
         # max_poll_seconds = 0.0 -> immediate timeout
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key="test-key",
             client=mock_client,
             poll_interval_seconds=0.01,
@@ -330,6 +344,7 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.get.side_effect = httpx.ReadTimeout("Timeout reading status")
 
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key="test-key",
             client=mock_client,
             poll_interval_seconds=0.01,
@@ -358,6 +373,7 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.get.return_value = mock_status_resp
 
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key="test-key",
             client=mock_client,
             poll_interval_seconds=0.01,
@@ -384,6 +400,7 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.get.return_value = mock_status_resp
 
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key="test-key",
             client=mock_client,
             poll_interval_seconds=0.01,
@@ -412,6 +429,7 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.get.return_value = mock_status_resp
 
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key="test-key",
             client=mock_client,
             poll_interval_seconds=0.01,
@@ -443,6 +461,7 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.get.return_value = mock_status_resp
 
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key="test-key",
             client=mock_client,
             poll_interval_seconds=0.01,
@@ -466,7 +485,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.post.return_value = mock_upload_resp
         mock_client.get.side_effect = httpx.ConnectError("Failed to fetch result")
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="Network failure fetching LlamaParse result for job job-123"
         ):
@@ -488,7 +509,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.post.return_value = mock_upload_resp
         mock_client.get.return_value = mock_result_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="LlamaParse result fetch failed with HTTP 404"
         ):
@@ -510,7 +533,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.post.return_value = mock_upload_resp
         mock_client.get.return_value = mock_result_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(
             OCRExtractionError, match="LlamaParse returned invalid JSON from result endpoint"
         ):
@@ -532,7 +557,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_client.post.return_value = mock_upload_resp
         mock_client.get.return_value = mock_result_resp
 
-        adapter = LlamaParseOCRAdapter(api_key="test-key", client=mock_client)
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key="test-key", client=mock_client
+        )
         with pytest.raises(OCRExtractionError, match="LlamaParse result is not a JSON object"):
             await adapter.extract(ocr_request)
 
@@ -580,6 +607,7 @@ class TestLlamaParseOCRAdapterExtract:
         ]
 
         adapter = LlamaParseOCRAdapter(
+            external_permitted=True,
             api_key=SecretStr("real-test-key"),
             client=mock_client,
             poll_interval_seconds=0.01,
@@ -620,7 +648,9 @@ class TestLlamaParseOCRAdapterExtract:
         mock_internal_client.get.return_value = mock_result_resp
 
         with patch("httpx.AsyncClient", return_value=mock_internal_client):
-            adapter = LlamaParseOCRAdapter(api_key="owned-key", client=None)
+            adapter = LlamaParseOCRAdapter(
+                external_permitted=True, api_key="owned-key", client=None
+            )
             result = await adapter.extract(ocr_request)
 
             assert len(result.blocks) == 1

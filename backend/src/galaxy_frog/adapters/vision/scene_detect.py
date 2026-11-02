@@ -192,6 +192,7 @@ class PySceneDetectAdapter:
         workspace_dir: Path,
         periodic_interval_ms: int = _DEFAULT_PERIODIC_INTERVAL_MS,
         detector_revision: str | None = None,
+        max_frames: int = 720,
     ) -> None:
         if periodic_interval_ms <= 0:
             msg = "periodic_interval_ms must be positive"
@@ -202,6 +203,9 @@ class PySceneDetectAdapter:
         self._workspace_dir = workspace_dir
         self._periodic_interval_ms = periodic_interval_ms
         self._detector_revision = detector_revision or _scenedetect_version()
+        if not 1 <= max_frames <= 720:
+            raise ValueError("max_frames must be between 1 and 720")
+        self._max_frames = max_frames
 
     async def detect(
         self,
@@ -251,6 +255,8 @@ class PySceneDetectAdapter:
             duration_ms,
             self._periodic_interval_ms,
         )
+        if len(sample_points) > self._max_frames:
+            raise ValueError("scene sampling exceeds the configured frame budget")
 
         frames = await self._extract_frames(video_path, video_id, sample_points)
         return detection_result, frames
@@ -286,16 +292,14 @@ class PySceneDetectAdapter:
         sample_points: list[tuple[int, int, int, FrameSource]],
     ) -> tuple[FrameSample, ...]:
         """Extract one JPEG per sample point and return ``FrameSample`` objects."""
-        tasks = [
-            asyncio.to_thread(
+        # Decode one frame at a time; concurrent video decoders can exhaust local RAM.
+        for sequence, (capture_ms, _start_ms, _end_ms, _source) in enumerate(sample_points):
+            await asyncio.to_thread(
                 _extract_frame_sync,
                 video_path,
                 capture_ms,
                 self._frame_path(video_id, sequence),
             )
-            for sequence, (capture_ms, _start_ms, _end_ms, _source) in enumerate(sample_points)
-        ]
-        await asyncio.gather(*tasks)
 
         samples: list[FrameSample] = []
         for sequence, (_capture_ms, start_ms, end_ms, source) in enumerate(sample_points):

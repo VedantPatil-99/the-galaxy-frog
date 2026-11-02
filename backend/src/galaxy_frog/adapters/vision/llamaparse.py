@@ -164,6 +164,7 @@ class LlamaParseOCRAdapter:
         max_poll_seconds: float = _DEFAULT_MAX_POLL_SECONDS,
         provider_revision: str = _DEFAULT_PROVIDER_REVISION,
         client: httpx.AsyncClient | None = None,
+        external_permitted: bool = False,
     ) -> None:
         self.spec = OCRProviderSpec(
             provider="llamaparse",
@@ -175,6 +176,7 @@ class LlamaParseOCRAdapter:
         self._poll_interval_seconds = poll_interval_seconds
         self._max_poll_seconds = max_poll_seconds
         self._client = client
+        self._external_permitted = external_permitted
 
     def _get_api_key_str(self) -> str:
         """Resolve and validate the API key string."""
@@ -194,6 +196,8 @@ class LlamaParseOCRAdapter:
     async def extract(self, request: OCRExtractionRequest) -> OCRExtractionResult:
         """Upload a frame to LlamaParse, poll until completion, and return OCR blocks."""
         api_key = self._get_api_key_str()
+        if not self._external_permitted:
+            raise OCRExtractionError("external_processing_not_permitted")
 
         if not request.frame.path.is_file():
             msg = f"Frame image not found at {request.frame.path}"

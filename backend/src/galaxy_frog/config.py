@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     ocr_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
     ocr_poll_interval_seconds: float = Field(default=1.0, gt=0, le=10)
     ocr_max_poll_seconds: float = Field(default=120.0, gt=0, le=600)
+    vision_ingestion_enabled: bool = True
+    vision_workspace_root: Path = _REPOSITORY_ROOT / "tmp" / "vision"
+    vision_max_frames: int = Field(default=120, ge=1, le=720)
+    vision_timeout_seconds: float = Field(default=180, gt=0, le=600)
+    visual_embedding_enabled: bool = False
+    visual_python: Path | None = None
+    visual_device: Literal["cpu", "cuda"] = "cuda"
+    visual_timeout_seconds: float = Field(default=120, gt=0, le=600)
+    external_frame_processing_enabled: bool = False
+    ocr_external_frames_permitted: bool = False
 
     @field_validator("llama_cloud_api_key")
     @classmethod
