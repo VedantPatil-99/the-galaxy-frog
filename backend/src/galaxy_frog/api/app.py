@@ -13,6 +13,8 @@ from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
 from galaxy_frog.adapters.reranking.bge import BgeTranscriptReranker
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
+from galaxy_frog.adapters.vision.reasoning import GeminiVisualReasoner, OllamaQwenVisualReasoner
+from galaxy_frog.adapters.vision.siglip import SiglipEmbeddingProvider
 from galaxy_frog.api.errors import register_error_handlers
 from galaxy_frog.api.middleware import correlation_id_middleware
 from galaxy_frog.api.routes.health import router as health_router
@@ -54,6 +56,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         python=resolved_settings.reranker_python,
         timeout_seconds=resolved_settings.reranker_timeout_seconds,
     )
+    application.state.visual_embedding_provider = (
+        SiglipEmbeddingProvider(
+            device=resolved_settings.visual_device,
+            python=resolved_settings.visual_python,
+            timeout_seconds=resolved_settings.visual_timeout_seconds,
+        )
+        if resolved_settings.visual_embedding_enabled
+        else None
+    )
+    application.state.visual_reasoning_provider = None
+    if resolved_settings.vlm_provider == "ollama":
+        application.state.visual_reasoning_provider = OllamaQwenVisualReasoner(
+            base_url=resolved_settings.ollama_base_url,
+            revision=resolved_settings.qwen_visual_revision,
+            timeout_seconds=resolved_settings.vlm_timeout_seconds,
+        )
+    elif (
+        resolved_settings.vlm_provider == "gemini"
+        and resolved_settings.gemini_api_key
+        and resolved_settings.gemini_visual_model
+        and resolved_settings.gemini_visual_revision
+    ):
+        application.state.visual_reasoning_provider = GeminiVisualReasoner(
+            model=resolved_settings.gemini_visual_model,
+            revision=resolved_settings.gemini_visual_revision,
+            api_key=resolved_settings.gemini_api_key.get_secret_value(),
+            external_enabled=resolved_settings.external_frame_processing_enabled,
+            timeout_seconds=resolved_settings.vlm_timeout_seconds,
+        )
     application.state.video_sources = (
         YouTubeSource(js_runtime=resolved_settings.yt_dlp_js_runtime),
     )

@@ -1,0 +1,36 @@
+"""Vision domain: scene detection, frame sampling, and OCR provider protocols."""
+
+from galaxy_frog.domain.vision.errors import OCRExtractionError, VisionProviderError
+from galaxy_frog.domain.vision.models import (
+    DeduplicatedFrameSet,
+    FrameSample,
+    FrameSource,
+    OCRBlock,
+    OCRExtractionRequest,
+    OCRExtractionResult,
+    OCRProviderSpec,
+    PerceptualHash,
+    RetrievedOCREvidence,
+    SceneBoundary,
+    SceneDetectionResult,
+)
+from galaxy_frog.domain.vision.ports import FrameDeduplicator, OCRProvider, SceneDetector
+
+__all__ = [
+    "DeduplicatedFrameSet",
+    "FrameDeduplicator",
+    "FrameSample",
+    "FrameSource",
+    "OCRBlock",
+    "OCRExtractionError",
+    "OCRExtractionRequest",
+    "OCRExtractionResult",
+    "OCRProvider",
+    "OCRProviderSpec",
+    "PerceptualHash",
+    "RetrievedOCREvidence",
+    "SceneBoundary",
+    "SceneDetectionResult",
+    "SceneDetector",
+    "VisionProviderError",
+]

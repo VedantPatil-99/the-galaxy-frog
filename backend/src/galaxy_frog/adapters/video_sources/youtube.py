@@ -84,7 +84,16 @@ async def _default_caption_loader(url: str) -> str:
         raise RuntimeError("caption URL must be absolute HTTPS")
 
     def read() -> str:
-        request = Request(url, headers={"User-Agent": "GalaxyFrog/0.1"})
+        request = Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+            },
+        )
         with urlopen(request, timeout=20) as response:
             body = response.read(10_000_001)
         if len(body) > 10_000_000:
@@ -199,15 +208,16 @@ class YouTubeSource:
         formats = self._caption_formats(info.get(key), track.language_code)
         supported = [
             item
-            for extension in ("json3", "vtt")
             for item in formats
-            if item.get("ext") == extension and isinstance(item.get("url"), str)
+            if item.get("ext") in ("json3", "vtt") and isinstance(item.get("url"), str)
         ]
+        supported.sort(key=lambda item: self._rank_caption_format(item, track.language_code))
         if not supported:
             raise VideoSourceError(
                 VideoSourceErrorCode.TRANSCRIPT_UNAVAILABLE,
                 "The selected YouTube caption track has no supported timestamped format.",
             )
+        load_failure: Exception | None = None
         parse_failure: ValueError | None = None
         for selected in supported:
             try:
@@ -215,11 +225,8 @@ class YouTubeSource:
             except VideoSourceError:
                 raise
             except Exception as exc:
-                raise VideoSourceError(
-                    VideoSourceErrorCode.SOURCE_UNAVAILABLE,
-                    "The YouTube caption document could not be retrieved.",
-                    retryable=True,
-                ) from exc
+                load_failure = exc
+                continue
             try:
                 cues = (
                     self._parse_json3(document)
@@ -237,6 +244,12 @@ class YouTubeSource:
         )
         if parse_failure is not None:
             raise error from parse_failure
+        if load_failure is not None:
+            raise VideoSourceError(
+                VideoSourceErrorCode.SOURCE_UNAVAILABLE,
+                "The YouTube caption document could not be retrieved.",
+                retryable=True,
+            ) from load_failure
         raise error
 
     async def _extract(self, reference: SourceReference) -> Mapping[str, object]:
@@ -320,6 +333,41 @@ class YouTubeSource:
         )
 
     @staticmethod
+    def _has_native_automatic_format(formats: Sequence[object]) -> bool:
+        for item in formats:
+            if not isinstance(item, Mapping):
+                continue
+            mapping_item = cast(Mapping[str, object], item)
+            url_value = mapping_item.get("url")
+            url = url_value if isinstance(url_value, str) else ""
+            params = parse_qs(urlsplit(url).query)
+            if not params.get("tlang"):
+                return True
+        return False
+
+    @staticmethod
+    def _rank_caption_format(
+        item: Mapping[str, object],
+        language: str,
+    ) -> tuple[int, int]:
+        ext = item.get("ext")
+        ext_rank = 0 if ext == "json3" else (1 if ext == "vtt" else 2)
+        url_value = item.get("url")
+        url = url_value if isinstance(url_value, str) else ""
+        parsed = urlsplit(url)
+        params = parse_qs(parsed.query)
+        tlang = params.get("tlang", [""])[0]
+        lang = params.get("lang", [""])[0]
+        if not tlang:
+            if lang == language or lang.startswith(f"{language}-") or not lang:
+                native_rank = 0
+            else:
+                native_rank = 1
+        else:
+            native_rank = 2 if tlang == language else 3
+        return (native_rank, ext_rank)
+
+    @staticmethod
     def _tracks_from_mapping(value: object, kind: CaptionKind) -> list[CaptionTrack]:
         if not isinstance(value, Mapping):
             return []
@@ -327,6 +375,11 @@ class YouTubeSource:
         tracks: list[CaptionTrack] = []
         for language, formats in mapping.items():
             if isinstance(language, str) and isinstance(formats, list) and formats:
+                formats_list = cast(list[object], formats)
+                if kind is CaptionKind.AUTOMATIC and not YouTubeSource._has_native_automatic_format(
+                    formats_list
+                ):
+                    continue
                 tracks.append(
                     CaptionTrack(
                         track_id=f"{kind}:{language}",

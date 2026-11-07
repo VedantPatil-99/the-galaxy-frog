@@ -1,0 +1,205 @@
+{
+  "created_at": "2026-11-02T11:19:27.195091+00:00",
+  "dataset_sha256": "8bd4de1a915dc39a1f74206f470ca744147ad5b94402fa94e953ab8425202b18",
+  "scope": "Eight-frame closed pool from one public video. No general accuracy claim. Freeze before evaluating. Existing real SigLIP vectors only; no generated substitutes.",
+  "embedding": {
+    "provider": "transformers-siglip",
+    "model": "google/siglip-base-patch16-224",
+    "revision": "7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed",
+    "location": "local"
+  },
+  "answer_generation_evaluated": false,
+  "experiment_is_default": false,
+  "baseline": "Visual-only projection of reciprocal-rank fusion; cosine ordering is unchanged",
+  "queries": [
+    {
+      "id": "visual-turtle",
+      "category": "visual-only",
+      "baseline_sequences": [
+        39,
+        2,
+        27,
+        5,
+        28,
+        3,
+        6,
+        0
+      ],
+      "baseline_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "baseline_ms": 6414.34289999961,
+      "reranked_sequences": [
+        39,
+        2,
+        27,
+        5
+      ],
+      "rerank_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "rerank_grades": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "rerank_ms": 21337.94730000045,
+      "rerank_provider": {
+        "provider": "ollama-qwen3vl-cuda-ctx2048-v1",
+        "model": "qwen3-vl:2b-instruct",
+        "revision": "afc393e3572c07db0bc84aa460d928a16c75f3fbb9ca9e0dccc4fbd2dafb573e",
+        "location": "local"
+      },
+      "prompt_version": "visual-rerank-experiment-v1"
+    },
+    {
+      "id": "visual-pair",
+      "category": "visual-only",
+      "baseline_sequences": [
+        3,
+        39,
+        27,
+        28,
+        2,
+        5,
+        0,
+        6
+      ],
+      "baseline_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "baseline_ms": 6826.641699999527,
+      "failure_code": "visual_invalid_output"
+    },
+    {
+      "id": "visual-road",
+      "category": "visual-only",
+      "baseline_sequences": [
+        6,
+        2,
+        5,
+        28,
+        3,
+        27,
+        0,
+        39
+      ],
+      "baseline_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "baseline_ms": 6361.336100000699,
+      "failure_code": "visual_invalid_output"
+    },
+    {
+      "id": "ocr-caption",
+      "category": "OCR-only",
+      "baseline_sequences": [
+        0,
+        3,
+        6,
+        5,
+        39,
+        27,
+        28,
+        2
+      ],
+      "baseline_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "baseline_ms": 6696.288999999524
+    },
+    {
+      "id": "mixed-caption",
+      "category": "mixed",
+      "baseline_sequences": [
+        5,
+        27,
+        39,
+        28,
+        2,
+        3,
+        0,
+        6
+      ],
+      "baseline_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "baseline_ms": 5965.078400000493,
+      "reranked_sequences": [
+        5,
+        27,
+        39,
+        28
+      ],
+      "rerank_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "rerank_grades": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "rerank_ms": 20480.522900001233,
+      "rerank_provider": {
+        "provider": "ollama-qwen3vl-cuda-ctx2048-v1",
+        "model": "qwen3-vl:2b-instruct",
+        "revision": "afc393e3572c07db0bc84aa460d928a16c75f3fbb9ca9e0dccc4fbd2dafb573e",
+        "location": "local"
+      },
+      "prompt_version": "visual-rerank-experiment-v1"
+    },
+    {
+      "id": "temporal-turtle",
+      "category": "temporal",
+      "baseline_sequences": [
+        5
+      ],
+      "baseline_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "baseline_ms": 8902.920900000026
+    },
+    {
+      "id": "temporal-boundary",
+      "category": "temporal",
+      "baseline_sequences": [
+        6
+      ],
+      "baseline_metrics": {
+        "hit_at_1": true,
+        "hit_at_3": true,
+        "reciprocal_rank": 1.0
+      },
+      "baseline_ms": 6962.465399999928
+    },
+    {
+      "id": "temporal-empty",
+      "category": "temporal-empty",
+      "baseline_sequences": [],
+      "baseline_metrics": {
+        "empty_correct": true
+      },
+      "baseline_ms": 0.04780000017490238
+    }
+  ],
+  "original_dataset_bytes_sha256": "337a368f7aa09fbdcafe65c7a9e69590c7eab3ec7496c996c877d2ff60192f6c",
+  "fingerprint_normalization": "CRLF to LF only; original annotation content and measurements unchanged"
+}

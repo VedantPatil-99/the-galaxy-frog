@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "source": "https://www.youtube.com/watch?v=_TJ61eCWQvQ",
+  "annotation_method": "Manual visual inspection; caption labels are human transcription, not OCR output",
+  "scope": "Eight-frame closed pool from one public video. No general accuracy claim. Freeze before evaluating. Existing real SigLIP vectors only; no generated substitutes.",
+  "frames": [
+    {
+      "sequence": 0,
+      "start_ms": 0,
+      "end_ms": 533,
+      "capture_ms": 0,
+      "content_sha256": "6e9f6d39ac44557a535cd40272221cc2b3ef23bbb3d23d152db7d669c9c2d914",
+      "perceptual_hash": "0000000000000078",
+      "annotation": "Black image with caption MAYBE I SHOULD JUST QUIT"
+    },
+    {
+      "sequence": 2,
+      "start_ms": 5900,
+      "end_ms": 10200,
+      "capture_ms": 5900,
+      "content_sha256": "0fbdfb98df3a2af2da44e3c3c33c69a7ea582b451d93594d21e2d5a9ec0b927e",
+      "perceptual_hash": "0068311130b0f830",
+      "annotation": "Animated turtle"
+    },
+    {
+      "sequence": 3,
+      "start_ms": 10200,
+      "end_ms": 23533,
+      "capture_ms": 10200,
+      "content_sha256": "8ebf9c34c899e2323f20ac092f1b4c510bb16ad2f226273fcbbfa263c8b5ea5e",
+      "perceptual_hash": "009e8c8c9c1c9e30",
+      "annotation": "Panda on left, turtle on right; caption QUIT DON'T QUIT"
+    },
+    {
+      "sequence": 5,
+      "start_ms": 26033,
+      "end_ms": 46300,
+      "capture_ms": 26033,
+      "content_sha256": "a1849b59f20fb34864fa179c28dd974c15009043c36564444335f66ca426fe14",
+      "perceptual_hash": "0038bc7459fc2468",
+      "annotation": "Animated turtle; caption TOMORROW IS A MYSTERY"
+    },
+    {
+      "sequence": 6,
+      "start_ms": 26033,
+      "end_ms": 46300,
+      "capture_ms": 36033,
+      "content_sha256": "3be259753a251620e4164802e680e869c502bbd5d23f5c1d55754cbd0aed9077",
+      "perceptual_hash": "00c09cdc4c5adc30",
+      "annotation": "Red gumball-machine character, car and desert road; caption WHEN ALL YOU"
+    },
+    {
+      "sequence": 27,
+      "start_ms": 148933,
+      "end_ms": 162100,
+      "capture_ms": 148933,
+      "content_sha256": "c5c499c1b8a5777b84c0bbcff970fc325994e5858960a6dd54eabc19be7c5469",
+      "perceptual_hash": "00001090aca8a470",
+      "annotation": "Animated turtle"
+    },
+    {
+      "sequence": 28,
+      "start_ms": 162100,
+      "end_ms": 195233,
+      "capture_ms": 162100,
+      "content_sha256": "81b9c64334176686f81fdeee6c10d67aa66860fb472d3bf47c189dda9fa48e7c",
+      "perceptual_hash": "001968a470362430",
+      "annotation": "Animated turtle; caption AN ACCIDENT"
+    },
+    {
+      "sequence": 39,
+      "start_ms": 228200,
+      "end_ms": 237233,
+      "capture_ms": 228200,
+      "content_sha256": "f89e4e230fd1c878492347e0a2d8d798ec6aa31e14a67115bd95623af07f2626",
+      "perceptual_hash": "0054e8e4d8d85030",
+      "annotation": "Animated turtle"
+    }
+  ],
+  "queries": [
+    {
+      "id": "visual-turtle",
+      "category": "visual-only",
+      "query": "An animated turtle character",
+      "relevant": [
+        2,
+        3,
+        5,
+        27,
+        28,
+        39
+      ]
+    },
+    {
+      "id": "visual-pair",
+      "category": "visual-only",
+      "query": "A panda on the left and a turtle on the right",
+      "relevant": [
+        3
+      ]
+    },
+    {
+      "id": "visual-road",
+      "category": "visual-only",
+      "query": "A red gumball machine character next to a car on a desert road",
+      "relevant": [
+        6
+      ]
+    },
+    {
+      "id": "ocr-caption",
+      "category": "OCR-only",
+      "query": "MAYBE I SHOULD JUST QUIT",
+      "relevant": [
+        0
+      ]
+    },
+    {
+      "id": "mixed-caption",
+      "category": "mixed",
+      "query": "An animated turtle with the caption TOMORROW IS A MYSTERY",
+      "relevant": [
+        5
+      ]
+    },
+    {
+      "id": "temporal-turtle",
+      "category": "temporal",
+      "query": "An animated turtle character",
+      "window": [
+        26000,
+        30000
+      ],
+      "relevant": [
+        5
+      ]
+    },
+    {
+      "id": "temporal-boundary",
+      "category": "temporal",
+      "query": "A red gumball machine character",
+      "window": [
+        36033,
+        36034
+      ],
+      "relevant": [
+        6
+      ]
+    },
+    {
+      "id": "temporal-empty",
+      "category": "temporal-empty",
+      "query": "An animated turtle character",
+      "window": [
+        30000,
+        36033
+      ],
+      "relevant": []
+    }
+  ],
+  "behavioral_cases": [
+    {
+      "id": "transcript-only",
+      "query": "What did he say about quitting?",
+      "expect": "no visual embedding or VLM call"
+    },
+    {
+      "id": "duplicate",
+      "candidate_sequences": [
+        5,
+        5,
+        6
+      ],
+      "expect": "only one original frame 5 survives deduplication"
+    },
+    {
+      "id": "irrelevant",
+      "query": "A red gumball machine character",
+      "irrelevant_sequences": [
+        0,
+        2,
+        3,
+        5,
+        27,
+        28,
+        39
+      ]
+    },
+    {
+      "id": "provider-failure",
+      "expect": "explicit warning and preserved retrieval; strict mode fails"
+    },
+    {
+      "id": "VLM-disabled",
+      "expect": "explicit degraded answer path with retrieval retained"
+    }
+  ]
+}

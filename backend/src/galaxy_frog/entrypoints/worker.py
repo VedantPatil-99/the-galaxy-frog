@@ -20,11 +20,16 @@ from galaxy_frog.adapters.media import (
 )
 from galaxy_frog.adapters.transcription import FasterWhisperTranscriptionProvider
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
+from galaxy_frog.adapters.vision.frame_pipeline import LocalFramePipeline
+from galaxy_frog.adapters.vision.indexing import PersistVisionIndex
+from galaxy_frog.adapters.vision.llamaparse import LlamaParseOCRAdapter
+from galaxy_frog.adapters.vision.siglip import SiglipEmbeddingProvider
 from galaxy_frog.application.ingestion import (
     IngestionJobRunner,
     IngestionWorker,
     caption_ingestion_handlers,
 )
+from galaxy_frog.application.ingestion.vision_stage import ContinueToVision, VisionIndexingStage
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
 from galaxy_frog.db.ingestion_artifacts import (
@@ -34,6 +39,9 @@ from galaxy_frog.db.ingestion_artifacts import (
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
+from galaxy_frog.db.visual_search import PgVectorVisualSearch
+from galaxy_frog.domain.ingestion.models import IngestionStage
 from galaxy_frog.domain.media import AudioAcquirer, AudioAcquisitionLimits
 from galaxy_frog.domain.transcription import (
     TranscriptionComputeType,
@@ -112,17 +120,54 @@ def build_worker(
         ),
     )
     lease_duration = timedelta(seconds=settings.ingestion_lease_seconds)
+    handlers = caption_ingestion_handlers(
+        sources=(YouTubeSource(js_runtime=settings.yt_dlp_js_runtime),),
+        videos=videos,
+        transcript_search=transcript_search,
+        audio_acquirer=build_audio_acquirer(settings),
+        audio_assets=audio_assets,
+        transcription_checkpoints=transcription_checkpoints,
+        transcription_provider=build_transcription_provider(settings),
+    )
+    if settings.vision_ingestion_enabled:
+        index = PersistVisionIndex(
+            videos=videos,
+            vision=SqlAlchemyVisionRepository(session),
+            pipeline=LocalFramePipeline(settings),
+            visual=PgVectorVisualSearch(
+                session,
+                SiglipEmbeddingProvider(
+                    device=settings.visual_device,
+                    python=settings.visual_python,
+                    timeout_seconds=settings.visual_timeout_seconds,
+                ),
+            )
+            if settings.visual_embedding_enabled
+            else None,
+            ocr=LlamaParseOCRAdapter(
+                api_key=settings.llama_cloud_api_key,
+                base_url=settings.llama_cloud_base_url,
+                timeout_seconds=settings.ocr_timeout_seconds,
+                poll_interval_seconds=settings.ocr_poll_interval_seconds,
+                max_poll_seconds=settings.ocr_max_poll_seconds,
+                external_permitted=settings.external_frame_processing_enabled
+                and settings.ocr_external_frames_permitted,
+            )
+            if settings.llama_cloud_api_key
+            else None,
+            ocr_permitted=settings.external_frame_processing_enabled
+            and settings.ocr_external_frames_permitted,
+        )
+        handlers = (
+            *(
+                ContinueToVision(handler) if handler.stage == IngestionStage.EMBEDDING else handler
+                for handler in handlers
+            ),
+            VisionIndexingStage(videos, index),
+        )
     runner = IngestionJobRunner(
         repository=ingestion,
-        handlers=caption_ingestion_handlers(
-            sources=(YouTubeSource(js_runtime=settings.yt_dlp_js_runtime),),
-            videos=videos,
-            transcript_search=transcript_search,
-            audio_acquirer=build_audio_acquirer(settings),
-            audio_assets=audio_assets,
-            transcription_checkpoints=transcription_checkpoints,
-            transcription_provider=build_transcription_provider(settings),
-        ),
+        handlers=handlers,
         worker_id=worker_id,
         lease_duration=lease_duration,
     )

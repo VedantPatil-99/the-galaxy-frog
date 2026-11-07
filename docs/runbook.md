@@ -26,6 +26,13 @@ password. Keep `POSTGRES_PASSWORD` and the password inside `DATABASE_URL` identi
 cp .env.example .env
 ```
 
+Optional cloud OCR requires a LlamaParse API key **and** both explicit worker privacy flags
+described below. A key alone never authorizes frame submission:
+
+```bash
+LLAMA_CLOUD_API_KEY=your-api-key-here
+```
+
 Install the exact dependencies recorded in `bun.lock` and `backend/uv.lock`:
 
 ```bash
@@ -522,10 +529,9 @@ and remain until explicit cleanup or their parent video's deletion.
 
 The evidence UI adds retrieval-only search, event selection, original provenance/ranking details,
 and durable trace inspection. Follow [P3.6 verification](phase-3/p3-6-verification.md) for the cached
-video procedure and exact service commands. The agent browser sandbox failed to initialize on
-2026-09-28; manual visual/seek acceptance is still required. Broad real reranker requests reached
+video procedure and exact service commands. Manual visual/seek acceptance passed successfully on 2026-10-05. Broad real reranker requests reached
 the default 120-second deadline even though the isolated probe passed; retain failure traces and
-report elapsed time and fallback rather than assuming GPU availability implies application success.
+report elapsed time and fallback rather than assuming GPU availability implies application success. Phase 3 is fully merged into `main`.
 
 Windows executable-shim launch failures in the web checks are avoided by calling installed ESLint,
 TypeScript, and OpenAPI JavaScript entrypoints through Bun. This requires no security-policy change.
@@ -536,3 +542,91 @@ The local Phase 1 stack uses PostgreSQL with pgvector in Docker and a user-manag
 service. Hosted Supabase and cloud generation remain later deployment decisions. FastAPI remains
 the only database and provider owner in either environment, and existing portable migrations are
 the path to a hosted PostgreSQL service.
+
+## Phase 5 local visual runtime
+
+Migrate through `20261102_0012` with `bun run db:migrate`. Python remains 3.14.7.
+Visual model dependencies are optional and loaded in the explicitly configured subprocess
+interpreter; the backend/API does not need to import Torch. Never install system tools, change
+drivers/security policy, or download weights automatically.
+
+The manually accepted Windows runtime is `tmp/reranker-probe/.venv/Scripts/python.exe`:
+Torch 2.11.0+cu128, Transformers 5.17.0, Hugging Face Hub 1.30.0, tokenizers 0.23.2,
+Pillow 13.0.0, SentencePiece 0.2.2 and Protobuf 7.36.2. Reuse the existing Phase 3 isolated
+runtime if it matches; provision an alternative manually before setting `VISUAL_PYTHON`.
+For a runtime already containing the pinned Phase 3 dependencies, the additional manual steps are:
+
+```bash
+visual_python='tmp/reranker-probe/.venv/Scripts/python.exe'
+uv pip install --python "$visual_python" --only-binary :all: \
+  'pillow==13.0.0' 'sentencepiece==0.2.2' 'protobuf==7.36.2'
+uv pip check --python "$visual_python"
+"$visual_python" - <<'PY'
+from huggingface_hub import snapshot_download
+print(snapshot_download(
+    repo_id="google/siglip-base-patch16-224",
+    revision="7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed",
+    allow_patterns=["config.json", "model.safetensors", "preprocessor_config.json",
+                    "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json",
+                    "spiece.model"],
+))
+PY
+ollama pull qwen3-vl:2b-instruct
+```
+
+These are user-run downloads. SigLIP execution is offline/cache-only and verifies the pinned
+revision. Ollama must expose digest
+`afc393e3572c07db0bc84aa460d928a16c75f3fbb9ca9e0dccc4fbd2dafb573e` for the selected tag;
+another digest is unavailable until explicitly revalidated/configured. The tested Q4_K_M model
+used about 1.64 GiB GPU memory with context 2048 on the 4 GiB RTX 2050. This is hardware acceptance,
+not a general model-accuracy claim. SigLIP and Qwen release their per-request model allocations;
+busy/timeout/device failures remain visible and never select CPU, another model or cloud implicitly.
+The Hugging Face Windows symlink warning affects cache disk usage, not model correctness;
+no security-policy or Developer Mode change is required.
+
+After manual provisioning, set the following in the ignored `.env` and restart API/worker:
+
+```bash
+VISUAL_EMBEDDING_ENABLED=true
+VISUAL_PYTHON=tmp/reranker-probe/.venv/Scripts/python.exe
+VISUAL_DEVICE=cuda
+VLM_PROVIDER=ollama
+EXTERNAL_FRAME_PROCESSING_ENABLED=false
+OCR_EXTERNAL_FRAMES_PERMITTED=false
+```
+
+Source defaults keep embeddings and VLM disabled. New imports run bounded frame extraction
+(`VISION_INGESTION_ENABLED=true`, 120-frame budget, 180-second detector deadline) and optionally
+index visual vectors. Extraction/provider failures preserve transcripts with warnings. Terminal
+jobs are reused, not automatically reprocessed. Legacy frames with unknown capture times require
+verified extraction manifests or explicit re-extraction; never infer captures from scene starts.
+
+Cloud OCR requires `EXTERNAL_FRAME_PROCESSING_ENABLED=true` **and**
+`OCR_EXTERNAL_FRAMES_PERMITTED=true` in addition to its key. Gemini requires `VLM_PROVIDER=gemini`,
+explicit `GEMINI_VISUAL_MODEL`, exact response `GEMINI_VISUAL_REVISION`, a local secret
+`GEMINI_API_KEY`, the server external-processing flag, and `allow_external_frames=true` for the
+current question. The UI sends false and has no automatic consent or provider-selection controls.
+Neither cloud provider was live-tested during Phase 5; transport tests are not cloud acceptance.
+
+Frozen evaluation reads existing frames/vectors and never ingests, downloads or uploads:
+
+```bash
+uv run --directory backend python ../scripts/phase_5_benchmark.py \
+  --python "$PWD/tmp/reranker-probe/.venv/Scripts/python.exe" \
+  --output "$PWD/tmp/visual-baseline-result.json"
+# Optional strict pointwise VLM reranking experiment; never enabled in production:
+uv run --directory backend python ../scripts/phase_5_benchmark.py \
+  --python "$PWD/tmp/reranker-probe/.venv/Scripts/python.exe" \
+  --output "$PWD/tmp/visual-rerank-result.json" --rerank
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest --no-cov -q \
+  tests/integration/test_visual_retrieval.py \
+  tests/integration/test_postgres_lexical_search.py \
+  tests/integration/test_durable_ingestion.py
+bun run check
+bun run precommit
+```
+
+The frozen source must already exist with matching pixels, sampling intervals/capture metadata
+and collection vectors. An unavailable source is an explicit setup failure, never replaced by
+generated images/vectors. Reports retain strict experiment failures; the reranker stays off.
+See [the final verification record](phase-5/p5-verification.md) for pool limits and actual timings.

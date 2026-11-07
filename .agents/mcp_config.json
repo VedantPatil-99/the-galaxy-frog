@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "llamaparse": {
+      "serverUrl": "https://mcp.llamaindex.ai/mcp"
+    }
+  }
+}

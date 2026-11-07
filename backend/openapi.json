@@ -83,6 +83,13 @@
             "$ref": "#/components/schemas/RetrievalStatus",
             "default": "resolved"
           },
+          "visual_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/VisualFrameResponse"
+            },
+            "title": "Visual Evidence",
+            "type": "array"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -109,6 +116,40 @@
         ],
         "title": "CaptionKind",
         "type": "string"
+      },
+      "EmbeddingCollectionSpec": {
+        "description": "Identity of one non-interchangeable embedding space.",
+        "properties": {
+          "dimension": {
+            "title": "Dimension",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "normalization": {
+            "title": "Normalization",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "revision",
+          "dimension",
+          "normalization"
+        ],
+        "title": "EmbeddingCollectionSpec",
+        "type": "object"
       },
       "ErrorPayload": {
         "description": "Stable, human-safe API error information.",
@@ -175,6 +216,28 @@
           "error"
         ],
         "title": "ErrorResponse",
+        "type": "object"
+      },
+      "EscalationDecision": {
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/VisualDecision"
+          },
+          "degraded": {
+            "default": false,
+            "title": "Degraded",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "EscalationDecision",
         "type": "object"
       },
       "EvidenceGroup": {
@@ -269,6 +332,47 @@
         ],
         "title": "EvidenceResponse",
         "type": "object"
+      },
+      "EvidenceSufficiency": {
+        "description": "Coverage is lexical support, never a calibrated answer confidence.",
+        "properties": {
+          "ocr_coverage": {
+            "title": "Ocr Coverage",
+            "type": "number"
+          },
+          "transcript_coverage": {
+            "title": "Transcript Coverage",
+            "type": "number"
+          },
+          "visual_hits": {
+            "default": 0,
+            "title": "Visual Hits",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "transcript_coverage",
+          "ocr_coverage"
+        ],
+        "title": "EvidenceSufficiency",
+        "type": "object"
+      },
+      "ExecutionLocation": {
+        "enum": [
+          "local",
+          "external"
+        ],
+        "title": "ExecutionLocation",
+        "type": "string"
+      },
+      "FrameSource": {
+        "description": "How a frame was selected from the video stream.",
+        "enum": [
+          "scene_boundary",
+          "periodic"
+        ],
+        "title": "FrameSource",
+        "type": "string"
       },
       "HTTPValidationError": {
         "properties": {
@@ -634,6 +738,116 @@
         "type": "string"
       },
       "JsonValue": {},
+      "OCREvidenceResponse": {
+        "properties": {
+          "block_id": {
+            "format": "uuid",
+            "title": "Block Id",
+            "type": "string"
+          },
+          "capture_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Ms"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Method"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "frame_id": {
+            "format": "uuid",
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "modality": {
+            "const": "ocr",
+            "default": "ocr",
+            "title": "Modality",
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/OCRProviderSpec"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "block_id",
+          "frame_id",
+          "sequence",
+          "start_ms",
+          "end_ms",
+          "text",
+          "provider",
+          "confidence",
+          "confidence_method"
+        ],
+        "title": "OCREvidenceResponse",
+        "type": "object"
+      },
+      "OCRProviderSpec": {
+        "description": "Identity and revision of one OCR provider instance.\n\nFollows the same pattern as TranscriptionProviderSpec so persistence and\nreporting layers can treat provider provenance uniformly.",
+        "properties": {
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_revision": {
+            "title": "Provider Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "provider_revision"
+        ],
+        "title": "OCRProviderSpec",
+        "type": "object"
+      },
       "QueryAnalysis": {
         "properties": {
           "exact_phrases": {
@@ -687,6 +901,11 @@
         "additionalProperties": false,
         "description": "A non-empty transcript question.",
         "properties": {
+          "allow_external_frames": {
+            "default": false,
+            "title": "Allow External Frames",
+            "type": "boolean"
+          },
           "allow_fallback": {
             "default": true,
             "title": "Allow Fallback",
@@ -963,6 +1182,11 @@
       "SearchRequest": {
         "additionalProperties": false,
         "properties": {
+          "allow_external_frames": {
+            "default": false,
+            "title": "Allow External Frames",
+            "type": "boolean"
+          },
           "allow_fallback": {
             "default": true,
             "title": "Allow Fallback",
@@ -1034,6 +1258,13 @@
           "mode": {
             "$ref": "#/components/schemas/RetrievalMode"
           },
+          "ocr_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/OCREvidenceResponse"
+            },
+            "title": "Ocr Evidence",
+            "type": "array"
+          },
           "selected_anchor": {
             "anyOf": [
               {
@@ -1057,6 +1288,50 @@
             "format": "uuid",
             "title": "Video Id",
             "type": "string"
+          },
+          "visual_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/EscalationDecision"
+            },
+            "title": "Visual Decisions",
+            "type": "array"
+          },
+          "visual_frames": {
+            "items": {
+              "$ref": "#/components/schemas/VisualFrameResponse"
+            },
+            "title": "Visual Frames",
+            "type": "array"
+          },
+          "visual_provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualProviderIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visual_reasoning": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualReasoningResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visual_sufficiency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSufficiency"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "warnings": {
             "items": {
@@ -1687,6 +1962,309 @@
         ],
         "title": "VideoSourceKind",
         "type": "string"
+      },
+      "VisualDecision": {
+        "enum": [
+          "transcript_ocr_sufficient",
+          "visual_retrieval_required",
+          "vlm_reasoning_required",
+          "visual_provider_unavailable",
+          "external_processing_not_permitted",
+          "insufficient_evidence"
+        ],
+        "title": "VisualDecision",
+        "type": "string"
+      },
+      "VisualFrameResponse": {
+        "properties": {
+          "capture_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Ms"
+          },
+          "collection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Id"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "cosine_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cosine Score"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "frame_id": {
+            "format": "uuid",
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string"
+          },
+          "is_duplicate": {
+            "default": false,
+            "title": "Is Duplicate",
+            "type": "boolean"
+          },
+          "modality": {
+            "default": "ocr",
+            "enum": [
+              "ocr",
+              "visual"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "ocr_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Text"
+          },
+          "perceptual_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perceptual Hash"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene Id"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FrameSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Id"
+          }
+        },
+        "required": [
+          "frame_id",
+          "sequence",
+          "start_ms",
+          "end_ms",
+          "image_url"
+        ],
+        "title": "VisualFrameResponse",
+        "type": "object"
+      },
+      "VisualProviderIdentity": {
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/ExecutionLocation"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "revision",
+          "location"
+        ],
+        "title": "VisualProviderIdentity",
+        "type": "object"
+      },
+      "VisualReasoningResponse": {
+        "properties": {
+          "cache_hit": {
+            "title": "Cache Hit",
+            "type": "boolean"
+          },
+          "cited_frame_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Cited Frame Ids",
+            "type": "array"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/VisualDecision"
+          },
+          "elapsed_ms": {
+            "title": "Elapsed Ms",
+            "type": "number"
+          },
+          "examined_frame_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Examined Frame Ids",
+            "type": "array"
+          },
+          "external_permitted": {
+            "title": "External Permitted",
+            "type": "boolean"
+          },
+          "insufficient_evidence": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insufficient Evidence"
+          },
+          "prompt_version": {
+            "default": "visual-grounding-v1",
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualProviderIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "schema_version": {
+            "default": "visual-answer-v1",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason",
+          "provider",
+          "examined_frame_ids",
+          "cited_frame_ids",
+          "cache_hit",
+          "external_permitted",
+          "elapsed_ms",
+          "insufficient_evidence"
+        ],
+        "title": "VisualReasoningResponse",
+        "type": "object"
       }
     }
   },
@@ -2157,6 +2735,75 @@
           }
         },
         "summary": "Get Video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/frames/{sequence}/image": {
+      "get": {
+        "description": "Return an extracted frame image with caching headers.",
+        "operationId": "get_frame_image_v1_videos__video_id__frames__sequence__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sequence",
+            "required": true,
+            "schema": {
+              "title": "Sequence",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {}
+            },
+            "description": "The binary JPEG frame image."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Frame Image",
         "tags": [
           "videos"
         ]

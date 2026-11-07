@@ -5,6 +5,7 @@ from uuid import UUID
 
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec, RetrievedEvidence
 from galaxy_frog.domain.retrieval.temporal import TimeWindow
+from galaxy_frog.domain.vision.models import RetrievedOCREvidence
 
 
 class TextEmbeddingProvider(Protocol):
@@ -31,3 +32,11 @@ class TranscriptSearch(Protocol):
     async def search(
         self, video_id: UUID, query: str, *, limit: int
     ) -> tuple[RetrievedEvidence, ...]: ...
+
+
+class OCRRetriever(Protocol):
+    """Retrieve original OCR blocks without requiring transcript units."""
+
+    async def search(
+        self, video_id: UUID, query: str, *, limit: int, window: TimeWindow | None = None
+    ) -> tuple[RetrievedOCREvidence, ...]: ...

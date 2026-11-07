@@ -221,3 +221,24 @@ async def test_generation_provider_normalizes_http_failures() -> None:
         await provider.generate("Question", (retrieved_evidence(),))
 
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_generation_provider_parses_evidence_fallback_key() -> None:
+    body = {
+        "answer": "Grounded answer.",
+        "confidence": "high",
+        "evidence": [{"retrieval_unit_id": "a" * 64, "quote": "Exact cited text."}],
+    }
+    client = mock_client({"response": json.dumps(body)})
+    provider = OllamaGenerationProvider(
+        base_url="http://localhost:11434/", model="qwen3:4b", client=client
+    )
+
+    draft = await provider.generate("Question?", (retrieved_evidence(),))
+    await client.aclose()
+
+    assert draft.answer == "Grounded answer."
+    assert draft.confidence is AnswerConfidence.HIGH
+    assert len(draft.citations) == 1
+    assert draft.citations[0].retrieval_unit_id == "a" * 64

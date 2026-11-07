@@ -54,6 +54,50 @@ class Settings(BaseSettings):
     reranker_python: Path | None = None
     reranker_timeout_seconds: float = Field(default=120, gt=0, le=600)
     retrieval_fusion_limit: int = Field(default=30, ge=1, le=30)
+    llama_cloud_api_key: SecretStr | None = None
+    llama_cloud_base_url: str = "https://api.cloud.llamaindex.ai"
+    ocr_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    ocr_poll_interval_seconds: float = Field(default=1.0, gt=0, le=10)
+    ocr_max_poll_seconds: float = Field(default=120.0, gt=0, le=600)
+    vision_ingestion_enabled: bool = True
+    vision_workspace_root: Path = _REPOSITORY_ROOT / "tmp" / "vision"
+    vision_max_frames: int = Field(default=120, ge=1, le=720)
+    vision_timeout_seconds: float = Field(default=180, gt=0, le=600)
+    visual_embedding_enabled: bool = False
+    visual_python: Path | None = None
+    visual_device: Literal["cpu", "cuda"] = "cuda"
+    visual_timeout_seconds: float = Field(default=120, gt=0, le=600)
+    external_frame_processing_enabled: bool = False
+    ocr_external_frames_permitted: bool = False
+    vlm_provider: Literal["disabled", "ollama", "gemini"] = "disabled"
+    vlm_timeout_seconds: float = Field(default=120, gt=0, le=300)
+    qwen_visual_revision: str = "afc393e3572c07db0bc84aa460d928a16c75f3fbb9ca9e0dccc4fbd2dafb573e"
+    gemini_api_key: SecretStr | None = None
+    gemini_visual_model: str | None = None
+    gemini_visual_revision: str | None = None
+
+    @field_validator("llama_cloud_api_key")
+    @classmethod
+    def validate_llama_cloud_api_key(cls, value: SecretStr | None) -> SecretStr | None:
+        """Normalize empty or whitespace API key to None."""
+        if value is None:
+            return None
+        if not value.get_secret_value().strip():
+            return None
+        return value
+
+    @field_validator("llama_cloud_base_url")
+    @classmethod
+    def validate_llama_cloud_base_url(cls, value: str) -> str:
+        """Require an absolute HTTP(S) origin and discard trailing slash, query, or fragment."""
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+            msg = "LLAMA_CLOUD_BASE_URL must be an absolute HTTP(S) URL"
+            raise ValueError(msg)
+        if parsed.query or parsed.fragment:
+            msg = "LLAMA_CLOUD_BASE_URL must not include a query or fragment"
+            raise ValueError(msg)
+        return value.rstrip("/")
 
     @field_validator("reranker_python")
     @classmethod

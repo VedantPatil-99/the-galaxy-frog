@@ -366,10 +366,9 @@ on 2026-09-16. The `3566a01` merge passed all three GitHub Actions jobs; this wa
   profiles, cloud-consent controls, live pricing configuration, and AWS deployment. P2.8 may display
   the provider decision that actually ran; Phase 8 owns changing that policy from the UI.
 
-## Active plan: Phase 3 — Hybrid text retrieval and reranking
+## Completed plan: Phase 3 — Hybrid text retrieval and reranking
 
-Status: **P3.1–P3.7 locally complete; manual browser acceptance and pre-commit remain open**.
-Hosted CI/merge remain pending. Duration target: 5–7 focused days.
+Status: **complete and merged**. PR #18 is merged into `main` at `55591a0` with passing hosted CI. Duration target: 5–7 focused days.
 Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
 
 ### Approved work packets
@@ -395,13 +394,12 @@ Notion: [P3.0 — Phase 3: Hybrid Text Retrieval and Reranking](https://app.noti
 - [x] P3.6 — Evidence UI (`feat/retrieval-evidence-ui`). Present retrieval-only results, rankings,
   anchor choices, merged intervals, original evidence, visible fallback, and citation seeking through
   generated contracts and the existing proxy.
-  Implementation, automated quality gates, and live proxy/anchor checks pass. Browser automation is
-  blocked by its Windows sandbox; manual visual/seek acceptance remains open.
+  Implementation, automated quality gates, and live proxy/anchor checks passed. Manual visual/seek acceptance passed successfully.
 - [x] P3.7 — Exit gate (`test/phase-3-exit-gate`). Compare dense-only, fused, reranked, and temporal
   retrieval on a frozen caption/ASR set; report Recall@5, MRR@10, temporal overlap, latency, and memory.
   Complete full quality, database, live provider, smoke, browser, and documentation gates.
-  Frozen 12-case benchmark at LIMIT=30 and LIMIT=20 complete; pre-commit and manual browser acceptance
-  remain open. See [P3.7 procedure and results](docs/phase-3/p3-7-verification.md).
+  Frozen 12-case benchmark at LIMIT=30 complete. Pre-commit and manual browser acceptance
+  passed. See [P3.7 procedure and results](docs/phase-3/p3-7-verification.md).
 
 ### Invariants and fallback policy
 
@@ -609,3 +607,114 @@ cloud deployment, interactive provider policy, or later-phase evaluation platfor
   yt-dlp EJS plus Node 22 challenge execution, CUDA `small` ASR, browser-rendered exact evidence,
   grounded citations, and duplicate-free live smoke. Keep Phase 2 marked unmerged until the stacked
   pull-request and GitHub Actions path reaches `main`; no Phase 3 capability is included.
+
+## Completed plan: Phase 4 — Scene and OCR pipeline
+
+Status: **Complete (P4.1, P4.2, P4.3, P4.4, P4.5, P4.6, P4.7 complete).**
+
+Duration: 7–10 days.
+
+### Approved work packets
+
+- [x] P4.1 — Vision Pipeline Foundation: Define provider-independent `VisionProvider` and `OCRProvider` interfaces.
+- [x] P4.2 — Scene detection: Add PySceneDetect adapter and periodic frame sampling.
+- [x] P4.3 — Frame Deduplication: Implement perceptual hashing (dHash) and deduplication.
+- [x] P4.4 — LlamaParse OCR Adapter: Implement cloud OCR using LlamaParse, avoiding local PaddleOCR constraints.
+- [x] P4.5 — OCR Persistence & Indexing: Store OCR text, boxes, and confidence. Associate with temporal scenes and add OCR FTS/embeddings.
+- [x] P4.6 — Multi-modal retrieval: Add OCR-specific query routing and blend OCR evidence with transcript retrieval.
+- [x] P4.7 — Evidence UI & Exit Gate: Display relevant frames and highlighted OCR evidence. Ensure duplicate slide frames do not flood results.
+
+### P4.1 local acceptance — 2026-10-18
+
+`feat/scene-and-ocr-pipeline` commit `79a4583` establishes the pure-Python vision domain models and provider protocols under `galaxy_frog.domain.vision`.
+- Models: `FrameSample`, `FrameSource`, `SceneBoundary`, `SceneDetectionResult`, `PerceptualHash`, `DeduplicatedFrameSet`, `OCRProviderSpec`, `OCRBlock`, `OCRExtractionRequest`, `OCRExtractionResult`.
+- Protocols: `SceneDetector` and `OCRProvider` (`@runtime_checkable`).
+- Complete validation: half-open millisecond intervals, strict confidence ranges, UTC timestamps, hex perceptual hashes, contiguous non-empty invariant checks.
+- 100% statement and branch coverage with zero framework or I/O dependencies.
+
+### P4.2 local acceptance — 2026-10-18
+
+`feat/scene-and-ocr-pipeline` commit `1886852` implements `PySceneDetectAdapter` under `galaxy_frog.adapters.vision.scene_detect`.
+- PySceneDetect `AdaptiveDetector` identifies visual cuts; OpenCV extracts JPEG frame samples at boundary starts and periodic intervals (default 10s).
+- Execution runs synchronously in thread workers via `asyncio.to_thread` to prevent event-loop blocking.
+- Contiguous sequence indices, absolute frame output paths, and single-pass coupled boundary detection + frame extraction.
+- 98 unit tests passing across vision domain and adapters; 100% statement and branch coverage maintained across all 4,588 backend statements.
+
+### P4.3 local acceptance — 2026-10-18
+
+`feat/scene-and-ocr-pipeline` adds `FrameDeduplicator` protocol in `domain.vision.ports` and `OpenCVDHashDeduplicator` in `adapters.vision.deduplication`.
+- Fast, sub-millisecond 64-bit difference hash (`dHash`) using OpenCV without heavy external dependencies.
+- Consecutive frame comparison via Hamming distance with configurable threshold (default 4 bits out of 64).
+- Preserves scene boundary context (`always_keep_scene_boundary=True`), sorts temporally, and rejects cross-video frame mixing.
+- Full test suite passes (789 passed) with 100% statement and branch coverage across all 4,675 backend statements.
+
+### P4.4 local acceptance — 2026-10-20
+
+`feat/scene-and-ocr-pipeline` adds `LlamaParseOCRAdapter` under `galaxy_frog.adapters.vision.llamaparse` fulfilling `OCRProvider`.
+- Domain failure contracts: `VisionProviderError` and `OCRExtractionError` in `galaxy_frog.domain.vision.errors`.
+- Typed configuration: `llama_cloud_api_key`, `llama_cloud_base_url`, `ocr_timeout_seconds`, `ocr_poll_interval_seconds`, `ocr_max_poll_seconds` in `galaxy_frog.config.Settings`.
+- Async REST execution using `httpx`: multipart JPEG frame upload, resilient status polling, and structured JSON parsing into `OCRBlock` records preserving intervals and frame sequence lineage.
+- Full test suite passes (831 passed) with 100% statement and branch coverage across all 4,870 backend statements.
+
+### P4.5 local acceptance — 2026-10-20
+
+`feat/scene-and-ocr-pipeline` adds vision persistence and indexing under `galaxy_frog.db`:
+- Alembic migration `20261020_0008_scene_and_ocr_pipeline.py`: defines `scenes`, `video_frames`, `ocr_blocks` (with computed `search_vector` TSVECTOR and GIN index), and `ocr_embeddings` (with pgvector `Vector(1024)` HNSW cosine index).
+- ORM rows in `galaxy_frog.db.models`: `SceneRow`, `VideoFrameRow`, `OCRBlockRow`, and `OCREmbeddingRow` with full interval, confidence, and foreign key CASCADE/SET NULL constraints.
+- `SqlAlchemyVisionRepository` in `galaxy_frog.db.vision_repository`: atomic and idempotent persistence of scenes, deduplicated frames linked to scenes, and OCR blocks.
+- `PostgresOCRLexicalSearch` and `PgVectorOCRSearch` in `galaxy_frog.db.ocr_search`: video-scoped full-text search (tsvector/tsquery with rank normalization 32) and dense vector search (cosine distance via pgvector), returning typed `RetrievedOCREvidence`.
+- Full test suite passes (870 passed) with 100% statement and branch coverage across all 5,087 backend statements.
+
+### P4.6 local acceptance — 2026-10-20
+
+`feat/scene-and-ocr-pipeline` adds multimodal query routing, evidence modeling, and reciprocal rank fusion:
+- Pure-Python domain models in `galaxy_frog.domain.retrieval.multimodal`: `EvidenceModality`, `QueryModality`, `QueryRoutingAnalysis`, `MultimodalEvidence`, `analyze_multimodal_query`, `fuse_multimodal_rankings`.
+- Added `OCRRetriever` protocol in `galaxy_frog.domain.retrieval.ports`.
+- `MultimodalSearchService` in `galaxy_frog.application.retrieval.multimodal`: coordinates transcript and OCR retrievers, routing queries and gracefully degrading to single-modality results if one provider fails.
+- Cross-modal temporal co-occurrence bonus in RRF scoring strengthens results where both spoken and visual evidence align.
+- Full test suite passes (914 passed) with 100% statement and branch coverage across all 5,264 backend statements.
+
+### P4.7 local acceptance — 2026-10-20
+
+`feat/scene-and-ocr-pipeline` adds frame image delivery, retrieval-evidence visual presentation, duplicate suppression, and completes the Phase 4 Exit Gate:
+- Backend Frame Endpoint: Added `GET /v1/videos/{video_id}/frames/{sequence}/image` returning `FileResponse` with `image/jpeg` and `Cache-Control: public, max-age=86400, immutable`. Added `get_frame` to `SqlAlchemyVisionRepository` and `get_vision_repository` dependency.
+- Retrieval Schemas & Search Blending: Added `VisualFrameResponse` (`frame_id`, `sequence`, `start_ms`, `end_ms`, `image_url`, `ocr_text`, `confidence`, `is_duplicate`) to `SearchResponse`. Blended relevant visual frames overlapping temporal windows or matching OCR text into `search_video`.
+- Generated Contracts & Proxy: Synchronized `backend/openapi.json` and `apps/web/lib/api/generated/schema.d.ts` verified by `bun run contracts:check`. Forwarded `Cache-Control` header in `apps/web/lib/api/proxy.ts`.
+- Evidence UI: `apps/web/components/retrieval-evidence.tsx` displays visual frame slides with `/api/proxy` image URLs, time interval badges, OCR text, confidence scores, duplicate suppression (`!frame.is_duplicate`), and click-to-seek `onSeek` callbacks.
+- Phase 4 Exit Gate: Complete quality checks passing locally: 923 backend tests with 100.00% statement and branch coverage across 5,321 statements and 1,294 branches. 34 frontend tests passing. Pyright (0 errors), Ruff (0 errors, formatted), ESLint (0 errors, 0 warnings), and Next.js production build passing.
+
+## Completed plan: Phase 5 — Visual retrieval and query-adaptive VLM
+
+Status: **locally complete, 2026-11-02**. Branch `feat/visual-retrieval-vlm` starts at the
+verified Phase 4 implementation `6a5a903`. Phase 4/5 hosted merge and Phase 5 hosted CI are
+not asserted. No PR or Notion page was created. Phase 6 is not started.
+
+- [x] P5.1 — Provider-independent visual contracts, identities, sufficiency, privacy and escalation decisions.
+- [x] P5.2 — Offline pinned SigLIP baseline with explicit CUDA/CPU selection, isolation and bounded batches.
+- [x] P5.3 — Versioned 768-dimensional vectors, video/collection isolation, resumable indexing and migrations.
+- [x] P5.4 — Query-adaptive OCR/visual retrieval, stage ranks, RRF, duplicate suppression and bounded nearby frames.
+- [x] P5.5 — Selective local Qwen3-VL and optional Gemini adapter, validated frame citations and explicit failure modes.
+- [x] P5.6 — Video/model/prompt/evidence-specific reasoning cache and bounded durable traces.
+- [x] P5.7 — Provider-independent opt-in pointwise VLM reranking experiment; measured and **not promoted**.
+- [x] P5.8 — Generated API/UI contracts, distinct evidence modalities, frozen evaluation and local exit gate.
+
+The approved integration gap is closed by a bounded worker indexing stage composing existing
+scene/frame/OCR components. Original scene intervals remain unchanged; additive `capture_ms`
+retains exact sampling time for temporal filtering and player seeking. Unknown legacy capture
+times cannot enter constrained frame/OCR searches. Migrations through `20261102_0012` are applied locally.
+
+Local gate: 1,121 backend tests, 16 opt-in skips, 100% statement/branch coverage across
+6,541 statements and 1,654 branches; 35 frontend tests; 11 real PostgreSQL integration checks;
+three Phase 5 benchmark integrity tests plus seven Phase 3 benchmark tests. Contracts, Ruff,
+Pyright, ESLint, TypeScript, production build and pre-commit pass.
+
+Real acceptance: 56 extracted/indexed frames, normalized CUDA SigLIP vectors, local Qwen caption
+and citation verification, durable cache reuse, browser trace inspection, player seek to 00:26,
+and VLM-disabled degradation with the frame retained. The eight-frame frozen closed pool has
+seven positive hit@1/hit@3 successes and one correct empty window; answer quality is evaluated
+separately and only the caption smoke is verified. Experimental reranking adds about 20–21s
+on two successful trials, produces no gain, and fails strict output validation on two others.
+
+Cloud live acceptance, general answer accuracy, larger retrieval datasets, Qwen3-VL Embedding,
+and general provider-selection UI remain unverified or deferred. See
+[the final plan and verification record](docs/phase-5/p5-verification.md).

@@ -39,3 +39,51 @@ test("renders ASR lineage, rerank scores, explicit fallback and unresolved state
   expect(render({ ...retrievalFixture, status: "anchor_unresolved", evidence: [] })).toContain("No matching event was found")
   expect(render({ ...retrievalFixture, evidence: [] })).toContain("No transcript evidence matched")
 })
+
+test("renders visual frames with OCR text and suppresses near-duplicate frames", () => {
+  const keptFrame = {
+    frame_id: "11111111-1111-1111-1111-111111111111",
+    sequence: 0,
+    start_ms: 5000,
+    end_ms: 10000,
+    image_url: "/v1/videos/327d444a-fd80-4a58-aedd-80bcdbe8964f/frames/0/image",
+    ocr_text: "System Architecture Diagram",
+    confidence: 0.95,
+    is_duplicate: false,
+  }
+  const dupFrame = {
+    frame_id: "22222222-2222-2222-2222-222222222222",
+    sequence: 1,
+    start_ms: 10000,
+    end_ms: 15000,
+    image_url: "/v1/videos/327d444a-fd80-4a58-aedd-80bcdbe8964f/frames/1/image",
+    ocr_text: "Duplicate Slide Text",
+    confidence: 0.95,
+    is_duplicate: true,
+  }
+  const markup = render({
+    ...retrievalFixture,
+    visual_frames: [keptFrame, dupFrame],
+  })
+
+  expect(markup).toContain("Visual frame evidence")
+  expect(markup).toContain("1 frame")
+  expect(markup).toContain("/api/proxy/v1/videos/327d444a-fd80-4a58-aedd-80bcdbe8964f/frames/0/image")
+  expect(markup).toContain("00:05–00:10")
+  expect(markup).toContain("System Architecture Diagram")
+  expect(markup).toContain("OCR confidence: 95%")
+  expect(markup).toContain("Jump to 00:05")
+  expect(markup).not.toContain("Duplicate Slide Text")
+})
+
+test("renders model, escalation, exact capture, cache, and original visual identity", () => {
+  const markup = render({ ...retrievalFixture, visual_decisions: [{ decision: "vlm_reasoning_required", reason: "visual_attributes", degraded: false }], visual_reasoning: { provider: { model: "qwen3-vl:2b-instruct", location: "local" }, examined_frame_ids: ["original-frame"], elapsed_ms: 12, cache_hit: true }, visual_frames: [{ frame_id: "original-frame", sequence: 6, start_ms: 26033, end_ms: 46300, capture_ms: 36033, image_url: `/v1/videos/${retrievalFixture.video_id}/frames/6/image`, is_duplicate: false, modality: "visual", scene_id: "original-scene", content_sha256: "a".repeat(64), collection: { provider: "transformers-siglip", model: "siglip", revision: "immutable", dimension: 768, normalization: "l2" }, collection_id: "original-collection" }] })
+  expect(markup).toContain("Jump to 00:36")
+  expect(markup).toContain("00:26–00:46")
+  expect(markup).toContain("original-scene")
+  expect(markup).toContain("original-collection")
+  expect(markup).toContain("qwen3-vl:2b-instruct")
+  expect(markup).toContain("cached result")
+  expect(markup).toContain("Visual similarity")
+  expect(markup).toContain("vlm reasoning required")
+})

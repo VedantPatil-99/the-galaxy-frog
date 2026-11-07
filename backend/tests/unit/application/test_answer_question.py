@@ -185,3 +185,47 @@ async def test_pre_retrieved_answer_requires_valid_question_and_explicit_executi
         await service.execute(uuid4(), "query")
     with pytest.raises(ValueError, match="empty"):
         await service.execute_with_evidence(uuid4(), " ", ())
+
+
+def test_validator_normalizes_quotes_with_sound_tags_and_quotes() -> None:
+    video_id = uuid4()
+    unit = RetrievalUnit(
+        unit_id="a" * 64,
+        start_ms=1000,
+        end_ms=2000,
+        text="The speaker explains [music] temporal\nprovenance clearly.",
+        cue_ids=("b" * 64,),
+    )
+    ev = (RetrievedEvidence(video_id=video_id, unit=unit, score=0.9),)
+    draft = GenerationDraft(
+        answer="It explains temporal provenance.",
+        confidence=AnswerConfidence.HIGH,
+        citations=(GenerationCitation(unit.unit_id, ' "explains temporal provenance" '),),
+    )
+    result = AnswerQuestion._validate(video_id, draft, ev)
+    assert len(result.evidence) == 1
+    assert result.evidence[0].quote == "explains temporal provenance"
+
+
+def test_validator_resolves_bare_quote_without_unit_id() -> None:
+    video_id = uuid4()
+    unit = RetrievalUnit(
+        unit_id="a" * 64,
+        start_ms=1000,
+        end_ms=2000,
+        text="The speaker explains [music] temporal\nprovenance clearly.",
+        cue_ids=("b" * 64,),
+    )
+    ev = (RetrievedEvidence(video_id=video_id, unit=unit, score=0.9),)
+    draft = GenerationDraft(
+        answer="It explains temporal provenance.",
+        confidence=AnswerConfidence.HIGH,
+        citations=(
+            GenerationCitation("", "explains temporal provenance"),
+            GenerationCitation("", "nonexistent phrase that cannot be found"),
+        ),
+    )
+    result = AnswerQuestion._validate(video_id, draft, ev)
+    assert len(result.evidence) == 1
+    assert result.evidence[0].retrieval_unit_id == unit.unit_id
+    assert result.evidence[0].quote == "explains temporal provenance"

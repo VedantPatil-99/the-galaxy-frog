@@ -19,6 +19,7 @@ export const retrievalFixture: SearchResponse = {
     cues: [{ cue_id: unit.cue_ids[0], source: { kind: "youtube", external_id: "dQw4w9WgXcQ", canonical_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, language_code: "en", source_order: 0, start_ms: 1000, end_ms: 4000, text: unit.text, origin: "caption", track_id: "en", caption_kind: "manual", transcription_run_id: null, confidence: null, confidence_method: null }],
   }],
   context_chars: unit.text.length,
+  visual_frames: [],
   warnings: [],
   degraded: false,
 }

@@ -5,7 +5,7 @@
 Galaxy Frog: A Video RAG
 
 Galaxy Frog is a provider-independent temporal multimodal retrieval
-system for YouTube videos. It will retrieve transcript, OCR, and visual
+system for YouTube videos. It retrieves transcript, OCR, and visual
 evidence and produce timestamp-grounded answers.
 
 ## Current status
@@ -26,8 +26,9 @@ evidence and produce timestamp-grounded answers.
 - P1.1–P1.9 — Transcript-first implementation: complete
 - P1.10 — Quality/database gates, scripted live smoke, and manual citation seeking: complete
 - Phase 2 — Durable ingestion and ASR fallback: complete and merged through PRs #4–#11
-- Phase 3 — Hybrid text retrieval and reranking: P3.1–P3.5 locally verified, CI/merge pending
-- P3.6 — Evidence UI implemented; automated/live HTTP checks pass, manual browser acceptance pending
+- Phase 3 — Hybrid text retrieval and reranking: complete and merged through PR #18
+- Phase 4 — Scene and OCR pipeline: locally implemented; hosted merge unverified.
+- Phase 5 — Visual retrieval and query-adaptive VLM: locally complete on `feat/visual-retrieval-vlm`; hosted CI/merge unverified.
 - P2.1 — Durable ingestion foundation: complete
 - P2.2 — Worker and persisted stage runner: complete
 - P2.3 — Job API and generated contracts: complete
@@ -54,8 +55,9 @@ evidence and produce timestamp-grounded answers.
 - Durable ingestion domain values, PostgreSQL job/event persistence, lease-safe repository
   operations, deterministic idempotency, a standalone local worker, and caption-first persisted
   stage handlers are implemented
-- Caption-to-ASR routing, durable ASR persistence, and generated-contract progress/recovery UI are
-  active; OCR, visual retrieval, reranking, and later-phase orchestration have not started
+- Caption-to-ASR routing, durable ASR persistence, text reranking, bounded scene/frame ingestion,
+  OCR adapters/retrieval, optional visual embeddings and selective VLM reasoning are implemented.
+  Cloud frame submission remains gated; later-phase orchestration has not started.
 - Provider-neutral dispatch uses PostgreSQL polling by default; optional QStash messages contain
   only a job identifier/action and terminate at a URL-bound signature-verified internal callback
 - FastAPI now exposes prompt durable import, job detail/events/retry/cancel, video detail,
@@ -92,24 +94,36 @@ PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
 ## Current state and next task
 
-### Phase 3 kickoff — 2026-09-27
+### Phase 5 handoff — 2026-11-02
 
-PRs #4–#10 and caption-control-event fix #11 are merged. The current `main` commit `3566a01`
-passed all three hosted CI jobs. P3.1 is on `feat/transcript-lexical-retrieval`, created from that
-verified base. It adds lexical retrieval beside the existing dense implementation without changing
-the ingestion lifecycle or public question API. The approved seven-packet plan is in `PLANS.md`
-and [Notion P3.0](https://app.notion.com/p/3e77942fa8e48100a112f5a879532749).
+P5.1–P5.8 are locally complete, based on Phase 4 tip `6a5a903`. Read
+[`phase-5/p5-verification.md`](phase-5/p5-verification.md),
+[`adr/0007-query-adaptive-visual-retrieval.md`](adr/0007-query-adaptive-visual-retrieval.md),
+the Phase 5 section in `PLANS.md`, and the visual setup in `runbook.md` before continuing.
+No Phase 6 implementation is authorized by this closeout.
 
-The first packet passes local acceptance: migration head `20260927_0006`, seven PostgreSQL
-integration checks, 13 focused retrieval tests, and the complete quality gate (514 backend tests,
-100% statement/branch coverage, 26 frontend tests, generated contracts, lint/types, production
-build, and pre-commit). Nine opt-in tests are skipped by the default suite; database checks ran
-separately. Standard `python -m pytest`, `python -m alembic`, and `python -m pre_commit` work with
-the existing Python 3.14.7 environment after a console-launcher Application Control block. No
-installation or security-policy change was needed. See
-[manual verification](phase-3/manual-verification.md). Hosted CI and merge are pending.
-P3.1 was pushed as `2b5c396` and `8ac25db`. No PR is created by the agent. Preserve the user's
-GPU-first, named-event-anchor, visible-fallback, and stacked-branch decisions.
+The local gate passes with 1,121 backend tests at 100% statement/branch coverage, 35 frontend
+tests, 11 real database integrations, generated contracts, types, lint, build and pre-commit.
+Real local SigLIP and Qwen3-VL checks passed on Python 3.14.7 and the RTX 2050. Browser checks
+verified original visual citations, frame thumbnails/provenance, saved traces, 00:26 seeking,
+and VLM-disabled retrieval retention. Frozen pool results and failed experimental reranking
+trials are committed separately from answer-quality evidence. No live Gemini/cloud OCR test
+or general accuracy claim is made.
+
+Defaults remain `VISUAL_EMBEDDING_ENABLED=false`, `VLM_PROVIDER=disabled`, and external-frame
+processing disabled. Acceptance used process-local overrides and a manually provisioned isolated
+runtime, without changing `.env` or installing system software. Existing terminal ingestion jobs
+are not automatically reprocessed. New imports execute the bounded frame stage; source video
+downloads are removed after extraction while JPEG evidence remains available.
+
+Preserve the user's uncommitted `apps/web/app/page.tsx` and untracked `apps/web/public/logo.png`.
+Neither belongs to Phase 5. No PR or Notion page was created. Verify hosted status independently.
+
+### Historical Phase 4 kickoff — 2026-10-05
+
+Phase 3 PR #18 is merged into `main` at `55591a0` and passed all hosted CI jobs.
+Phase 4 — Scene and OCR pipeline is approved and starting. The plan is to use LlamaParse Cloud for OCR to avoid local PaddleOCR Python 3.14 compatibility issues, while retaining the FastAPI architecture boundary and `OCRProvider` interface.
+The next packet is P4.1 (Vision Pipeline Foundation).
 
 ### P3.2 shared retrieval — 2026-09-27
 

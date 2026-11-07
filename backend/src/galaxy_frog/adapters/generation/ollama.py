@@ -82,11 +82,28 @@ class OllamaGenerationProvider:
             for item in evidence
         )
         return (
-            "Answer only from the supplied transcript evidence. Return one JSON object with "
-            'keys "answer", "confidence" (low, medium, or high), and "citations". Each citation '
-            'must contain "retrieval_unit_id" and an exact contiguous "quote" copied from that '
-            "unit. If evidence is insufficient, say so and return an empty citations list.\n\n"
-            f"QUESTION:\n{question}\n\nEVIDENCE:\n{blocks}"
+            f"EVIDENCE:\n{blocks}\n\n"
+            f"QUESTION:\n{question}\n\n"
+            "INSTRUCTIONS:\n"
+            "Answer the question using only the supplied transcript evidence above.\n"
+            'Return exactly one JSON object with keys "answer", "confidence", and "citations".\n'
+            '- "answer": Grounded answer text directly supported by the evidence.\n'
+            '- "confidence": Exactly one of "low", "medium", or "high".\n'
+            '- "citations": JSON array of citation objects. Each object must contain:\n'
+            '    * "retrieval_unit_id": Exact 64-character ID from the cited evidence block.\n'
+            '    * "quote": A short, exact contiguous phrase copied verbatim from that unit\'s TEXT.\n'
+            'If evidence is insufficient, state so in "answer" and set "citations": [].\n\n'
+            "Example format:\n"
+            "{\n"
+            '  "answer": "Grounded answer text.",\n'
+            '  "confidence": "high",\n'
+            '  "citations": [\n'
+            "    {\n"
+            '      "retrieval_unit_id": "<exact 64-character ID from the cited evidence block>",\n'
+            '      "quote": "<short exact contiguous phrase copied from that unit\'s TEXT>"\n'
+            "    }\n"
+            "  ]\n"
+            "}"
         )
 
     @staticmethod
@@ -94,25 +111,33 @@ class OllamaGenerationProvider:
         if not isinstance(value, Mapping):
             raise ValueError("draft must be an object")
         mapping = cast(Mapping[str, object], value)
-        answer = mapping["answer"]
-        confidence = mapping["confidence"]
-        citations_value = mapping["citations"]
+        answer = mapping.get("answer")
+        confidence = mapping.get("confidence")
+        citations_value = mapping.get("citations")
+        if citations_value is None and "evidence" in mapping:
+            citations_value = mapping["evidence"]
         if not isinstance(answer, str) or not answer.strip() or not isinstance(confidence, str):
             raise ValueError("draft answer and confidence are invalid")
         if not isinstance(citations_value, list):
             raise ValueError("draft citations must be a list")
+
         citations: list[GenerationCitation] = []
         for item in cast(list[object], citations_value):
             if not isinstance(item, Mapping):
                 raise ValueError("citation must be an object")
             item_mapping = cast(Mapping[str, object], item)
-            unit_id = item_mapping.get("retrieval_unit_id")
-            quote = item_mapping.get("quote")
+            unit_id = (
+                item_mapping.get("retrieval_unit_id")
+                or item_mapping.get("unit_id")
+                or item_mapping.get("id")
+            )
+            quote = item_mapping.get("quote") or item_mapping.get("text")
             if not isinstance(unit_id, str) or not isinstance(quote, str):
                 raise ValueError("citation fields are invalid")
-            citations.append(GenerationCitation(unit_id, quote))
+            citations.append(GenerationCitation(unit_id.strip(), quote.strip()))
+
         return GenerationDraft(
             answer=answer.strip(),
-            confidence=AnswerConfidence(confidence),
+            confidence=AnswerConfidence(confidence.strip().lower()),
             citations=tuple(citations),
         )

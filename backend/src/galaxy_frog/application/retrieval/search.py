@@ -2,17 +2,19 @@
 
 import json
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import cast
 from uuid import UUID, uuid4
 
+from galaxy_frog.application.retrieval.reasoning import AdaptiveVisualReasoning, ReasoningExecution
 from galaxy_frog.application.retrieval.temporal import (
     InvalidAnchor,
     RetrieveTemporalEvidence,
     TemporalRetrievalResult,
 )
+from galaxy_frog.application.retrieval.visual import AdaptiveVisualRetrieval, VisualRetrievalResult
 from galaxy_frog.domain.retrieval.errors import (
     EmbeddingProviderError,
     RetrievalIntegrityError,
@@ -27,12 +29,15 @@ from galaxy_frog.domain.retrieval.reranking import (
     RerankerError,
 )
 from galaxy_frog.domain.retrieval.traces import RetrievalTrace, RetrievalTraceRepository, TraceValue
+from galaxy_frog.domain.vision.visual import VisualProviderError
 
 
 @dataclass(frozen=True, slots=True)
 class SearchExecution:
     trace: RetrievalTrace
     result: TemporalRetrievalResult
+    visual: VisualRetrievalResult | None = None
+    reasoning: ReasoningExecution | None = None
 
 
 class TracedRetrievalFailure(RuntimeError):
@@ -96,12 +101,16 @@ class SearchTranscript:
         retrieval: RetrieveTemporalEvidence,
         traces: RetrievalTraceRepository,
         embedding_spec: EmbeddingCollectionSpec,
+        visual: AdaptiveVisualRetrieval | None = None,
+        reasoning: AdaptiveVisualReasoning | None = None,
         clock: Callable[[], float] = perf_counter,
     ) -> None:
         self._retrieval = retrieval
         self._traces = traces
         self._embedding_spec = embedding_spec
         self._clock = clock
+        self._visual = visual
+        self._reasoning = reasoning
 
     async def execute(
         self,
@@ -112,6 +121,8 @@ class SearchTranscript:
         limit: int = 8,
         selected_anchor: str | None = None,
         allow_fallback: bool = True,
+        reason: bool = False,
+        external_permission: bool = False,
     ) -> SearchExecution:
         started = self._clock()
         payload: dict[str, object] = {
@@ -132,6 +143,13 @@ class SearchTranscript:
                 },
             },
         }
+        visual_result = None
+        reasoning_result = None
+        if self._visual is not None:
+            payload["visual_configuration"] = self._visual.configuration
+        if reason and self._reasoning is not None:
+            payload["reasoning_configuration"] = self._reasoning.configuration
+            payload["external_permission"] = external_permission
         try:
             result = await self._retrieval.execute(
                 video_id,
@@ -141,12 +159,36 @@ class SearchTranscript:
                 selected_anchor=selected_anchor,
                 allow_fallback=allow_fallback,
             )
+            if self._visual is not None:
+                visual_result = await self._visual.execute(
+                    video_id, query, result, limit=limit, allow_fallback=allow_fallback
+                )
+                result = replace(
+                    result,
+                    warnings=(*result.warnings, *visual_result.warnings),
+                    degraded=result.degraded or visual_result.degraded,
+                )
+                if reason and self._reasoning is not None:
+                    reasoning_result = await self._reasoning.execute(
+                        video_id,
+                        query,
+                        result,
+                        visual_result,
+                        external_permission=external_permission,
+                        allow_fallback=allow_fallback,
+                    )
+                    result = replace(
+                        result,
+                        warnings=(*result.warnings, *reasoning_result.warnings),
+                        degraded=result.degraded or reasoning_result.degraded,
+                    )
         except (
             EmbeddingProviderError,
             RerankerError,
             TemporalResolutionRequired,
             InvalidAnchor,
             RetrievalIntegrityError,
+            VisualProviderError,
         ) as exc:
             code = (
                 "EMBEDDING_UNAVAILABLE"
@@ -158,6 +200,8 @@ class SearchTranscript:
                 else "INVALID_ANCHOR"
                 if isinstance(exc, InvalidAnchor)
                 else "RETRIEVAL_INTEGRITY_FAILED"
+                if isinstance(exc, RetrievalIntegrityError)
+                else "VISUAL_UNAVAILABLE"
             )
             payload.update(
                 status="failed", failure_code=code, elapsed_ms=(self._clock() - started) * 1000
@@ -200,7 +244,13 @@ class SearchTranscript:
             degraded=result.degraded,
             elapsed_ms=(self._clock() - started) * 1000,
         )
-        return SearchExecution(await self._persist(video_id, payload), result)
+        if visual_result is not None:
+            payload["visual"] = visual_result.trace_payload()
+        if reasoning_result is not None:
+            payload["visual_reasoning"] = reasoning_result.trace_payload()
+        return SearchExecution(
+            await self._persist(video_id, payload), result, visual_result, reasoning_result
+        )
 
     async def _persist(self, video_id: UUID, payload: dict[str, object]) -> RetrievalTrace:
         # Convert UUIDs/enums/tuples to a portable JSON value tree. Transcript text

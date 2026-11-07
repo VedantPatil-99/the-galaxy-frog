@@ -4,21 +4,11 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phases 0–2 are complete and merged. Phase 2 PRs #4–#10 and the caption-control-event fix in
-PR #11 are included in `main` at `3566a01`; all three hosted CI jobs passed on that merge.
-Phase 3 — Hybrid text retrieval and reranking — is approved. P3.1–P3.5 are locally verified:
-PostgreSQL FTS and a shared lexical/dense retrieval service with deterministic fusion and explicit
-embedding fallback pass the full quality gate. The pinned CUDA reranker also passes native execution,
-truncation, and timeout checks. Its process isolation releases VRAM but adds model-loading latency.
-Temporal retrieval now resolves timestamps and named events, requires selection for semantic anchor
-suggestions, and expands evidence while preserving original cue/ASR lineage and bounded context.
-Search and questions now share retrieval and durable video-scoped traces. Questions wait for
-ambiguous/implied event selection before generation. Apply migration `20260927_0007` before use.
-P3.6 adds retrieval-only mode, evidence/ranking inspection, anchor selection, warnings, and saved
-traces. Automated checks pass; manual browser/seek acceptance remains pending because the browser
-automation sandbox cannot start. Broad live reranker requests have also reached the 120-second
-deadline; the exit gate must measure this before claiming full-mode reliability or quality gains.
-Hosted CI and merge remain pending. See [P3.6 verification](docs/phase-3/p3-6-verification.md).
+Phases 0–3 are complete and merged. Phase 3 PR #18 is included in `main` at `55591a0`; all hosted CI jobs passed on that merge. Phase 3 added PostgreSQL FTS and a shared lexical/dense retrieval service with deterministic fusion, explicit embedding fallback, temporal constraint parsing, and video-scoped traces. The local CUDA reranker was proven but its broad timing profile is deferred to later benchmarking; retrieval now defaults to reranked mode with strict fallback. Search and questions share the exact trace, with question generation pausing for explicit user selection on ambiguous/implied anchors. The full suite, manual HTTP/database/browser checks, browser automation, and PR #18 CI all passed.
+
+Phase 4 is locally implemented. Phase 5 — visual retrieval and query-adaptive VLM reasoning — is locally complete on `feat/visual-retrieval-vlm`, based on the verified Phase 4 tip `6a5a903`. New imports connect the bounded scene/frame pipeline to the durable worker. Optional offline SigLIP retrieves versioned frame evidence; selective local Qwen3-VL reasoning preserves validated frame citations, exact capture times, original scene intervals, cache identity, and durable escalation traces. Transcript-only queries skip visual work. Gemini and cloud OCR require explicit privacy configuration; cloud processing was not enabled for this acceptance run.
+
+Local acceptance: 1,121 backend tests with 100% statement/branch coverage, 35 frontend tests, 11 PostgreSQL integrations, generated contracts, lint, strict types, production build, and pre-commit. Real SigLIP/Qwen and browser evidence/seek/degraded checks passed. The frozen eight-frame closed pool passed all seven positive retrieval cases and its empty-window case; this is not a general accuracy estimate. Experimental VLM reranking remains off after no measured gain and two strict-output failures. Hosted Phase 5 CI and merge are unverified; no PR was created. See [Phase 5 verification](docs/phase-5/p5-verification.md) and [local visual setup](docs/runbook.md#phase-5-local-visual-runtime).
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are

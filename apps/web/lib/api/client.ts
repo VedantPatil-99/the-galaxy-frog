@@ -210,7 +210,7 @@ export async function askVideoQuestion(
   videoId: string,
   question: string,
   fetcher: Fetcher = fetch,
-  options: Omit<QuestionRequest, "question"> = { mode: "reranked", limit: 8, allow_fallback: true },
+  options: Omit<QuestionRequest, "question"> = { mode: "reranked", limit: 8, allow_fallback: true, allow_external_frames: false },
 ): Promise<AnswerResponse> {
   return requestApi(
     `/v1/videos/${encodeURIComponent(videoId)}/questions`,

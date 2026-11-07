@@ -13,5 +13,9 @@ class TranscriptIndexError(RetrievalIntegrityError):
     """Indexing or search would violate embedding collection compatibility."""
 
 
+class OCRIndexError(RetrievalIntegrityError):
+    """Indexing or search would violate OCR embedding collection compatibility."""
+
+
 class TemporalResolutionRequired(ValueError):
     """A temporal query must be resolved before unrestricted text retrieval."""

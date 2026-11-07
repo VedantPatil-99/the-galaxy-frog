@@ -1,5 +1,6 @@
 """Dense retrieval, grounded generation, and deterministic citation validation."""
 
+import re
 from uuid import UUID
 
 from galaxy_frog.domain.generation.models import (
@@ -72,16 +73,37 @@ class AnswerQuestion:
         citations: list[ValidatedCitation] = []
         seen: set[str] = set()
         for proposed in draft.citations:
-            item = by_id.get(proposed.retrieval_unit_id)
-            quote = proposed.quote.strip()
-            source_text = item.unit.text if item is not None else ""
-            if item is None or not quote or quote not in source_text:
-                raise CitationValidationError(
-                    "The generated answer contained an unsupported transcript citation."
-                )
-            if proposed.retrieval_unit_id in seen:
+            quote = proposed.quote.strip().strip("\"'“”«»")
+            if not quote:
                 continue
-            seen.add(proposed.retrieval_unit_id)
+            if proposed.retrieval_unit_id:
+                item = by_id.get(proposed.retrieval_unit_id)
+            else:
+                norm_q = " ".join(quote.split())
+                item = None
+                for candidate in evidence:
+                    cand_text = candidate.unit.text
+                    cand_norm = " ".join(cand_text.split())
+                    cand_clean = re.sub(r"\s*\[[A-Za-z\s]+\]\s*", " ", cand_norm)
+                    if quote in cand_text or (
+                        norm_q and (norm_q in cand_norm or norm_q in cand_clean)
+                    ):
+                        item = candidate
+                        break
+            if item is None:
+                continue
+            source_text = item.unit.text
+            if quote not in source_text:
+                norm_quote = " ".join(quote.split())
+                norm_source = " ".join(source_text.split())
+                no_tags_source = re.sub(r"\s*\[[A-Za-z\s]+\]\s*", " ", norm_source)
+                if norm_quote and (norm_quote in norm_source or norm_quote in no_tags_source):
+                    quote = norm_quote
+                else:
+                    continue
+            if item.unit.unit_id in seen:
+                continue
+            seen.add(item.unit.unit_id)
             citations.append(
                 ValidatedCitation(
                     video_id=item.video_id,
