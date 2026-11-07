@@ -686,8 +686,8 @@ Duration: 7–10 days.
 ## Completed plan: Phase 5 — Visual retrieval and query-adaptive VLM
 
 Status: **locally complete, 2026-11-02**. Branch `feat/visual-retrieval-vlm` starts at the
-verified Phase 4 implementation `6a5a903`. Phase 4/5 hosted merge and Phase 5 hosted CI are
-not asserted. No PR or Notion page was created. Phase 6 is not started.
+verified Phase 4 implementation `6a5a903`. The local closeout did not verify hosted CI or merge
+status. No PR or Notion page was created during that closeout.
 
 - [x] P5.1 — Provider-independent visual contracts, identities, sufficiency, privacy and escalation decisions.
 - [x] P5.2 — Offline pinned SigLIP baseline with explicit CUDA/CPU selection, isolation and bounded batches.
@@ -718,3 +718,17 @@ on two successful trials, produces no gain, and fails strict output validation o
 Cloud live acceptance, general answer accuracy, larger retrieval datasets, Qwen3-VL Embedding,
 and general provider-selection UI remain unverified or deferred. See
 [the final plan and verification record](docs/phase-5/p5-verification.md).
+
+## Phase 6 — Explain this moment
+
+Branch `feat/explain-this-moment` started from `origin/main` at `55216fc`, which contains Phase 5.
+
+- [x] P6.1 — Backend moment evidence. Validate the integer playhead against the video duration and
+  read the clipped 15-second window on either side. Keep original transcript, OCR, and frame
+  provenance, scope visual evidence by known capture time, and select distinct previous, current,
+  and next frame captures. Local checks passed for the focused unit and PostgreSQL cases, Ruff
+  lint and format, strict Pyright, and the full backend suite (1,136 passed, 17 opt-in skips,
+  100% statement and branch coverage).
+- [ ] P6.2 — Grounded explanation, validated citations, and saved trace.
+- [ ] P6.3 — FastAPI contract, generated types, and player integration.
+- [ ] P6.4 — Browser acceptance and Phase 6 closeout.

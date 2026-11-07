@@ -25,6 +25,24 @@ from galaxy_frog.domain.videos.models import (
 from galaxy_frog.domain.videos.records import TranscriptRecord, VideoRecord
 
 
+def transcript_cue_from_row(row: TranscriptCueRow, source: SourceReference) -> TranscriptCue:
+    return TranscriptCue(
+        cue_id=row.id,
+        source=source,
+        language_code=row.language_code,
+        source_order=row.source_order,
+        start_ms=row.start_ms,
+        end_ms=row.end_ms,
+        text=row.text,
+        origin=TranscriptOrigin(row.origin),
+        track_id=row.track_id,
+        caption_kind=CaptionKind(row.caption_kind) if row.caption_kind else None,
+        transcription_run_id=row.transcription_run_id,
+        confidence=row.confidence,
+        confidence_method=row.confidence_method,
+    )
+
+
 class SqlAlchemyVideoRepository:
     """Persist imports atomically through a request-scoped async session."""
 
@@ -158,24 +176,7 @@ class SqlAlchemyVideoRepository:
         cue_ids_by_unit: defaultdict[str, list[str]] = defaultdict(list)
         for link in links:
             cue_ids_by_unit[link.retrieval_unit_id].append(link.cue_id)
-        cues = tuple(
-            TranscriptCue(
-                cue_id=row.id,
-                source=video.metadata.reference,
-                language_code=row.language_code,
-                source_order=row.source_order,
-                start_ms=row.start_ms,
-                end_ms=row.end_ms,
-                text=row.text,
-                origin=TranscriptOrigin(row.origin),
-                track_id=row.track_id,
-                caption_kind=(CaptionKind(row.caption_kind) if row.caption_kind else None),
-                transcription_run_id=row.transcription_run_id,
-                confidence=row.confidence,
-                confidence_method=row.confidence_method,
-            )
-            for row in cue_rows
-        )
+        cues = tuple(transcript_cue_from_row(row, video.metadata.reference) for row in cue_rows)
         units = tuple(
             RetrievalUnit(
                 unit_id=row.id,
