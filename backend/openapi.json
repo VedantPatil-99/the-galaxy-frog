@@ -117,6 +117,77 @@
         "title": "CaptionKind",
         "type": "string"
       },
+      "Chapter": {
+        "properties": {
+          "boundary_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Boundary Reasons",
+            "type": "array"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "timestamp_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "start_ms",
+          "end_ms",
+          "timestamp_url",
+          "title",
+          "boundary_reasons",
+          "citations"
+        ],
+        "title": "Chapter",
+        "type": "object"
+      },
+      "ChapterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "ChapterRequest",
+        "type": "object"
+      },
       "EmbeddingCollectionSpec": {
         "description": "Identity of one non-interchangeable embedding space.",
         "properties": {
@@ -470,6 +541,38 @@
           "trace_id"
         ],
         "title": "ExplainMomentResponse",
+        "type": "object"
+      },
+      "FlashcardItem": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "kind": {
+            "const": "flashcards",
+            "default": "flashcards",
+            "title": "Kind",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "answer",
+          "citations"
+        ],
+        "title": "FlashcardItem",
         "type": "object"
       },
       "FrameSource": {
@@ -1028,6 +1131,38 @@
         "title": "MomentTranscriptLineage",
         "type": "object"
       },
+      "NoteItem": {
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "kind": {
+            "const": "notes",
+            "default": "notes",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "text",
+          "citations"
+        ],
+        "title": "NoteItem",
+        "type": "object"
+      },
       "OCREvidenceResponse": {
         "properties": {
           "block_id": {
@@ -1237,6 +1372,61 @@
         "title": "QuestionRequest",
         "type": "object"
       },
+      "QuizItem": {
+        "properties": {
+          "choices": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Choices",
+            "type": "array"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "correct_index": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Correct Index",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "quiz",
+            "default": "quiz",
+            "title": "Kind",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "choices",
+          "correct_index",
+          "citations"
+        ],
+        "title": "QuizItem",
+        "type": "object"
+      },
       "RankedEvidence": {
         "properties": {
           "fusion_rank": {
@@ -1314,6 +1504,33 @@
           }
         },
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "RegenerateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chapter_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Version Id"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "RegenerateRequest",
         "type": "object"
       },
       "RetrievalMode": {
@@ -1468,6 +1685,16 @@
         ],
         "title": "RetrievalWarning",
         "type": "object"
+      },
+      "RunState": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "RunState",
+        "type": "string"
       },
       "SearchRequest": {
         "additionalProperties": false,
@@ -1701,6 +1928,716 @@
           "score"
         ],
         "title": "StageRank",
+        "type": "object"
+      },
+      "StudyArtifactRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chapter_version_id": {
+            "format": "uuid",
+            "title": "Chapter Version Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "summary",
+              "notes",
+              "flashcards",
+              "quiz"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "kind",
+          "chapter_version_id"
+        ],
+        "title": "StudyArtifactRequest",
+        "type": "object"
+      },
+      "StudyCitation": {
+        "properties": {
+          "caption_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptionKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capture_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Ms"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Method"
+          },
+          "cue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cue Id"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "frame_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Id"
+          },
+          "language_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Code"
+          },
+          "modality": {
+            "enum": [
+              "transcript",
+              "ocr"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "ocr_block_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Block Id"
+          },
+          "ocr_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Provider"
+          },
+          "ocr_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Revision"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscriptOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "seek_ms": {
+            "title": "Seek Ms",
+            "type": "integer"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "timestamp_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Url"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "transcription_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcription Run Id"
+          },
+          "unit_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unit Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_id",
+          "modality",
+          "quote",
+          "start_ms",
+          "end_ms",
+          "seek_ms",
+          "timestamp_url"
+        ],
+        "title": "StudyCitation",
+        "type": "object"
+      },
+      "StudyDocument": {
+        "properties": {
+          "chapter_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Version"
+          },
+          "chapters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Chapter"
+            },
+            "title": "Chapters",
+            "type": "array"
+          },
+          "sections": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StudySection"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/StudySource"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "StudyDocument",
+        "type": "object"
+      },
+      "StudyFailure": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "suggested_action": {
+            "title": "Suggested Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "suggested_action"
+        ],
+        "title": "StudyFailure",
+        "type": "object"
+      },
+      "StudyIndex": {
+        "properties": {
+          "latest": {
+            "items": {
+              "$ref": "#/components/schemas/StudyVersionSummary"
+            },
+            "title": "Latest",
+            "type": "array"
+          },
+          "next_before_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before Version"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/StudyRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "versions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StudyVersionSummary"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "latest",
+          "runs"
+        ],
+        "title": "StudyIndex",
+        "type": "object"
+      },
+      "StudyKind": {
+        "enum": [
+          "chapters",
+          "summary",
+          "notes",
+          "flashcards",
+          "quiz"
+        ],
+        "title": "StudyKind",
+        "type": "string"
+      },
+      "StudyRun": {
+        "properties": {
+          "chapter_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Version Id"
+          },
+          "completed_chapters": {
+            "title": "Completed Chapters",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudyFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StudyKind"
+          },
+          "result_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Id"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "total_chapters": {
+            "title": "Total Chapters",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "video_id",
+          "kind",
+          "state",
+          "chapter_version_id",
+          "result_id",
+          "completed_chapters",
+          "total_chapters",
+          "warnings",
+          "failure",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StudyRun",
+        "type": "object"
+      },
+      "StudySection": {
+        "properties": {
+          "chapter_number": {
+            "title": "Chapter Number",
+            "type": "integer"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "flashcards": "#/components/schemas/FlashcardItem",
+                  "notes": "#/components/schemas/NoteItem",
+                  "quiz": "#/components/schemas/QuizItem",
+                  "summary": "#/components/schemas/SummaryItem"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SummaryItem"
+                },
+                {
+                  "$ref": "#/components/schemas/NoteItem"
+                },
+                {
+                  "$ref": "#/components/schemas/FlashcardItem"
+                },
+                {
+                  "$ref": "#/components/schemas/QuizItem"
+                }
+              ]
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "timestamp_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chapter_number",
+          "title",
+          "start_ms",
+          "end_ms",
+          "timestamp_url",
+          "items"
+        ],
+        "title": "StudySection",
+        "type": "object"
+      },
+      "StudySource": {
+        "properties": {
+          "canonical_url": {
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/VideoSourceKind"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "kind",
+          "external_id",
+          "canonical_url",
+          "title",
+          "duration_ms"
+        ],
+        "title": "StudySource",
+        "type": "object"
+      },
+      "StudyVersion": {
+        "properties": {
+          "artifact_id": {
+            "format": "uuid",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "chapter_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Version Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/StudyDocument"
+          },
+          "evidence_fingerprint": {
+            "title": "Evidence Fingerprint",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StudyKind"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "kind",
+          "version",
+          "chapter_version_id",
+          "created_at",
+          "schema_version",
+          "prompt_version",
+          "evidence_fingerprint",
+          "provider",
+          "model",
+          "document"
+        ],
+        "title": "StudyVersion",
+        "type": "object"
+      },
+      "StudyVersionSummary": {
+        "properties": {
+          "artifact_id": {
+            "format": "uuid",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "chapter_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Version Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StudyKind"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "kind",
+          "version",
+          "chapter_version_id",
+          "created_at"
+        ],
+        "title": "StudyVersionSummary",
+        "type": "object"
+      },
+      "SummaryItem": {
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "kind": {
+            "const": "summary",
+            "default": "summary",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "citations"
+        ],
+        "title": "SummaryItem",
         "type": "object"
       },
       "TimeWindow": {
@@ -2618,6 +3555,89 @@
         ]
       }
     },
+    "/v1/artifacts/{artifact_id}/regenerate": {
+      "post": {
+        "operationId": "regenerate_artifact_v1_artifacts__artifact_id__regenerate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Regenerate Artifact",
+        "tags": [
+          "study"
+        ]
+      }
+    },
     "/v1/jobs/{job_id}": {
       "get": {
         "description": "Return the current durable projection for one ingestion job.",
@@ -3027,6 +4047,562 @@
         "summary": "Get Video",
         "tags": [
           "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/artifact-runs/{run_id}": {
+      "get": {
+        "operationId": "read_artifact_run_v1_videos__video_id__artifact_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read Artifact Run",
+        "tags": [
+          "study"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/artifacts": {
+      "get": {
+        "operationId": "list_artifacts_v1_videos__video_id__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StudyKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Artifacts",
+        "tags": [
+          "study"
+        ]
+      },
+      "post": {
+        "operationId": "start_artifact_v1_videos__video_id__artifacts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyArtifactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Artifact",
+        "tags": [
+          "study"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/artifacts/{artifact_id}": {
+      "get": {
+        "operationId": "read_artifact_v1_videos__video_id__artifacts__artifact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read Artifact",
+        "tags": [
+          "study"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/artifacts/{artifact_id}/export": {
+      "get": {
+        "operationId": "export_artifact_v1_videos__video_id__artifacts__artifact_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": true,
+            "schema": {
+              "enum": [
+                "markdown",
+                "json"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyVersion"
+                }
+              },
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Export Artifact",
+        "tags": [
+          "study"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/chapters": {
+      "post": {
+        "operationId": "start_chapters_v1_videos__video_id__chapters_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChapterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Chapters",
+        "tags": [
+          "study"
         ]
       }
     },

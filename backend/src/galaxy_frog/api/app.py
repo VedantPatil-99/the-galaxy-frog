@@ -21,6 +21,7 @@ from galaxy_frog.api.routes.health import router as health_router
 from galaxy_frog.api.routes.internal_dispatch import router as internal_dispatch_router
 from galaxy_frog.api.routes.jobs import router as jobs_router
 from galaxy_frog.api.routes.retrieval import router as retrieval_router
+from galaxy_frog.api.routes.study import router as study_router
 from galaxy_frog.api.routes.videos import router as videos_router
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -125,6 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(jobs_router)
     application.include_router(videos_router)
     application.include_router(retrieval_router)
+    application.include_router(study_router)
     return application
 
 
