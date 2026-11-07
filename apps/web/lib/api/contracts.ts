@@ -13,6 +13,8 @@ export type TranscriptionRunResponse = components["schemas"]["TranscriptionRunRe
 export type VideoResponse = components["schemas"]["VideoResponse"]
 export type SearchRequest = components["schemas"]["SearchRequest"]
 export type SearchResponse = components["schemas"]["SearchResponse"]
+export type ExplainMomentRequest = components["schemas"]["ExplainMomentRequest"]
+export type ExplainMomentResponse = components["schemas"]["ExplainMomentResponse"]
 export type QuestionRequest = components["schemas"]["QuestionRequest"]
 export type RetrievalTraceResponse = components["schemas"]["RetrievalTraceResponse"]
 export type RetrievalMode = components["schemas"]["RetrievalMode"]
@@ -353,4 +355,27 @@ export function isSearchResponse(value: unknown): value is SearchResponse {
 export function isRetrievalTraceResponse(value: unknown): value is RetrievalTraceResponse {
   return isRecord(value) && value.version === 1 && typeof value.trace_id === "string" &&
     typeof value.video_id === "string" && typeof value.created_at === "string" && isRecord(value.payload)
+}
+
+export function isExplainMomentResponse(value: unknown): value is ExplainMomentResponse {
+  if (!isRecord(value) || !isInterval(value.window) || typeof value.timestamp_ms !== "number") return false
+  const { start_ms: start, end_ms: end } = value.window
+  const inWindow = (time: unknown): time is number =>
+    typeof time === "number" && Number.isSafeInteger(time) && time >= start && time < end
+  const isFrame = (frame: unknown) => isInterval(frame) && typeof frame.frame_id === "string" &&
+    (frame.scene_id === null || typeof frame.scene_id === "string") &&
+    (frame.source === "periodic" || frame.source === "scene_boundary") &&
+    inWindow(frame.capture_ms) && frame.capture_ms >= frame.start_ms && frame.capture_ms < frame.end_ms
+
+  return typeof value.video_id === "string" && typeof value.trace_id === "string" &&
+    typeof value.explanation === "string" && inWindow(value.timestamp_ms) &&
+    (value.current_frame === null || isFrame(value.current_frame)) &&
+    Array.isArray(value.related_moments) && value.related_moments.every(isFrame) &&
+    Array.isArray(value.citations) && value.citations.every(citation => isInterval(citation) &&
+      (citation.modality === "transcript" || citation.modality === "ocr" || citation.modality === "frame") &&
+      typeof citation.source_id === "string" && inWindow(citation.seek_ms) &&
+      isNullableString(citation.quote) && isNullableString(citation.frame_id) &&
+      isStringArray(citation.unit_ids)) &&
+    Array.isArray(value.warnings) && value.warnings.every(warning =>
+      isRecord(warning) && typeof warning.code === "string" && typeof warning.message === "string")
 }

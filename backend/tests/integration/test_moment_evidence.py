@@ -3,17 +3,21 @@
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.integration.test_postgres_lexical_search import (
     _seed,  # pyright: ignore[reportPrivateUsage]
 )
 
+from galaxy_frog.api.app import create_app
+from galaxy_frog.api.dependencies import get_video_repository
 from galaxy_frog.application.retrieval.moment import MomentFrames, RetrieveMomentEvidence
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -28,6 +32,11 @@ from galaxy_frog.db.models import (
 )
 from galaxy_frog.db.moment_evidence import SqlAlchemyMomentEvidenceReader
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.generation.models import (
+    AnswerConfidence,
+    GenerationCitation,
+    GenerationDraft,
+)
 from galaxy_frog.domain.retrieval.temporal import TimeWindow
 from galaxy_frog.domain.videos.models import SafeVideoMetadata, SourceReference, VideoSourceKind
 
@@ -71,6 +80,33 @@ async def test_moment_reads_original_evidence_inside_video_and_time_scope(tmp_pa
                 (unit_id,) for unit_id in unit_ids[1:4]
             )
             assert spoken.ocr == () and spoken.frames == MomentFrames()
+
+            text = AsyncMock()
+            text.generate_moment.return_value = GenerationDraft(
+                "The speaker says two.",
+                AnswerConfidence.HIGH,
+                (GenerationCitation(transcript.cues[2].cue_id, "Two"),),
+            )
+            app = create_app(Settings(vlm_provider="disabled"))
+            app.state.generation_provider_factory = lambda: text
+            app.dependency_overrides[get_video_repository] = lambda: videos
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    f"/v1/videos/{video_id}/explain-moment", json={"timestamp_ms": 25_000}
+                )
+                assert response.status_code == 200
+                body = response.json()
+                assert body["citations"][0]["transcript_lineage"]["track_id"] == "manual:en"
+                trace_path = f"retrieval-traces/{body['trace_id']}"
+                trace = await client.get(f"/v1/videos/{video_id}/{trace_path}")
+                assert trace.status_code == 200 and trace.json()["payload"]["route"] == "text"
+                assert trace.json()["payload"]["visual_reasoning"] is None
+                assert (
+                    await client.get(f"/v1/videos/{other.video_id}/{trace_path}")
+                ).status_code == 404
+
             partial = await retrieve.execute(video_id, 23_000)
             assert partial.window == TimeWindow(8_000, 38_000)
             assert tuple(item.cue for item in partial.cues) == transcript.cues[:4]

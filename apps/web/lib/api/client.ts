@@ -1,6 +1,7 @@
 import {
   isApiErrorResponse,
   isAnswerResponse,
+  isExplainMomentResponse,
   isHealthResponse,
   isImportVideoResponse,
   isIngestionEventsResponse,
@@ -11,6 +12,8 @@ import {
   isRetrievalTraceResponse,
   type ApiErrorResponse,
   type AnswerResponse,
+  type ExplainMomentRequest,
+  type ExplainMomentResponse,
   type HealthResponse,
   type ImportVideoResponse,
   type IngestionEventsResponse,
@@ -111,6 +114,17 @@ export async function importVideo(
   return requestApi("/v1/videos/import", isImportVideoResponse, fetcher, {
     method: "POST",
     body: JSON.stringify({ source_url: sourceUrl }),
+  })
+}
+
+export function explainVideoMoment(
+  videoId: string,
+  body: ExplainMomentRequest,
+  fetcher: Fetcher = fetch,
+): Promise<ExplainMomentResponse> {
+  return requestApi(`/v1/videos/${encodeURIComponent(videoId)}/explain-moment`, isExplainMomentResponse, fetcher, {
+    method: "POST",
+    body: JSON.stringify(body),
   })
 }
 

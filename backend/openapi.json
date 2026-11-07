@@ -357,6 +357,24 @@
         "title": "EvidenceSufficiency",
         "type": "object"
       },
+      "ExaminedWindow": {
+        "properties": {
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start_ms",
+          "end_ms"
+        ],
+        "title": "ExaminedWindow",
+        "type": "object"
+      },
       "ExecutionLocation": {
         "enum": [
           "local",
@@ -364,6 +382,95 @@
         ],
         "title": "ExecutionLocation",
         "type": "string"
+      },
+      "ExplainMomentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_external_frames": {
+            "default": false,
+            "title": "Allow External Frames",
+            "type": "boolean"
+          },
+          "timestamp_ms": {
+            "minimum": 0.0,
+            "title": "Timestamp Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp_ms"
+        ],
+        "title": "ExplainMomentRequest",
+        "type": "object"
+      },
+      "ExplainMomentResponse": {
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/MomentCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "current_frame": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MomentFrameResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "related_moments": {
+            "items": {
+              "$ref": "#/components/schemas/MomentFrameResponse"
+            },
+            "title": "Related Moments",
+            "type": "array"
+          },
+          "timestamp_ms": {
+            "title": "Timestamp Ms",
+            "type": "integer"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/ExaminedWindow"
+          }
+        },
+        "required": [
+          "video_id",
+          "timestamp_ms",
+          "window",
+          "explanation",
+          "citations",
+          "current_frame",
+          "related_moments",
+          "warnings",
+          "trace_id"
+        ],
+        "title": "ExplainMomentResponse",
+        "type": "object"
       },
       "FrameSource": {
         "description": "How a frame was selected from the video stream.",
@@ -738,6 +845,189 @@
         "type": "string"
       },
       "JsonValue": {},
+      "MomentCitation": {
+        "properties": {
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "frame_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Id"
+          },
+          "modality": {
+            "enum": [
+              "transcript",
+              "ocr",
+              "frame"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "ocr_provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OCRProviderSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "seek_ms": {
+            "title": "Seek Ms",
+            "type": "integer"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "transcript_lineage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MomentTranscriptLineage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unit Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modality",
+          "source_id",
+          "start_ms",
+          "end_ms",
+          "seek_ms"
+        ],
+        "title": "MomentCitation",
+        "type": "object"
+      },
+      "MomentFrameResponse": {
+        "properties": {
+          "capture_ms": {
+            "title": "Capture Ms",
+            "type": "integer"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "frame_id": {
+            "format": "uuid",
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene Id"
+          },
+          "source": {
+            "$ref": "#/components/schemas/FrameSource"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "frame_id",
+          "scene_id",
+          "source",
+          "start_ms",
+          "end_ms",
+          "capture_ms"
+        ],
+        "title": "MomentFrameResponse",
+        "type": "object"
+      },
+      "MomentTranscriptLineage": {
+        "properties": {
+          "caption_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptionKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "$ref": "#/components/schemas/TranscriptOrigin"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "transcription_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcription Run Id"
+          }
+        },
+        "required": [
+          "origin",
+          "track_id",
+          "caption_kind",
+          "transcription_run_id"
+        ],
+        "title": "MomentTranscriptLineage",
+        "type": "object"
+      },
       "OCREvidenceResponse": {
         "properties": {
           "block_id": {
@@ -2737,6 +3027,79 @@
         "summary": "Get Video",
         "tags": [
           "videos"
+        ]
+      }
+    },
+    "/v1/videos/{video_id}/explain-moment": {
+      "post": {
+        "operationId": "explain_video_moment_v1_videos__video_id__explain_moment_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainMomentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplainMomentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Explain Video Moment",
+        "tags": [
+          "retrieval"
         ]
       }
     },
