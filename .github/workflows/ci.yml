@@ -86,7 +86,7 @@ jobs:
         run: uv run --directory backend python -m pyright
 
       - name: Test
-        run: uv run --directory backend pytest
+        run: uv run --directory backend python -m pytest
 
   frontend:
     name: Frontend quality

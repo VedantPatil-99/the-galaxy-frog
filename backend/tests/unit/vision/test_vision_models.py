@@ -25,7 +25,7 @@ from galaxy_frog.domain.vision.ports import OCRProvider, SceneDetector
 # Helpers
 # ---------------------------------------------------------------------------
 
-_ABS_PATH = Path("C:/tmp/frame_001.jpg")
+_ABS_PATH = Path.cwd() / "frame_001.jpg"
 _VIDEO_ID = uuid4()
 _JOB_ID = uuid4()
 _NOW = datetime(2026, 10, 5, 12, 0, 0, tzinfo=UTC)

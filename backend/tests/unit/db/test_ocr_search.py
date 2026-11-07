@@ -173,7 +173,7 @@ async def test_lexical_matches_with_and_without_window() -> None:
         source="scene_boundary",
         dhash="0123456789abcdef",
         is_duplicate=False,
-        image_path="C:/tmp/frame_003.jpg",
+        image_path=str(Path.cwd() / "frame_003.jpg"),
         created_at=now,
     )
 
@@ -201,7 +201,7 @@ async def test_lexical_matches_with_and_without_window() -> None:
     assert evidence.block.provider_spec.provider == "llamaparse"
     assert evidence.block.confidence == 0.95
     assert evidence.block.confidence_method == "average"
-    assert evidence.image_path == Path("C:/tmp/frame_003.jpg")
+    assert evidence.image_path == Path.cwd() / "frame_003.jpg"
 
     stmt = str(session.statements[-1])
     assert "video_frames.capture_ms >=" in stmt
@@ -466,7 +466,7 @@ async def test_vector_search_success() -> None:
         source="periodic",
         dhash=None,
         is_duplicate=False,
-        image_path="C:/tmp/frame_002.jpg",
+        image_path=str(Path.cwd() / "frame_002.jpg"),
         created_at=now,
     )
     # distance = 0.2, score = 1.0 - 0.2 = 0.8
@@ -491,7 +491,7 @@ async def test_vector_search_success() -> None:
     assert abs(res.score - 0.8) < 1e-5
     assert res.block.text == "Matching slide text"
     assert res.block.source_frame_sequence == 2
-    assert res.image_path == Path("C:/tmp/frame_002.jpg")
+    assert res.image_path == Path.cwd() / "frame_002.jpg"
 
     stmt = str(session.statements[-1])
     assert "video_frames.capture_ms >=" in stmt
@@ -571,7 +571,7 @@ async def test_vector_search_without_window_and_open_ended_window() -> None:
         source="periodic",
         dhash=None,
         is_duplicate=False,
-        image_path="C:/tmp/frame_000.jpg",
+        image_path=str(Path.cwd() / "frame_000.jpg"),
         created_at=now,
     )
 

@@ -72,7 +72,7 @@ def make_ocr_evidence(
             provider_spec=_SPEC,
         ),
         score=score,
-        image_path=Path("C:/tmp/frame_001.jpg"),
+        image_path=Path.cwd() / "frame_001.jpg",
     )
 
 

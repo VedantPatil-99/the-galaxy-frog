@@ -149,7 +149,7 @@ async def test_save_frames_existing_returns_early(
             sequence=0,
             start_ms=0,
             end_ms=1000,
-            path=Path("C:/tmp/0.jpg"),
+            path=Path.cwd() / "0.jpg",
             source=FrameSource.PERIODIC,
         )
     ]
@@ -185,7 +185,7 @@ async def test_save_frames_with_scene_matching_and_deduplication(
         sequence=0,
         start_ms=0,
         end_ms=2500,
-        path=Path("C:/tmp/0.jpg"),
+        path=Path.cwd() / "0.jpg",
         source=FrameSource.SCENE_BOUNDARY,
     )
     frame1 = FrameSample(
@@ -193,7 +193,7 @@ async def test_save_frames_with_scene_matching_and_deduplication(
         sequence=1,
         start_ms=2500,
         end_ms=5000,
-        path=Path("C:/tmp/1.jpg"),
+        path=Path.cwd() / "1.jpg",
         source=FrameSource.PERIODIC,
     )
     frame2 = FrameSample(
@@ -201,7 +201,7 @@ async def test_save_frames_with_scene_matching_and_deduplication(
         sequence=2,
         start_ms=6000,
         end_ms=8000,
-        path=Path("C:/tmp/2.jpg"),
+        path=Path.cwd() / "2.jpg",
         source=FrameSource.PERIODIC,
     )
     dedup = DeduplicatedFrameSet(
@@ -346,7 +346,7 @@ async def test_save_ocr_results_missing_frame_sequence_raises(
         sequence=5,
         start_ms=5000,
         end_ms=6000,
-        path=Path("C:/tmp/5.jpg"),
+        path=Path.cwd() / "5.jpg",
         source=FrameSource.PERIODIC,
     )
     request = OCRExtractionRequest(job_id=uuid4(), video_id=video_id, frame=frame)
@@ -399,7 +399,7 @@ async def test_save_ocr_results_success(
         sequence=0,
         start_ms=0,
         end_ms=1000,
-        path=Path("C:/tmp/0.jpg"),
+        path=Path.cwd() / "0.jpg",
         source=FrameSource.PERIODIC,
     )
     request = OCRExtractionRequest(job_id=uuid4(), video_id=video_id, frame=frame)
