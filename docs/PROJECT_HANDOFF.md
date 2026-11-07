@@ -94,6 +94,17 @@ PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
 ## Current state and next task
 
+### Phase 7 handoff — 2026-11-08
+
+The Study workspace generates chapters, summaries, notes, flashcards, and quizzes from
+existing video evidence. Each material has its own version history. Select a chapter or
+citation to seek, and export any saved version as Markdown or JSON. Local Ollama and
+PostgreSQL are required to create new materials.
+
+The Phase 7 branch is based on the merged Phase 6 work. Apply migration `20261107_0013`
+before starting the API and worker. Local gates passed. Hosted CI and merge are pending.
+See the [verification record](phase-7/p7-verification.md) and [study runbook](runbook.md#phase-7-study-workspace).
+
 ### Phase 6 handoff — 2026-11-07
 
 P6.1–P6.4 are complete locally on `feat/explain-this-moment`. Pause an imported YouTube video and
