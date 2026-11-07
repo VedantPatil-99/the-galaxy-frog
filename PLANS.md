@@ -686,8 +686,8 @@ Duration: 7–10 days.
 ## Completed plan: Phase 5 — Visual retrieval and query-adaptive VLM
 
 Status: **locally complete, 2026-11-02**. Branch `feat/visual-retrieval-vlm` starts at the
-verified Phase 4 implementation `6a5a903`. Phase 4/5 hosted merge and Phase 5 hosted CI are
-not asserted. No PR or Notion page was created. Phase 6 is not started.
+verified Phase 4 implementation `6a5a903`. The local closeout did not verify hosted CI or merge
+status. No PR or Notion page was created during that closeout.
 
 - [x] P5.1 — Provider-independent visual contracts, identities, sufficiency, privacy and escalation decisions.
 - [x] P5.2 — Offline pinned SigLIP baseline with explicit CUDA/CPU selection, isolation and bounded batches.
@@ -718,3 +718,40 @@ on two successful trials, produces no gain, and fails strict output validation o
 Cloud live acceptance, general answer accuracy, larger retrieval datasets, Qwen3-VL Embedding,
 and general provider-selection UI remain unverified or deferred. See
 [the final plan and verification record](docs/phase-5/p5-verification.md).
+
+## Phase 6 — Explain this moment
+
+Branch `feat/explain-this-moment` started from `origin/main` at `55216fc`, which contains Phase 5.
+Record each completed packet here with its implementation commit, source and test links, and
+verification results. Record hosted CI and merge status separately from local checks.
+
+- [x] P6.1 — Backend moment evidence. Validate the integer playhead against the video duration and
+  read the clipped 15-second window on either side. Keep original transcript, OCR, and frame
+  provenance, scope visual evidence by known capture time, and select distinct previous, current,
+  and next frame captures. Local checks passed for the focused unit and PostgreSQL cases, Ruff
+  lint and format, strict Pyright, and the full backend suite (1,136 passed, 17 opt-in skips,
+  100% statement and branch coverage).
+  - Commit `ab22e64` adds the [use case](backend/src/galaxy_frog/application/retrieval/moment.py)
+    and [SQLAlchemy reader](backend/src/galaxy_frog/db/moment_evidence.py).
+  - Tests cover [playhead boundaries](backend/tests/unit/application/test_retrieve_moment_evidence.py),
+    [lineage and frame slots](backend/tests/unit/db/test_moment_evidence_reader.py), and
+    [PostgreSQL isolation and capture boundaries](backend/tests/integration/test_moment_evidence.py).
+    Pushed to the feature branch. Hosted CI and merge were pending at packet closeout.
+- [x] P6.2 — Grounded explanation, validated citations, and saved trace. Commit `3e96986`
+  adds the [explanation use case](backend/src/galaxy_frog/application/retrieval/explain_moment.py)
+  and [grounding tests](backend/tests/unit/application/test_explain_moment.py). The tests verify
+  that speech can skip the VLM, image reasoning respects privacy, and unavailable providers
+  leave source evidence available.
+- [x] P6.3 — FastAPI contract, generated types, and player integration. Commit `819fd34`
+  adds the [endpoint](backend/src/galaxy_frog/api/routes/retrieval.py) and
+  [player action](apps/web/components/moment-player.tsx). The
+  [HTTP tests](backend/tests/test_moment_api.py) and
+  [web client tests](apps/web/tests/moment-client.test.ts) passed. The browser accepted two
+  distinct paused playheads and a citation moved the player to its source time.
+- [x] P6.4 — Browser acceptance and Phase 6 closeout. Commit `ad0bd99` updates
+  [frame acquisition](backend/src/galaxy_frog/adapters/vision/frame_pipeline.py) to accept a
+  bounded video-only stream when YouTube offers no combined format. The
+  [frame tests](backend/tests/unit/vision/test_frame_pipeline.py), full checks, and spoken and
+  visual browser acceptance passed. The visual browser request used the local VLM and its
+  citation moved the paused player from `5020` ms to `0` ms. Hosted CI and merge are pending.
+  See the [Phase 6 verification record](docs/phase-6/p6-verification.md).

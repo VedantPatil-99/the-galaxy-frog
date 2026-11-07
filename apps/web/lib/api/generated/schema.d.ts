@@ -144,6 +144,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/videos/{video_id}/explain-moment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explain Video Moment */
+        post: operations["explain_video_moment_v1_videos__video_id__explain_moment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/videos/{video_id}/frames/{sequence}/image": {
         parameters: {
             query?: never;
@@ -416,11 +433,53 @@ export interface components {
              */
             visual_hits: number;
         };
+        /** ExaminedWindow */
+        ExaminedWindow: {
+            /** End Ms */
+            end_ms: number;
+            /** Start Ms */
+            start_ms: number;
+        };
         /**
          * ExecutionLocation
          * @enum {string}
          */
         ExecutionLocation: "local" | "external";
+        /** ExplainMomentRequest */
+        ExplainMomentRequest: {
+            /**
+             * Allow External Frames
+             * @default false
+             */
+            allow_external_frames: boolean;
+            /** Timestamp Ms */
+            timestamp_ms: number;
+        };
+        /** ExplainMomentResponse */
+        ExplainMomentResponse: {
+            /** Citations */
+            citations: components["schemas"]["MomentCitation"][];
+            current_frame: components["schemas"]["MomentFrameResponse"] | null;
+            /** Explanation */
+            explanation: string;
+            /** Related Moments */
+            related_moments: components["schemas"]["MomentFrameResponse"][];
+            /** Timestamp Ms */
+            timestamp_ms: number;
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id: string;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+            /** Warnings */
+            warnings: components["schemas"]["RetrievalWarning"][];
+            window: components["schemas"]["ExaminedWindow"];
+        };
         /**
          * FrameSource
          * @description How a frame was selected from the video stream.
@@ -579,6 +638,59 @@ export interface components {
          */
         IngestionStage: "source_resolution" | "metadata" | "caption_retrieval" | "audio_acquisition" | "transcription" | "chunking" | "persistence" | "embedding" | "indexing" | "cleanup" | "completed";
         JsonValue: unknown;
+        /** MomentCitation */
+        MomentCitation: {
+            /** End Ms */
+            end_ms: number;
+            /** Frame Id */
+            frame_id?: string | null;
+            /**
+             * Modality
+             * @enum {string}
+             */
+            modality: "transcript" | "ocr" | "frame";
+            ocr_provider?: components["schemas"]["OCRProviderSpec"] | null;
+            /** Quote */
+            quote?: string | null;
+            /** Seek Ms */
+            seek_ms: number;
+            /** Source Id */
+            source_id: string;
+            /** Start Ms */
+            start_ms: number;
+            transcript_lineage?: components["schemas"]["MomentTranscriptLineage"] | null;
+            /**
+             * Unit Ids
+             * @default []
+             */
+            unit_ids: string[];
+        };
+        /** MomentFrameResponse */
+        MomentFrameResponse: {
+            /** Capture Ms */
+            capture_ms: number;
+            /** End Ms */
+            end_ms: number;
+            /**
+             * Frame Id
+             * Format: uuid
+             */
+            frame_id: string;
+            /** Scene Id */
+            scene_id: string | null;
+            source: components["schemas"]["FrameSource"];
+            /** Start Ms */
+            start_ms: number;
+        };
+        /** MomentTranscriptLineage */
+        MomentTranscriptLineage: {
+            caption_kind: components["schemas"]["CaptionKind"] | null;
+            origin: components["schemas"]["TranscriptOrigin"];
+            /** Track Id */
+            track_id: string | null;
+            /** Transcription Run Id */
+            transcription_run_id: string | null;
+        };
         /** OCREvidenceResponse */
         OCREvidenceResponse: {
             /**
@@ -1497,6 +1609,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    explain_video_moment_v1_videos__video_id__explain_moment_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplainMomentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplainMomentResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */

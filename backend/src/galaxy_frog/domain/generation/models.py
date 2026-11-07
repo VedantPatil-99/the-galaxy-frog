@@ -5,6 +5,19 @@ from enum import StrEnum
 from uuid import UUID
 
 
+class GenerationProviderError(RuntimeError):
+    """Safe provider failure that never exposes response internals."""
+
+
+@dataclass(frozen=True, slots=True)
+class GroundingText:
+    source_id: str
+    modality: str
+    start_ms: int
+    end_ms: int
+    text: str
+
+
 class AnswerConfidence(StrEnum):
     """Small public confidence vocabulary for transcript-only answers."""
 

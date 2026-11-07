@@ -1,12 +1,19 @@
 """Retrieval-only search and video-scoped durable trace inspection."""
 
-from typing import Annotated
+from collections.abc import Callable
+from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.exc import SQLAlchemyError
 
-from galaxy_frog.api.dependencies import get_vision_repository
+from galaxy_frog.api.dependencies import build_visual_reasoning, get_vision_repository
 from galaxy_frog.api.errors import ApiError
+from galaxy_frog.api.moment_schemas import (
+    ExplainMomentRequest,
+    ExplainMomentResponse,
+    moment_response,
+)
 from galaxy_frog.api.retrieval import (
     SearchDependency,
     TraceRepositoryDependency,
@@ -22,12 +29,74 @@ from galaxy_frog.api.retrieval_schemas import (
     trace_response,
 )
 from galaxy_frog.api.schemas import ErrorResponse
+from galaxy_frog.application.retrieval.explain_moment import ExplainMoment, MomentTextProvider
+from galaxy_frog.application.retrieval.moment import InvalidMomentTimestamp, RetrieveMomentEvidence
+from galaxy_frog.application.retrieval.temporal import RetrievalVideoNotFound
 from galaxy_frog.db.models import OCRBlockRow, VideoFrameRow
+from galaxy_frog.db.moment_evidence import SqlAlchemyMomentEvidenceReader
+from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
+from galaxy_frog.domain.retrieval.traces import TraceLimitExceeded
 
 router = APIRouter(prefix="/v1/videos", tags=["retrieval"])
 
 VisionRepositoryDependency = Annotated[SqlAlchemyVisionRepository, Depends(get_vision_repository)]
+
+
+def get_moment_service(request: Request, repository: VideoRepositoryDependency) -> ExplainMoment:
+    text = cast(Callable[[], MomentTextProvider], request.app.state.generation_provider_factory)()
+    return ExplainMoment(
+        evidence=RetrieveMomentEvidence(SqlAlchemyMomentEvidenceReader(repository.session)),
+        text=text,
+        visual=build_visual_reasoning(request, repository.session),
+        traces=PostgresRetrievalTraces(repository.session),
+    )
+
+
+@router.post(
+    "/{video_id}/explain-moment",
+    response_model=ExplainMomentResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+)
+async def explain_video_moment(
+    video_id: UUID,
+    body: ExplainMomentRequest,
+    service: Annotated[ExplainMoment, Depends(get_moment_service)],
+) -> ExplainMomentResponse:
+    try:
+        result = await service.execute(
+            video_id, body.timestamp_ms, external_permission=body.allow_external_frames
+        )
+    except RetrievalVideoNotFound as exc:
+        raise ApiError(
+            status_code=404,
+            code="VIDEO_NOT_FOUND",
+            message="The requested video does not exist.",
+            retryable=False,
+        ) from exc
+    except InvalidMomentTimestamp as exc:
+        raise ApiError(
+            status_code=422, code="INVALID_MOMENT_TIMESTAMP", message=str(exc), retryable=False
+        ) from exc
+    except TraceLimitExceeded as exc:
+        raise ApiError(
+            status_code=422,
+            code="RETRIEVAL_TRACE_LIMIT_EXCEEDED",
+            message="The moment evidence exceeds the bounded trace size.",
+            retryable=False,
+        ) from exc
+    except SQLAlchemyError as exc:
+        raise ApiError(
+            status_code=503,
+            code="DATABASE_UNAVAILABLE",
+            message="Moment evidence and its trace require the database.",
+            retryable=True,
+        ) from exc
+    return moment_response(result)
 
 
 @router.post(

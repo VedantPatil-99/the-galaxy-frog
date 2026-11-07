@@ -17,6 +17,7 @@ from galaxy_frog.adapters.generation.ollama import (
     OllamaGenerationProvider,
 )
 from galaxy_frog.domain.generation import AnswerConfidence
+from galaxy_frog.domain.generation.models import GroundingText
 from galaxy_frog.domain.retrieval import RetrievedEvidence
 from galaxy_frog.domain.transcripts import RetrievalUnit
 
@@ -27,6 +28,41 @@ def mock_client(payload: object, *, status: int = 200) -> httpx.AsyncClient:
         return httpx.Response(status, json=payload)
 
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+@pytest.mark.asyncio
+async def test_moment_generation_keeps_source_ids_and_labels() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        prompt = json.loads(request.content)["prompt"]
+        assert "ID: block-id\nSOURCE: ocr\nINTERVAL_MS: 100-200" in prompt
+        assert "ID: cue-id\nSOURCE: transcript" in prompt
+        return httpx.Response(
+            200,
+            json={
+                "response": json.dumps(
+                    {
+                        "answer": "The screen shows a title.",
+                        "confidence": "high",
+                        "citations": [{"retrieval_unit_id": "block-id", "quote": "Title"}],
+                    }
+                )
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = OllamaGenerationProvider(
+            base_url="http://localhost:11434", model="fixture", client=client
+        )
+        result = await provider.generate_moment(
+            "Explain the playhead",
+            (
+                GroundingText("block-id", "ocr", 100, 200, "Title"),
+                GroundingText(
+                    "cue-id", "transcript", 150, 200, "The speaker introduces the topic."
+                ),
+            ),
+        )
+    assert result.citations[0].retrieval_unit_id == "block-id"
 
 
 @pytest.mark.asyncio

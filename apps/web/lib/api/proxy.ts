@@ -176,7 +176,7 @@ export async function proxyRequest(
     path[0] === "v1" &&
     path[1] === "videos"
   const isRetrievalRequest = isVideoPost &&
-    (path[3] === "search" || path[3] === "questions")
+    (path[3] === "search" || path[3] === "questions" || path[3] === "explain-moment")
   const timeoutMs = isRetrievalRequest ? 300_000 :
     isVideoPost && path[2] === "import" ? 120_000 : 10_000
   const init: StreamingRequestInit = {

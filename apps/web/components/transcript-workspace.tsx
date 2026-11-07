@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from "react"
 
 import { IngestionProgress } from "@/components/ingestion-progress"
+import { MomentPlayer } from "@/components/moment-player"
 import { TranscriptionEvidence } from "@/components/transcription-evidence"
 import { RetrievalEvidence } from "@/components/retrieval-evidence"
 import {
@@ -240,9 +241,7 @@ export function TranscriptWorkspace() {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
           <div className="space-y-5">
             <article className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-              <div className="aspect-video bg-black">
-                <iframe ref={player} title={`YouTube player: ${transcript.video.title}`} src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(transcript.video.external_id)}?enablejsapi=1&rel=0`} className="size-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
-              </div>
+              <MomentPlayer key={transcript.video.video_id} video={transcript.video} iframeRef={player} />
               <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="font-heading text-xl font-semibold">{transcript.video.title}</h2>

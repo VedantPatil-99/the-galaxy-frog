@@ -107,9 +107,19 @@ class FrameRunner:
 
 @pytest.mark.asyncio
 async def test_local_pipeline_retains_frames_and_cleans_source(tmp_path: Path) -> None:
-    result = await LocalFramePipeline(
-        Settings(vision_workspace_root=tmp_path), FrameRunner()
-    ).extract(video())
+    runner = FrameRunner()
+    with patch.object(runner, "execute", wraps=runner.execute) as execute:
+        result = await LocalFramePipeline(Settings(vision_workspace_root=tmp_path), runner).extract(
+            video()
+        )
+    download, _ = execute.call_args_list[0].args
+    formats = download[download.index("--format") + 1]
+    assert formats.split("/") == [
+        "best[height<=480][ext=mp4]",
+        "best[height<=480]",
+        "bestvideo[height<=480][ext=mp4]",
+        "bestvideo[height<=480]",
+    ]
     assert len(result[1]) == 1 and result[1][0].path.exists()
     assert not (result[1][0].path.parent / "source.mp4").exists()
 

@@ -32,6 +32,20 @@ from galaxy_frog.domain.vision.visual_ports import VisualEmbeddingProvider, Visu
 type DatabaseProbe = Callable[[], Awaitable[None]]
 
 
+def build_visual_reasoning(request: Request, session: AsyncSession) -> AdaptiveVisualReasoning:
+    return AdaptiveVisualReasoning(
+        provider=cast(
+            VisualReasoningProvider | None,
+            getattr(request.app.state, "visual_reasoning_provider", None),
+        ),
+        cache=PostgresVisualReasoningCache(session),
+        verifier=LocalReasoningFrameVerifier(),
+        external_enabled=cast(
+            Settings, request.app.state.settings
+        ).external_frame_processing_enabled,
+    )
+
+
 def build_retrieval_service(
     request: Request, repository: SqlAlchemyVideoRepository
 ) -> SearchTranscript:
@@ -56,17 +70,7 @@ def build_retrieval_service(
         retrieval=RetrieveTemporalEvidence(videos=repository, retrieval=retrieval),
         traces=PostgresRetrievalTraces(repository.session),
         embedding_spec=provider.spec,
-        reasoning=AdaptiveVisualReasoning(
-            provider=cast(
-                VisualReasoningProvider | None,
-                getattr(request.app.state, "visual_reasoning_provider", None),
-            ),
-            cache=PostgresVisualReasoningCache(repository.session),
-            verifier=LocalReasoningFrameVerifier(),
-            external_enabled=cast(
-                Settings, request.app.state.settings
-            ).external_frame_processing_enabled,
-        ),
+        reasoning=build_visual_reasoning(request, repository.session),
         visual=AdaptiveVisualRetrieval(
             ocr_lexical=PostgresOCRLexicalSearch(repository.session),
             ocr_dense=PgVectorOCRSearch(session=repository.session, provider=provider),
