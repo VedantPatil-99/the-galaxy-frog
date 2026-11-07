@@ -58,7 +58,8 @@ class LocalFramePipeline:
         workspace = (settings.vision_workspace_root / str(video.video_id)).resolve()
         await asyncio.to_thread(workspace.mkdir, parents=True, exist_ok=True)
         try:
-            # A single non-merged low-resolution stream bounds acquisition and decoder memory.
+            # Frames only need one low-resolution video stream. Prefer the existing combined
+            # formats, then accept video-only formats without merging in a separate audio stream.
             downloaded = await self._runner.run(
                 (
                     sys.executable,
@@ -71,7 +72,8 @@ class LocalFramePipeline:
                     "--js-runtimes",
                     settings.yt_dlp_js_runtime,
                     "--format",
-                    "best[height<=480][ext=mp4]/best[height<=480]",
+                    "best[height<=480][ext=mp4]/best[height<=480]/"
+                    "bestvideo[height<=480][ext=mp4]/bestvideo[height<=480]",
                     "--max-filesize",
                     str(settings.media_max_download_bytes),
                     "--match-filters",
