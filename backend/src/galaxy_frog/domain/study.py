@@ -12,7 +12,7 @@ from galaxy_frog.domain.videos.models import CaptionKind, VideoSourceKind
 
 MAX_VIDEO_MS = 7_200_000
 SCHEMA_VERSION = 1
-PROMPT_VERSION = "study-v1"
+PROMPT_VERSION = "study-v2"
 
 
 class StudyKind(StrEnum):

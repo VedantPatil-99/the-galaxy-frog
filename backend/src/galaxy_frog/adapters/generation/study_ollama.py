@@ -13,7 +13,10 @@ from galaxy_frog.domain.study import StudyCitation, StudyError, StudyKind
 _TASKS = {
     StudyKind.CHAPTERS: "Write one short chapter title.",
     StudyKind.SUMMARY: "Write one or two concise takeaways that the quotes support.",
-    StudyKind.NOTES: "Write one or two useful study notes with a title and explanation.",
+    StudyKind.NOTES: (
+        "Write one or two notes. Give each a short title and one sentence explaining a single fact. "
+        "Cite a quote that directly states that fact. Keep citation IDs in citations only."
+    ),
     StudyKind.FLASHCARDS: (
         "Write one self-contained factual recall question with a complete, short answer. "
         "Copy the answer exactly from the citation quote. Avoid incomplete fragments."
