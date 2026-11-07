@@ -722,6 +722,8 @@ and general provider-selection UI remain unverified or deferred. See
 ## Phase 6 — Explain this moment
 
 Branch `feat/explain-this-moment` started from `origin/main` at `55216fc`, which contains Phase 5.
+Record each completed packet here with its implementation commit, source and test links, and
+verification results. Record hosted CI and merge status separately from local checks.
 
 - [x] P6.1 — Backend moment evidence. Validate the integer playhead against the video duration and
   read the clipped 15-second window on either side. Keep original transcript, OCR, and frame
@@ -729,6 +731,12 @@ Branch `feat/explain-this-moment` started from `origin/main` at `55216fc`, which
   and next frame captures. Local checks passed for the focused unit and PostgreSQL cases, Ruff
   lint and format, strict Pyright, and the full backend suite (1,136 passed, 17 opt-in skips,
   100% statement and branch coverage).
+  - Commit `ab22e64` adds the [use case](backend/src/galaxy_frog/application/retrieval/moment.py)
+    and [SQLAlchemy reader](backend/src/galaxy_frog/db/moment_evidence.py).
+  - Tests cover [playhead boundaries](backend/tests/unit/application/test_retrieve_moment_evidence.py),
+    [lineage and frame slots](backend/tests/unit/db/test_moment_evidence_reader.py), and
+    [PostgreSQL isolation and capture boundaries](backend/tests/integration/test_moment_evidence.py).
+    Pushed to the feature branch. Hosted CI and merge were pending at packet closeout.
 - [ ] P6.2 — Grounded explanation, validated citations, and saved trace.
 - [ ] P6.3 — FastAPI contract, generated types, and player integration.
 - [ ] P6.4 — Browser acceptance and Phase 6 closeout.
