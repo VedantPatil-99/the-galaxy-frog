@@ -748,7 +748,10 @@ verification results. Record hosted CI and merge status separately from local ch
   [HTTP tests](backend/tests/test_moment_api.py) and
   [web client tests](apps/web/tests/moment-client.test.ts) passed. The browser accepted two
   distinct paused playheads and a citation moved the player to its source time.
-- [ ] P6.4 — Browser acceptance and Phase 6 closeout. Local automated checks, spoken browser
-  acceptance, and live visual API verification passed. The indexed visual fixture could not
-  play in the YouTube embed, so visual playback acceptance remains open. See the
-  [Phase 6 verification record](docs/phase-6/p6-verification.md).
+- [x] P6.4 — Browser acceptance and Phase 6 closeout. Commit `ad0bd99` updates
+  [frame acquisition](backend/src/galaxy_frog/adapters/vision/frame_pipeline.py) to accept a
+  bounded video-only stream when YouTube offers no combined format. The
+  [frame tests](backend/tests/unit/vision/test_frame_pipeline.py), full checks, and spoken and
+  visual browser acceptance passed. The visual browser request used the local VLM and its
+  citation moved the paused player from `5020` ms to `0` ms. Hosted CI and merge are pending.
+  See the [Phase 6 verification record](docs/phase-6/p6-verification.md).

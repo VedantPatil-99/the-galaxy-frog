@@ -1,7 +1,7 @@
 # Phase 6 verification
 
-Checked on 2026-11-07 on `feat/explain-this-moment`, based on `55216fc`. P6.1–P6.3 are
-implemented. P6.4 remains open for a visual moment played and explained in the embedded player.
+Locally complete on 2026-11-07 on `feat/explain-this-moment`, based on `55216fc`.
+P6.1–P6.4 passed their local acceptance checks.
 
 ## Implementation
 
@@ -18,6 +18,8 @@ implemented. P6.4 remains open for a visual moment played and explained in the e
   window, and seeks to the validated citation timestamp. External frame processing is off for
   requests from the player. The server requires both configuration and request permission before
   external frame processing.
+- `ad0bd99` keeps the existing combined-format preference and lets frame extraction fall back
+  to one bounded video-only stream. The same height, duration, byte, and time limits apply.
 
 ## Local verification
 
@@ -36,11 +38,18 @@ implemented. P6.4 remains open for a visual moment played and explained in the e
   final answer, “They tried” and “TOMORROW IS A MYSTERY.” The original prompt also produced an
   unsupported guess about the setting. The revised prompt omitted that guess on the retest.
   Final trace `26b02a96-eb87-4edf-8783-cbef0c17ff49`.
-- **Visual browser check.** The indexed fixture returned “This video is unavailable” inside the
-  YouTube embed. Complete the remaining gate with a playable indexed video by pausing on a
-  visual moment, requesting an explanation, and checking that the frame citation seeks to its
-  stored capture time. Local API verification covers the VLM and frame citation for the
-  unavailable fixture.
+- **Visual browser check.** The `_TJ61eCWQvQ` embed reported that playback was unavailable.
+  The replacement, `jNQXAC9IVRw`, played in the embed. Its import saved six caption cues and
+  reported zero frames because the source exposed video and audio separately. After the format
+  fix, rerunning only the existing vision indexing operation for this video saved one hashed
+  frame and indexed it with local CUDA SigLIP. The original ingestion record still reflects
+  the initial attempt. OCR was unavailable for this fixture.
+- In the browser, the paused player submitted `5020` ms in a caption gap and the response
+  showed `[0,19000)` ms. Local `qwen3-vl:2b-instruct` cited frame
+  `69a38f5f-feca-4fd5-b614-e282a58b3452` at `0` ms. The click moved the paused player to
+  `00:00`. Trace `80bdae33-2ab3-4ecc-b31b-1c9050858fe6` confirms a cache miss and external
+  processing disabled. The frame shows a person, elephants, and fencing. The answer's claim
+  that the elephants were eating was unconfirmed from the still frame.
 
 ## Hosted status
 
