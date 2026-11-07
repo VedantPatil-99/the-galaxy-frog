@@ -97,13 +97,6 @@ class AdaptiveVisualReasoning:
         external_permission: bool = False,
         allow_fallback: bool = True,
     ) -> ReasoningExecution:
-        started = perf_counter()
-        provider = self._provider
-        identity = provider.identity if provider else None
-        selected: tuple[VisualFrame, ...] = ()
-        key = None
-        permitted = False
-        context_warning: tuple[RetrievalWarning, ...] = ()
         if (
             text.status != RetrievalStatus.RESOLVED
             or visual.decisions[-1].decision != VisualDecision.REASON
@@ -111,7 +104,7 @@ class AdaptiveVisualReasoning:
             return ReasoningExecution(
                 visual.decisions[-1].decision,
                 "reasoning_not_required",
-                identity,
+                self._provider.identity if self._provider else None,
                 (),
                 None,
                 False,
@@ -119,6 +112,69 @@ class AdaptiveVisualReasoning:
                 False,
                 0,
             )
+        context = "\n".join(
+            [
+                *(unit.text for group in text.groups for unit in group.units),
+                *(item.block.text for item in visual.ocr),
+            ]
+        )
+        lineage = {
+            "units": [
+                {
+                    "unit_id": unit.unit_id,
+                    "cue_ids": unit.cue_ids,
+                    "start_ms": unit.start_ms,
+                    "end_ms": unit.end_ms,
+                }
+                for group in text.groups
+                for unit in group.units
+            ],
+            "ocr": [
+                {
+                    "block_id": str(item.block_id),
+                    "frame_id": str(item.frame_id),
+                    "capture_ms": item.capture_ms,
+                    "provider": asdict(item.block.provider_spec),
+                    "start_ms": item.block.start_ms,
+                    "end_ms": item.block.end_ms,
+                }
+                for item in visual.ocr
+            ],
+            "visual_collections": [
+                {"id": str(hit.collection_id), "spec": asdict(hit.collection)}
+                for hit in visual.hits
+            ],
+        }
+        return await self.reason_with_context(
+            video_id,
+            question,
+            tuple(hit.frame for hit in visual.hits[:1]),
+            context,
+            evidence_fingerprint=sha256(json.dumps(lineage, sort_keys=True).encode()).hexdigest(),
+            decision_reason=visual.decisions[-1].reason,
+            external_permission=external_permission,
+            allow_fallback=allow_fallback,
+        )
+
+    async def reason_with_context(
+        self,
+        video_id: UUID,
+        question: str,
+        frames: tuple[VisualFrame, ...],
+        context: str,
+        *,
+        evidence_fingerprint: str,
+        decision_reason: str,
+        external_permission: bool,
+        allow_fallback: bool = True,
+    ) -> ReasoningExecution:
+        started = perf_counter()
+        provider = self._provider
+        identity = provider.identity if provider else None
+        selected: tuple[VisualFrame, ...] = ()
+        key = None
+        permitted = False
+        context_warning: tuple[RetrievalWarning, ...] = ()
         try:
             if provider is None:
                 raise VisualProviderError(VisualFailureCode.UNAVAILABLE)
@@ -129,15 +185,8 @@ class AdaptiveVisualReasoning:
                 permitted=external_permission,
             ):
                 raise VisualProviderError(VisualFailureCode.PRIVACY_DENIED)
-            # The verified local baseline uses the best seed only; no full-video VLM processing.
-            selected = tuple(hit.frame for hit in visual.hits[:1])
-            context = "\n".join(
-                [
-                    *(unit.text for group in text.groups for unit in group.units),
-                    *(item.block.text for item in visual.ocr),
-                ]
-            )
-            # Context is a separate bounded copy; original evidence stays intact in retrieval/traces.
+            selected = frames[:1]
+            # Original evidence stays intact; only the provider copy is bounded.
             evidence = context[:3000]
             if len(context) > 3000:
                 context_warning = (
@@ -146,34 +195,6 @@ class AdaptiveVisualReasoning:
                         "Only the first 3000 characters of retrieved text were sent to visual reasoning.",
                     ),
                 )
-            lineage = {
-                "units": [
-                    {
-                        "unit_id": unit.unit_id,
-                        "cue_ids": unit.cue_ids,
-                        "start_ms": unit.start_ms,
-                        "end_ms": unit.end_ms,
-                    }
-                    for group in text.groups
-                    for unit in group.units
-                ],
-                "ocr": [
-                    {
-                        "block_id": str(item.block_id),
-                        "frame_id": str(item.frame_id),
-                        "capture_ms": item.capture_ms,
-                        "provider": asdict(item.block.provider_spec),
-                        "start_ms": item.block.start_ms,
-                        "end_ms": item.block.end_ms,
-                    }
-                    for item in visual.ocr
-                ],
-                "visual_collections": [
-                    {"id": str(hit.collection_id), "spec": asdict(hit.collection)}
-                    for hit in visual.hits
-                ],
-            }
-            evidence_fingerprint = sha256(json.dumps(lineage, sort_keys=True).encode()).hexdigest()
             request = VisualReasoningRequest(
                 video_id,
                 question,
@@ -198,9 +219,7 @@ class AdaptiveVisualReasoning:
                 VisualDecision.INSUFFICIENT
                 if result.insufficient_evidence
                 else VisualDecision.REASON,
-                "visual_evidence_insufficient"
-                if result.insufficient_evidence
-                else visual.decisions[-1].reason,
+                "visual_evidence_insufficient" if result.insufficient_evidence else decision_reason,
                 identity,
                 selected,
                 result,
