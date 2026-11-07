@@ -94,6 +94,19 @@ PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
 ## Current state and next task
 
+### Phase 6 handoff — 2026-11-07
+
+P6.1–P6.3 are implemented on `feat/explain-this-moment`. Pause an imported YouTube video and
+select **Explain this moment** to see the examined window, explanation, source citations,
+sampled frame times, and retrieval trace ID. The player reads the current paused time and
+seeks to the citation when selected. Visual reasoning uses the existing opt-in VLM and frame
+privacy checks. It requires a frame with stored hashes that pass verification.
+
+P6.4 remains open for visual playback acceptance. The repository-wide checks, the spoken
+browser check, and the live visual endpoint check passed. YouTube showed the indexed visual
+fixture as unavailable in its embed. See the [Phase 6 verification record](phase-6/p6-verification.md)
+for exact timestamps, trace IDs, and hosted status.
+
 ### Phase 5 handoff — 2026-11-02
 
 P5.1–P5.8 are locally complete, based on Phase 4 tip `6a5a903`. Read

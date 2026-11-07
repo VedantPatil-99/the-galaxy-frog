@@ -737,6 +737,18 @@ verification results. Record hosted CI and merge status separately from local ch
     [lineage and frame slots](backend/tests/unit/db/test_moment_evidence_reader.py), and
     [PostgreSQL isolation and capture boundaries](backend/tests/integration/test_moment_evidence.py).
     Pushed to the feature branch. Hosted CI and merge were pending at packet closeout.
-- [ ] P6.2 — Grounded explanation, validated citations, and saved trace.
-- [ ] P6.3 — FastAPI contract, generated types, and player integration.
-- [ ] P6.4 — Browser acceptance and Phase 6 closeout.
+- [x] P6.2 — Grounded explanation, validated citations, and saved trace. Commit `3e96986`
+  adds the [explanation use case](backend/src/galaxy_frog/application/retrieval/explain_moment.py)
+  and [grounding tests](backend/tests/unit/application/test_explain_moment.py). The tests verify
+  that speech can skip the VLM, image reasoning respects privacy, and unavailable providers
+  leave source evidence available.
+- [x] P6.3 — FastAPI contract, generated types, and player integration. Commit `819fd34`
+  adds the [endpoint](backend/src/galaxy_frog/api/routes/retrieval.py) and
+  [player action](apps/web/components/moment-player.tsx). The
+  [HTTP tests](backend/tests/test_moment_api.py) and
+  [web client tests](apps/web/tests/moment-client.test.ts) passed. The browser accepted two
+  distinct paused playheads and a citation moved the player to its source time.
+- [ ] P6.4 — Browser acceptance and Phase 6 closeout. Local automated checks, spoken browser
+  acceptance, and live visual API verification passed. The indexed visual fixture could not
+  play in the YouTube embed, so visual playback acceptance remains open. See the
+  [Phase 6 verification record](docs/phase-6/p6-verification.md).
