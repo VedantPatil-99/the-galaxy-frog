@@ -25,7 +25,8 @@ Galaxy Frog is a temporal multimodal retrieval product, not a generic video chat
 ## Phase Discipline & Future Goals
 
 - Implement only the active checkpoint in `PLANS.md`. Do not implement later phases or refactor completed work unnecessarily.
-- Future/Non-goals: ingestion redesign, OCR, frames/scenes, visual embeddings, VLMs, LangGraph, learning artifacts, cloud deployment, provider-selection UI, and the later evaluation platform.
+- Phase 7 may read existing transcripts, embeddings, scenes, and OCR to build chapters and evidence-backed study artifacts. Separate slide/PDF association is deferred.
+- Non-goals for Phase 7: ingestion redesign, new OCR/frame/scene/embedding/VLM processing, LangGraph, cloud deployment, provider-selection UI, and the later evaluation platform.
 
 ## Working Method & Delivery Rules
 

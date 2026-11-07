@@ -755,3 +755,22 @@ verification results. Record hosted CI and merge status separately from local ch
   visual browser acceptance passed. The visual browser request used the local VLM and its
   citation moved the paused player from `5020` ms to `0` ms. Hosted CI and merge are pending.
   See the [Phase 6 verification record](docs/phase-6/p6-verification.md).
+
+## Phase 7 — Product intelligence
+
+Branch: `feat/product-intelligence`, based on Phase 6 merge `182233a`.
+Status: **locally complete, 2026-11-08**. Hosted CI and merge are pending.
+
+- [x] P7.1 — Durable generation runs, leases, and immutable versions.
+- [x] P7.2 — Deterministic chapters and evidence-backed titles.
+- [x] P7.3 — Grounded summaries, notes, flashcards, and objective quizzes.
+- [x] P7.4 — Study workspace, progress, practice, and player seeking.
+- [x] P7.5 — Exact version Markdown and JSON export.
+- [x] P7.6 — Local acceptance, documentation, and checkpoint synchronization.
+
+The local gate passed 1,180 backend tests at 100% statement and branch coverage, 39 web
+tests, ten PostgreSQL integration checks, the production build, and pre-commit. See the
+[verification record](docs/phase-7/p7-verification.md) and [matching Notion checkpoint](https://app.notion.com/p/3cb7942fa8e48063af52f3404471551f).
+
+Separate document uploads and alignment, new cloud processing, provider configuration,
+and the later evaluation platform are outside this phase.

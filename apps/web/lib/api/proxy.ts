@@ -10,6 +10,7 @@ const REQUEST_HEADERS = [
   "x-correlation-id",
 ] as const
 const RESPONSE_HEADERS = [
+  "content-disposition",
   "content-type",
   "retry-after",
   "x-correlation-id",

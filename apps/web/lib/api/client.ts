@@ -59,7 +59,7 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-async function requestApi<T>(
+export async function requestApi<T>(
   path: string,
   guard: ResponseGuard<T>,
   fetcher: Fetcher,

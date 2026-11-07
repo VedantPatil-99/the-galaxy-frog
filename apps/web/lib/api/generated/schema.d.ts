@@ -44,6 +44,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/artifacts/{artifact_id}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Artifact */
+        post: operations["regenerate_artifact_v1_artifacts__artifact_id__regenerate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -138,6 +155,92 @@ export interface paths {
         get: operations["get_video_v1_videos__video_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/artifact-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Artifact Run */
+        get: operations["read_artifact_run_v1_videos__video_id__artifact_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Artifacts */
+        get: operations["list_artifacts_v1_videos__video_id__artifacts_get"];
+        put?: never;
+        /** Start Artifact */
+        post: operations["start_artifact_v1_videos__video_id__artifacts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/artifacts/{artifact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Artifact */
+        get: operations["read_artifact_v1_videos__video_id__artifacts__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/artifacts/{artifact_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Artifact */
+        get: operations["export_artifact_v1_videos__video_id__artifacts__artifact_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/{video_id}/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Chapters */
+        post: operations["start_chapters_v1_videos__video_id__chapters_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -324,6 +427,31 @@ export interface components {
          * @enum {string}
          */
         CaptionKind: "manual" | "automatic";
+        /** Chapter */
+        Chapter: {
+            /** Boundary Reasons */
+            boundary_reasons: string[];
+            /** Citations */
+            citations: components["schemas"]["StudyCitation"][];
+            /** End Ms */
+            end_ms: number;
+            /** Number */
+            number: number;
+            /** Start Ms */
+            start_ms: number;
+            /** Timestamp Url */
+            timestamp_url: string | null;
+            /** Title */
+            title: string;
+        };
+        /** ChapterRequest */
+        ChapterRequest: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+        };
         /**
          * EmbeddingCollectionSpec
          * @description Identity of one non-interchangeable embedding space.
@@ -479,6 +607,20 @@ export interface components {
             /** Warnings */
             warnings: components["schemas"]["RetrievalWarning"][];
             window: components["schemas"]["ExaminedWindow"];
+        };
+        /** FlashcardItem */
+        FlashcardItem: {
+            /** Answer */
+            answer: string;
+            /** Citations */
+            citations: components["schemas"]["StudyCitation"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "flashcards";
+            /** Question */
+            question: string;
         };
         /**
          * FrameSource
@@ -691,6 +833,20 @@ export interface components {
             /** Transcription Run Id */
             transcription_run_id: string | null;
         };
+        /** NoteItem */
+        NoteItem: {
+            /** Citations */
+            citations: components["schemas"]["StudyCitation"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "notes";
+            /** Text */
+            text: string;
+            /** Title */
+            title: string;
+        };
         /** OCREvidenceResponse */
         OCREvidenceResponse: {
             /**
@@ -792,6 +948,27 @@ export interface components {
             /** Selected Anchor */
             selected_anchor?: string | null;
         };
+        /** QuizItem */
+        QuizItem: {
+            /** Choices */
+            choices: [
+                string,
+                string,
+                string,
+                string
+            ];
+            /** Citations */
+            citations: components["schemas"]["StudyCitation"][];
+            /** Correct Index */
+            correct_index: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "quiz";
+            /** Question */
+            question: string;
+        };
         /** RankedEvidence */
         RankedEvidence: {
             /** Fusion Rank */
@@ -826,6 +1003,16 @@ export interface components {
              * @constant
              */
             status: "ready";
+        };
+        /** RegenerateRequest */
+        RegenerateRequest: {
+            /** Chapter Version Id */
+            chapter_version_id?: string | null;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
         };
         /**
          * RetrievalMode
@@ -904,6 +1091,11 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * RunState
+         * @enum {string}
+         */
+        RunState: "queued" | "running" | "succeeded" | "failed";
         /** SearchRequest */
         SearchRequest: {
             /**
@@ -984,6 +1176,251 @@ export interface components {
             /** Score */
             score: number;
             stage: components["schemas"]["RetrievalMode"];
+        };
+        /** StudyArtifactRequest */
+        StudyArtifactRequest: {
+            /**
+             * Chapter Version Id
+             * Format: uuid
+             */
+            chapter_version_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "summary" | "notes" | "flashcards" | "quiz";
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+        };
+        /** StudyCitation */
+        StudyCitation: {
+            caption_kind?: components["schemas"]["CaptionKind"] | null;
+            /** Capture Ms */
+            capture_ms?: number | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Confidence Method */
+            confidence_method?: string | null;
+            /** Cue Id */
+            cue_id?: string | null;
+            /** End Ms */
+            end_ms: number;
+            /** Frame Id */
+            frame_id?: string | null;
+            /** Language Code */
+            language_code?: string | null;
+            /**
+             * Modality
+             * @enum {string}
+             */
+            modality: "transcript" | "ocr";
+            /** Ocr Block Id */
+            ocr_block_id?: string | null;
+            /** Ocr Provider */
+            ocr_provider?: string | null;
+            /** Ocr Revision */
+            ocr_revision?: string | null;
+            origin?: components["schemas"]["TranscriptOrigin"] | null;
+            /** Quote */
+            quote: string;
+            /** Seek Ms */
+            seek_ms: number;
+            /** Source Id */
+            source_id: string;
+            /** Start Ms */
+            start_ms: number;
+            /** Timestamp Url */
+            timestamp_url: string | null;
+            /** Track Id */
+            track_id?: string | null;
+            /** Transcription Run Id */
+            transcription_run_id?: string | null;
+            /**
+             * Unit Ids
+             * @default []
+             */
+            unit_ids: string[];
+        };
+        /** StudyDocument */
+        StudyDocument: {
+            /** Chapter Version */
+            chapter_version?: number | null;
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["Chapter"][];
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["StudySection"][];
+            source: components["schemas"]["StudySource"];
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+        };
+        /** StudyFailure */
+        StudyFailure: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Retryable */
+            retryable: boolean;
+            /** Suggested Action */
+            suggested_action: string;
+        };
+        /** StudyIndex */
+        StudyIndex: {
+            /** Latest */
+            latest: components["schemas"]["StudyVersionSummary"][];
+            /** Next Before Version */
+            next_before_version?: number | null;
+            /** Runs */
+            runs: components["schemas"]["StudyRun"][];
+            /**
+             * Versions
+             * @default []
+             */
+            versions: components["schemas"]["StudyVersionSummary"][];
+        };
+        /**
+         * StudyKind
+         * @enum {string}
+         */
+        StudyKind: "chapters" | "summary" | "notes" | "flashcards" | "quiz";
+        /** StudyRun */
+        StudyRun: {
+            /** Chapter Version Id */
+            chapter_version_id: string | null;
+            /** Completed Chapters */
+            completed_chapters: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            failure: components["schemas"]["StudyFailure"] | null;
+            kind: components["schemas"]["StudyKind"];
+            /** Result Id */
+            result_id: string | null;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            state: components["schemas"]["RunState"];
+            /** Total Chapters */
+            total_chapters: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** StudySection */
+        StudySection: {
+            /** Chapter Number */
+            chapter_number: number;
+            /** End Ms */
+            end_ms: number;
+            /** Items */
+            items: (components["schemas"]["SummaryItem"] | components["schemas"]["NoteItem"] | components["schemas"]["FlashcardItem"] | components["schemas"]["QuizItem"])[];
+            /** Start Ms */
+            start_ms: number;
+            /** Timestamp Url */
+            timestamp_url: string | null;
+            /** Title */
+            title: string;
+        };
+        /** StudySource */
+        StudySource: {
+            /** Canonical Url */
+            canonical_url: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** External Id */
+            external_id: string;
+            kind: components["schemas"]["VideoSourceKind"];
+            /** Title */
+            title: string;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+        };
+        /** StudyVersion */
+        StudyVersion: {
+            /**
+             * Artifact Id
+             * Format: uuid
+             */
+            artifact_id: string;
+            /** Chapter Version Id */
+            chapter_version_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            document: components["schemas"]["StudyDocument"];
+            /** Evidence Fingerprint */
+            evidence_fingerprint: string;
+            kind: components["schemas"]["StudyKind"];
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Provider */
+            provider: string;
+            /** Schema Version */
+            schema_version: number;
+            /** Version */
+            version: number;
+        };
+        /** StudyVersionSummary */
+        StudyVersionSummary: {
+            /**
+             * Artifact Id
+             * Format: uuid
+             */
+            artifact_id: string;
+            /** Chapter Version Id */
+            chapter_version_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            kind: components["schemas"]["StudyKind"];
+            /** Version */
+            version: number;
+        };
+        /** SummaryItem */
+        SummaryItem: {
+            /** Citations */
+            citations: components["schemas"]["StudyCitation"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "summary";
+            /** Text */
+            text: string;
         };
         /** TimeWindow */
         TimeWindow: {
@@ -1341,6 +1778,68 @@ export interface operations {
             };
         };
     };
+    regenerate_artifact_v1_artifacts__artifact_id__regenerate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyRun"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_job_v1_jobs__job_id__get: {
         parameters: {
             query?: never;
@@ -1609,6 +2108,373 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_artifact_run_v1_videos__video_id__artifact_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyRun"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_artifacts_v1_videos__video_id__artifacts_get: {
+        parameters: {
+            query?: {
+                before_version?: number | null;
+                kind?: components["schemas"]["StudyKind"] | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyIndex"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_artifact_v1_videos__video_id__artifacts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudyArtifactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyRun"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_artifact_v1_videos__video_id__artifacts__artifact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_id: string;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyVersion"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    export_artifact_v1_videos__video_id__artifacts__artifact_id__export_get: {
+        parameters: {
+            query: {
+                format: "markdown" | "json";
+            };
+            header?: never;
+            path: {
+                artifact_id: string;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyVersion"];
+                    "text/markdown": string;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_chapters_v1_videos__video_id__chapters_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChapterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyRun"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */

@@ -630,3 +630,36 @@ The frozen source must already exist with matching pixels, sampling intervals/ca
 and collection vectors. An unavailable source is an explicit setup failure, never replaced by
 generated images/vectors. Reports retain strict experiment failures; the reranker stays off.
 See [the final verification record](phase-5/p5-verification.md) for pool limits and actual timings.
+
+## Phase 7 study workspace
+
+Start PostgreSQL, apply the additive migration, and run the app and worker from Git Bash:
+
+```bash
+bun run infra:up
+bun run db:migrate
+bun run dev
+```
+
+Use the configured local Ollama model (`GENERATION_MODEL`, default `qwen3:4b`) and a loopback
+`OLLAMA_BASE_URL`. Open a ready video, select **Generate chapters**, then choose Summary,
+Notes, Flashcards, or Quiz and generate each independently. A reload reopens the selected
+video and checks its saved runs. When the worker is unavailable, runs remain queued until it
+starts. After a failed run, read its error and retry from the same material. The last saved
+version stays available during a regeneration and after a failure.
+
+The study worker reclaims an expired lease once. A second expiration becomes a retryable
+failure. It reads only the video's existing evidence and reports missing signals and sampled
+coverage. The current local prompt uses up to 1,400 source characters per chapter so a call
+can complete within its 60-second deadline on the development machine. Video length is
+limited to two hours, with up to 20 chapters. Export Markdown or JSON from the selected
+version. JSON keeps exact milliseconds, including when the corresponding YouTube link
+starts at the whole second.
+
+For the PostgreSQL acceptance tests, use the development test database while the local
+worker is idle, so it does not claim runs created by the tests:
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest --no-cov -q \
+  tests/integration/test_product_intelligence.py
+```

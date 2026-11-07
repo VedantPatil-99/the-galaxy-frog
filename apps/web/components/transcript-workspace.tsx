@@ -1,9 +1,10 @@
 "use client"
 
-import { useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 
 import { IngestionProgress } from "@/components/ingestion-progress"
 import { MomentPlayer } from "@/components/moment-player"
+import { StudyWorkspace } from "@/components/study-workspace"
 import { TranscriptionEvidence } from "@/components/transcription-evidence"
 import { RetrievalEvidence } from "@/components/retrieval-evidence"
 import {
@@ -38,6 +39,13 @@ function errorMessage(error: unknown): string {
   return "The request could not be completed. Please try again."
 }
 
+function rememberVideo(videoId: string | null) {
+  const url = new URL(window.location.href)
+  if (videoId === null) url.searchParams.delete("video")
+  else url.searchParams.set("video", videoId)
+  window.history.replaceState(window.history.state, "", url)
+}
+
 export function TranscriptWorkspace() {
   const player = useRef<HTMLIFrameElement>(null)
   const [sourceUrl, setSourceUrl] = useState("")
@@ -54,6 +62,25 @@ export function TranscriptWorkspace() {
   const [importing, setImporting] = useState(false)
   const [jobActionPending, setJobActionPending] = useState(false)
   const [asking, setAsking] = useState(false)
+
+  const restoreRequest = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    const id = new URL(window.location.href).searchParams.get("video")
+    if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return
+    const abort = new AbortController()
+    restoreRequest.current = abort
+    void getTranscript(id, (input, init) => fetch(input, { ...init, signal: abort.signal }))
+      .then((loaded) => {
+        if (abort.signal.aborted) return
+        setTranscript(loaded)
+        setSourceUrl(loaded.video.canonical_url)
+      })
+      .catch((caught: unknown) => {
+        if (!abort.signal.aborted) setError(errorMessage(caught))
+      })
+    return () => abort.abort()
+  }, [])
 
   function seekTo(milliseconds: number) {
     for (const command of seekCommands(milliseconds)) {
@@ -89,6 +116,7 @@ export function TranscriptWorkspace() {
     }
 
     const loaded = await getTranscript(completed.video_id)
+    rememberVideo(completed.video_id)
     setAnswer(null)
     setRetrieval(null)
     setTranscript(loaded)
@@ -107,6 +135,8 @@ export function TranscriptWorkspace() {
 
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    restoreRequest.current?.abort()
+    rememberVideo(null)
     setImporting(true)
     setError(null)
     setNotice(null)
@@ -255,6 +285,7 @@ export function TranscriptWorkspace() {
             </article>
 
             <TranscriptionEvidence transcription={transcript.transcription} />
+            <StudyWorkspace key={transcript.video.video_id} videoId={transcript.video.video_id} onSeek={seekTo} />
 
             <article className="rounded-3xl border bg-card p-5 shadow-sm sm:p-6">
               <div className="mb-4">
