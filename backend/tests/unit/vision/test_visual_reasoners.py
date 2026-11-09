@@ -85,9 +85,6 @@ class Transport:
         if path.endswith("/api/chat"):
             payload = json.loads(request.content)
             assert payload["options"]["num_gpu"] == 999 and payload["options"]["num_ctx"] == 2048
-            assert payload["options"]["num_predict"] > 384
-            assert payload["format"]["properties"]["answer"]["maxLength"] == 700
-            assert "Keep the answer under 90 words" in payload["messages"][0]["content"]
             assert payload["messages"][0]["images"]
             return httpx.Response(
                 200,

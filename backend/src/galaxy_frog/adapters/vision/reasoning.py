@@ -32,10 +32,6 @@ class _Answer(BaseModel):
     insufficient_evidence: bool
 
 
-class _LocalAnswer(_Answer):
-    answer: str = Field(min_length=1, max_length=700)
-
-
 def _prompt(request: VisualReasoningRequest) -> str:
     return json.dumps(
         {
@@ -52,8 +48,7 @@ def _prompt(request: VisualReasoningRequest) -> str:
             ],
             "prompt_version": request.prompt_version,
             "schema_version": request.schema_version,
-        },
-        ensure_ascii=False,
+        }
     )
 
 
@@ -116,7 +111,7 @@ class OllamaQwenVisualReasoner:
         if not re.fullmatch(r"[a-f0-9]{64}", revision) or not 0 < timeout_seconds <= 300:
             raise ValueError("local visual reasoning requires pinned weights and a bounded timeout")
         self.identity = VisualProviderIdentity(
-            "ollama-qwen3vl-cuda-ctx2048-v3",
+            "ollama-qwen3vl-cuda-ctx2048-v1",
             "qwen3-vl:2b-instruct",
             revision,
             ExecutionLocation.LOCAL,
@@ -153,21 +148,13 @@ class OllamaQwenVisualReasoner:
                             "model": self.identity.model,
                             "stream": False,
                             "keep_alive": "1m",
-                            "format": _LocalAnswer.model_json_schema(),
+                            "format": _Answer.model_json_schema(),
                             "messages": [
-                                {
-                                    "role": "user",
-                                    "content": _prompt(request)
-                                    + "\nKeep the answer under 90 words. For broad diagram questions, "
-                                    "summarize the visible groups using labels from the image. "
-                                    "Omit item numbers, ranges, and totals unless asked for them. "
-                                    "Finish the JSON with the required citations and evidence status.",
-                                    "images": images,
-                                }
+                                {"role": "user", "content": _prompt(request), "images": images}
                             ],
                             "options": {
                                 "num_ctx": 2048,
-                                "num_predict": 512,
+                                "num_predict": 384,
                                 "temperature": 0,
                                 "num_gpu": 999,
                             },

@@ -160,7 +160,7 @@ async def test_context_budget_insufficiency_and_question_only_trace() -> None:
         result.decision == VisualDecision.INSUFFICIENT
         and result.warnings[0].code == "visual_context_limit"
     )
-    assert len(provider.reason.call_args.args[0].evidence) == 1200
+    assert len(provider.reason.call_args.args[0].evidence) == 3000
     retrieval, visual_service, traces = (
         AsyncMock(spec=RetrieveTemporalEvidence),
         AsyncMock(),
