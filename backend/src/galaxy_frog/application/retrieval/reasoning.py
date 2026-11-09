@@ -16,6 +16,7 @@ from galaxy_frog.domain.vision.reasoning_cache import (
     reasoning_cache_key,
 )
 from galaxy_frog.domain.vision.visual import (
+    ExecutionLocation,
     VisualFailureCode,
     VisualFrame,
     VisualProviderError,
@@ -186,13 +187,15 @@ class AdaptiveVisualReasoning:
             ):
                 raise VisualProviderError(VisualFailureCode.PRIVACY_DENIED)
             selected = frames[:1]
-            # Original evidence stays intact; only the provider copy is bounded.
-            evidence = context[:3000]
-            if len(context) > 3000:
+            # The local 2048-token window must leave room for the image and answer.
+            context_limit = 1200 if provider.identity.location == ExecutionLocation.LOCAL else 3000
+            evidence = context[:context_limit]
+            if len(context) > context_limit:
                 context_warning = (
                     RetrievalWarning(
                         "visual_context_limit",
-                        "Only the first 3000 characters of retrieved text were sent to visual reasoning.",
+                        f"Only the first {context_limit} characters of retrieved text "
+                        "were sent to visual reasoning.",
                     ),
                 )
             request = VisualReasoningRequest(
