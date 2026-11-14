@@ -42,7 +42,7 @@ from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.db.visual_search import PgVectorVisualSearch
-from galaxy_frog.domain.ingestion.models import IngestionStage
+from galaxy_frog.domain.ingestion.models import IngestionJob, IngestionStage
 from galaxy_frog.domain.media import AudioAcquirer, AudioAcquisitionLimits
 from galaxy_frog.domain.transcription import (
     TranscriptionComputeType,
@@ -51,7 +51,11 @@ from galaxy_frog.domain.transcription import (
 )
 from galaxy_frog.domain.vision.ports import OCRProvider
 from galaxy_frog.entrypoints.study_worker import run_study_worker
-from galaxy_frog.entrypoints.worker_providers import RoutedOCR, RoutedTranscription
+from galaxy_frog.entrypoints.worker_providers import (
+    RoutedIngestionEmbedding,
+    RoutedOCR,
+    RoutedTranscription,
+)
 
 EngineFactory = Callable[[Settings], AsyncEngine]
 logger = logging.getLogger(__name__)
@@ -115,18 +119,28 @@ def build_worker(
     audio_assets = PostgresAudioAssetRepository(session)
     transcription_checkpoints = PostgresTranscriptionCheckpointRepository(session)
     videos = SqlAlchemyVideoRepository(session)
+    embedder = OllamaBgeM3EmbeddingProvider(
+        base_url=settings.ollama_base_url,
+        model=settings.embedding_model,
+        revision=settings.embedding_model_revision,
+    )
     transcript_search = PgVectorTranscriptSearch(
         session=session,
         videos=videos,
-        provider=OllamaBgeM3EmbeddingProvider(
-            base_url=settings.ollama_base_url,
-            model=settings.embedding_model,
-            revision=settings.embedding_model_revision,
-        ),
+        provider=embedder,
     )
     lease_duration = timedelta(seconds=settings.ingestion_lease_seconds)
     routing = IngestionProviderRouting(engine, settings, worker_id) if engine else None
     asr = build_transcription_provider(settings)
+
+    def job_search(job: IngestionJob) -> PgVectorTranscriptSearch:
+        assert routing is not None
+        return PgVectorTranscriptSearch(
+            session=session,
+            videos=videos,
+            provider=RoutedIngestionEmbedding(embedder, routing, job),
+        )
+
     handlers = caption_ingestion_handlers(
         sources=(YouTubeSource(js_runtime=settings.yt_dlp_js_runtime),),
         videos=videos,
@@ -135,6 +149,7 @@ def build_worker(
         audio_assets=audio_assets,
         transcription_checkpoints=transcription_checkpoints,
         transcription_provider=RoutedTranscription(asr, settings, routing) if routing else asr,
+        transcript_search_for_job=job_search if routing else None,
     )
     if settings.vision_ingestion_enabled:
         ocr: OCRProvider | None = None

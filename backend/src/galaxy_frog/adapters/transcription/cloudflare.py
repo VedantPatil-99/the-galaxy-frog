@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, time, timedelta
 from math import ceil, floor
 from time import perf_counter
@@ -9,7 +10,7 @@ from time import perf_counter
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure, retry_after_at
 from galaxy_frog.application.provider_registry import CLOUDFLARE_MODEL
 from galaxy_frog.domain.transcription.models import (
     TranscriptionComputeType,
@@ -71,7 +72,12 @@ class CloudflareTranscription:
         self._token = token
         self._client = client
 
-    async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
+    async def transcribe(
+        self,
+        request: TranscriptionRequest,
+        *,
+        verify_consent: Callable[[], Awaitable[None]] | None = None,
+    ) -> TranscriptionResult:
         started = perf_counter()
         if request.audio_end_ms - request.audio_start_ms > MAX_AUDIO_MS:
             raise ProviderFailure(ProviderCode.INPUT_LIMIT)
@@ -86,6 +92,8 @@ class CloudflareTranscription:
             raise ProviderFailure(ProviderCode.UNAVAILABLE) from exc
         if not audio or len(audio) > MAX_AUDIO_BYTES:
             raise ProviderFailure(ProviderCode.INPUT_LIMIT)
+        if verify_consent:
+            await verify_consent()
         try:
             async with self._client.stream(
                 "POST",
@@ -131,14 +139,10 @@ class CloudflareTranscription:
             if any(error.code == 3036 for error in body.errors):
                 reset = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=UTC)
                 raise ProviderFailure(ProviderCode.QUOTA_EXHAUSTED, retry_at=reset)
-            retry_after = headers.get("retry-after", "")
-            delay = (
-                min(int(retry_after), 86_400)
-                if retry_after.isascii() and retry_after.isdigit() and len(retry_after) < 8
-                else 60
-            )
             raise ProviderFailure(
-                ProviderCode.RATE_LIMITED, retry_at=now + timedelta(seconds=delay)
+                ProviderCode.RATE_LIMITED,
+                retry_at=retry_after_at(headers.get("retry-after"), now)
+                or now + timedelta(seconds=60),
             )
         if status != 200 or not body.success or body.result is None:
             raise ProviderFailure(ProviderCode.INVALID_OUTPUT)

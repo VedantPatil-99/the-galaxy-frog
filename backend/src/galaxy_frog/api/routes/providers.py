@@ -21,7 +21,7 @@ from galaxy_frog.application.provider_registry import (
     provider_catalog,
 )
 from galaxy_frog.config import Settings
-from galaxy_frog.db.models import ProviderRuntimeRow
+from galaxy_frog.db.models import IngestionJobRow, ProviderConsentRow, ProviderRuntimeRow
 from galaxy_frog.db.provider_profiles import PostgresProviderProfiles, ProfileVersionConflict
 from galaxy_frog.db.provider_runtime import (
     CONSENT_DATA,
@@ -41,6 +41,7 @@ from galaxy_frog.domain.providers import (
     ProviderOperation,
     ProviderProfileEdit,
     ProviderProfileVersion,
+    ProviderSelection,
 )
 
 router = APIRouter(prefix="/v1", tags=["providers"])
@@ -102,6 +103,21 @@ async def read_provider_run(
         raise _database_failure() from exc
 
 
+@router.get("/provider-runs/import/{run_id}/consent", responses={503: {"model": ErrorResponse}})
+async def import_provider_consent(run_id: UUID, repository: Profiles) -> ProviderConsent | None:
+    try:
+        job = await repository.session.get(IngestionJobRow, run_id)
+        if job is None or job.provider_selection is None:
+            return None
+        selection = ProviderSelection.model_validate(job.provider_selection)
+        if selection.consent_id is None:
+            return None
+        grant = await repository.session.get(ProviderConsentRow, selection.consent_id)
+        return consent_response(grant) if grant is not None and grant.run_id == run_id else None
+    except SQLAlchemyError as exc:
+        raise _database_failure() from exc
+
+
 @router.get("/providers/health", responses={503: {"model": ErrorResponse}})
 async def provider_health(request: Request, repository: Profiles) -> tuple[ProviderHealth, ...]:
     try:
@@ -123,7 +139,8 @@ async def provider_health(request: Request, repository: Profiles) -> tuple[Provi
             provider_id=entry.provider_id,
             state=(
                 "model_listed"
-                if entry.provider == "ollama" and entry.model in local_models
+                if entry.provider == "ollama"
+                and (entry.model in local_models or f"{entry.model}:latest" in local_models)
                 else "unknown"
             ),
         )
@@ -142,16 +159,22 @@ class ProviderConsentOptions(BaseModel):
     scopes: tuple[ConsentScope, ...]
 
 
-@router.get("/provider-consents/options", responses={404: {"model": ErrorResponse}})
+@router.get(
+    "/provider-consents/options",
+    responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+)
 async def provider_consent_options(
     profile_id: ProfileId,
     version: Annotated[int, Query(ge=1)],
     operation: ProviderOperation,
     repository: Profiles,
 ) -> ProviderConsentOptions:
-    profile = await PostgresProviderProfiles(repository.session).get(
-        ProfileRef(profile_id=profile_id, version=version)
-    )
+    try:
+        profile = await PostgresProviderProfiles(repository.session).get(
+            ProfileRef(profile_id=profile_id, version=version)
+        )
+    except SQLAlchemyError as exc:
+        raise _database_failure() from exc
     if profile is None:
         raise ApiError(
             status_code=404,

@@ -61,7 +61,7 @@ async def test_catalog_distinguishes_configured_and_documented_without_leaking_c
         _env_file=None,  # type: ignore[call-arg]
         ollama_base_url="https://example.org",
         cloudflare_asr_enabled=True,
-        cloudflare_account_id="account-id",
+        cloudflare_account_id="a" * 32,
         cloudflare_api_token=SecretStr("cloudflare-secret"),
         bedrock_text_enabled=True,
         aws_bearer_token_bedrock=SecretStr("bedrock-secret"),
@@ -93,7 +93,7 @@ async def test_catalog_distinguishes_configured_and_documented_without_leaking_c
         assert entry["pricing"]["source_url"].startswith("https://")
         assert isinstance(entry["pricing"]["stale"], bool)
     assert "-secret" not in response.text
-    assert "account-id" not in response.text
+    assert "a" * 32 not in response.text
 
 
 @pytest.mark.asyncio

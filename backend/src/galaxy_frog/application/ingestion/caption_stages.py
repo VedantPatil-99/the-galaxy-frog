@@ -1,7 +1,7 @@
 """Resumable caption-first ingestion with explicit local ASR fallback."""
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Never
 from uuid import UUID
 
@@ -30,6 +30,7 @@ from galaxy_frog.domain.media import (
     AudioAcquisitionRequest,
     AudioFallbackReason,
 )
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.retrieval.ports import TranscriptSearch
 from galaxy_frog.domain.transcription import (
     TranscriptionCheckpoint,
@@ -54,6 +55,7 @@ class _TranscriptStage:
         audio_assets: AudioAssetRepository | None,
         transcription_checkpoints: TranscriptionCheckpointRepository | None,
         transcription_provider: TranscriptionProvider | None,
+        transcript_search_for_job: Callable[[IngestionJob], TranscriptSearch] | None = None,
     ) -> None:
         self._sources = tuple(sources)
         self._videos = videos
@@ -63,6 +65,7 @@ class _TranscriptStage:
         self._audio_assets = audio_assets
         self._transcription_checkpoints = transcription_checkpoints
         self._transcription_provider = transcription_provider
+        self._transcript_search_for_job = transcript_search_for_job
         self._chunker = TemporalChunker()
 
     def _source(self, job: IngestionJob) -> VideoSource:
@@ -440,9 +443,19 @@ class EmbeddingStage(_TranscriptStage):
                 "The persisted video could not be loaded for indexing.",
                 retryable=True,
             )
-        collection_id = await context.run_with_heartbeats(
-            self._transcript_search.ensure_indexed(video.video_id)
+        search = (
+            self._transcript_search_for_job(job)
+            if self._transcript_search_for_job
+            else self._transcript_search
         )
+        try:
+            collection_id = await context.run_with_heartbeats(search.ensure_indexed(video.video_id))
+        except EmbeddingProviderError as exc:
+            raise IngestionStageError(
+                "EMBEDDING_UNAVAILABLE",
+                "Transcript indexing requires a compatible embedding provider.",
+                retryable=True,
+            ) from exc
         return StageResult(
             IngestionStage.CLEANUP,
             {"video_id": str(video.video_id), "embedding_collection_id": str(collection_id)},
@@ -498,6 +511,7 @@ def caption_ingestion_handlers(
     audio_assets: AudioAssetRepository | None = None,
     transcription_checkpoints: TranscriptionCheckpointRepository | None = None,
     transcription_provider: TranscriptionProvider | None = None,
+    transcript_search_for_job: Callable[[IngestionJob], TranscriptSearch] | None = None,
 ) -> tuple[IngestionStageHandler, ...]:
     """Build caption-first handlers and activate ASR only when every service is configured."""
 
@@ -541,6 +555,7 @@ def caption_ingestion_handlers(
             audio_assets=audio_assets,
             transcription_checkpoints=transcription_checkpoints,
             transcription_provider=transcription_provider,
+            transcript_search_for_job=transcript_search_for_job,
         )
         for handler_type in handler_types
     )

@@ -3,8 +3,10 @@
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import AbstractAsyncContextManager
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from enum import StrEnum
+from math import isfinite
 from time import perf_counter
 
 from pydantic import BaseModel, ConfigDict
@@ -36,6 +38,19 @@ class ProviderFailure(RuntimeError):
         super().__init__(code.value)
         self.code = code
         self.retry_at = retry_at
+
+
+def retry_after_at(header: str | None, now: datetime | None = None) -> datetime | None:
+    if not header:
+        return None
+    current = now or datetime.now(UTC)
+    try:
+        if header.isascii() and header.isdigit() and len(header) < 9:
+            return current + timedelta(seconds=min(int(header), 86_400))
+        proposed = parsedate_to_datetime(header)
+    except TypeError, ValueError, OverflowError:
+        return None
+    return min(max(current, proposed.astimezone(UTC)), current + timedelta(days=1))
 
 
 class ProviderAttempt(BaseModel):
@@ -86,7 +101,10 @@ class ProviderRouting:
         timeout_seconds: float,
         compatible: frozenset[str] | None = None,
         fallback: bool = True,
+        is_cached: Callable[[T], bool] | None = None,
     ) -> T:
+        if not isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("Provider deadlines must be finite and positive.")
         chain = self.profile.candidates.get(capability, ())
         if not fallback:
             chain = chain[:1]
@@ -115,7 +133,7 @@ class ProviderRouting:
                 failure = exc
             else:
                 await self._save(
-                    entry, "cached" if getattr(result, "cache_hit", False) else "succeeded", started
+                    entry, "cached" if is_cached and is_cached(result) else "succeeded", started
                 )
                 return result
             await self._save(entry, status, started, failure)

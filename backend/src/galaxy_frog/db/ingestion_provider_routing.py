@@ -1,6 +1,7 @@
 """Resolve the canonical ingestion job's pinned provider policy for each operation."""
 
 from collections.abc import Awaitable, Callable
+from functools import partial
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -29,6 +30,7 @@ class IngestionProviderRouting:
         self._engine = engine
         self._sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         self._catalog = provider_catalog(settings)
+        self.ollama_base_url = settings.ollama_base_url
         self._worker_id = worker_id
 
     async def execute[T](
@@ -39,6 +41,7 @@ class IngestionProviderRouting:
         *,
         timeout_seconds: float,
         input_duration_ms: int | None = None,
+        external: dict[str, Callable[[Callable[[], Awaitable[None]]], Awaitable[T]]] | None = None,
     ) -> T:
         async with self._sessions() as session:
             job = await session.get(IngestionJobRow, job_id)
@@ -90,6 +93,24 @@ class IngestionProviderRouting:
             default = builtin_profiles()["local"].candidates.get(capability)
             if default:
                 policy = policy.model_copy(update={"candidates": {capability: default}})
+
+        async def dispatch(
+            provider_id: str, action: Callable[[Callable[[], Awaitable[None]]], Awaitable[T]]
+        ) -> T:
+            entry = next(item for item in self._catalog if item.provider_id == provider_id)
+
+            async def verify() -> None:
+                await runtime.verify_consent(entry, dispatch=True)
+
+            return await action(verify)
+
+        actions = {
+            **actions,
+            **{
+                provider_id: partial(dispatch, provider_id, action)
+                for provider_id, action in (external or {}).items()
+            },
+        }
         return await ProviderRouting(policy, self._catalog, runtime.admit, record).execute(
             capability, actions, timeout_seconds=timeout_seconds
         )

@@ -97,6 +97,7 @@ async def test_docs_and_openapi_are_available() -> None:
         "/v1/provider-profiles",
         "/v1/provider-profiles/{profile_id}",
         "/v1/provider-runs/{operation}/{run_id}",
+        "/v1/provider-runs/import/{run_id}/consent",
         "/v1/providers/capabilities",
         "/v1/providers/health",
         "/v1/artifacts/{artifact_id}/regenerate",

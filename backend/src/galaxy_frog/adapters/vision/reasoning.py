@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import re
+from collections.abc import Awaitable, Callable
 from hashlib import sha256
 from time import perf_counter
 from urllib.parse import urlsplit
@@ -245,7 +246,12 @@ class GeminiVisualReasoner:
         )
         self._lock = asyncio.Lock()
 
-    async def reason(self, request: VisualReasoningRequest) -> VisualReasoningResult:
+    async def reason(
+        self,
+        request: VisualReasoningRequest,
+        *,
+        verify_consent: Callable[[], Awaitable[None]] | None = None,
+    ) -> VisualReasoningResult:
         # Enforce privacy before file reads, cache access, client creation, or network calls.
         if not self._enabled or not request.external_permitted:
             raise VisualProviderError(VisualFailureCode.PRIVACY_DENIED)
@@ -259,6 +265,8 @@ class GeminiVisualReasoner:
             try:
                 async with asyncio.timeout(self._timeout):
                     images = await asyncio.to_thread(_image_bytes, request.frames)
+                    if verify_consent:
+                        await verify_consent()
                     response = await client.post(
                         f"https://generativelanguage.googleapis.com/v1beta/models/{self.identity.model}:generateContent",
                         headers={"x-goog-api-key": self._key},

@@ -1,6 +1,7 @@
 """Safe provider catalog and deterministic built-in profile chains."""
 
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -22,6 +23,7 @@ class PricingSource(BaseModel):
     billing_unit: str
     currency: str | None = "USD"
     tier_note: str
+    list_rate_per_unit: Decimal | None = None
     verified_at: date = date(2026, 11, 14)
 
     @computed_field
@@ -50,7 +52,9 @@ async def probe_ollama_models(base_url: str) -> dict[str, str]:
             return {
                 str(item["model"]): str(item["digest"])
                 for item in response_data["models"]
-                if not item.get("remote_model") and not item.get("remote_host")
+                if not item.get("remote_model")
+                and not item.get("remote_host")
+                and not str(item["model"]).endswith((":cloud", "-cloud"))
             }
     except httpx.HTTPError, KeyError, TypeError, ValueError, AttributeError:
         return {}
@@ -136,7 +140,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             provider_id="siglip",
             capability=Capability.VISUAL_EMBEDDING,
             location=Location.LOCAL,
-            provider="siglip",
+            provider="transformers-siglip",
             model=SIGLIP_MODEL,
             revision=SIGLIP_REVISION,
             device=settings.visual_device,
@@ -152,7 +156,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             provider_id="bge-reranker",
             capability=Capability.RERANKING,
             location=Location.LOCAL,
-            provider="bge",
+            provider="transformers",
             model=BGE_RERANKER_MODEL,
             revision=BGE_RERANKER_REVISION,
             device="cuda",
@@ -273,9 +277,10 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             privacy="Sends bounded normalized audio to Cloudflare Workers AI.",
             summary="Opt-in fallback for captionless imports within the cloud audio limit.",
             pricing=PricingSource(
-                source_url="https://developers.cloudflare.com/workers-ai/platform/pricing/",
-                billing_unit="Audio minutes and Workers AI neurons",
-                tier_note="Daily free allocation is shared. Paid accounts can incur overage.",
+                source_url="https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/",
+                billing_unit="Audio minute",
+                list_rate_per_unit=Decimal("0.000513"),
+                tier_note="Estimate uses the model list rate before credits. Daily free allocation is shared and paid accounts can incur overage.",
             ),
             capability_url="https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/",
         ),

@@ -1,13 +1,19 @@
 """FastAPI dependencies that expose application-scoped infrastructure."""
 
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from functools import partial
 from typing import cast
 
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from galaxy_frog.adapters.vision.reasoning import LocalReasoningFrameVerifier
-from galaxy_frog.api.provider_execution import ApiProviderRun
+from galaxy_frog.adapters.vision.reasoning import GeminiVisualReasoner, LocalReasoningFrameVerifier
+from galaxy_frog.api.provider_execution import (
+    ApiProviderRun,
+    RoutedQueryEmbedding,
+    RoutedReranker,
+    RoutedVisualQueryEmbedding,
+)
 from galaxy_frog.application.ingestion.dispatch import DispatchSignatureVerifier, JobDispatcher
 from galaxy_frog.application.retrieval.reasoning import AdaptiveVisualReasoning
 from galaxy_frog.application.retrieval.search import SearchTranscript
@@ -41,11 +47,12 @@ def build_visual_reasoning(
         dict[str, VisualReasoningProvider], request.app.state.visual_reasoning_candidates
     )
 
-    async def check_consent(provider_id: str) -> None:
+    async def check_consent(provider_id: str, dispatch: bool) -> None:
         assert run is not None
         entry = next(entry for entry in run.catalog if entry.provider_id == provider_id)
-        await run.runtime.verify_consent(entry)
+        await run.runtime.verify_consent(entry, dispatch=dispatch)
 
+    gemini = candidates.get("gemini-vision")
     return AdaptiveVisualReasoning(
         provider=cast(
             VisualReasoningProvider | None,
@@ -59,6 +66,11 @@ def build_visual_reasoning(
         routing=run.router(Capability.VISION) if run else None,
         candidates=candidates,
         check_consent=check_consent if run else None,
+        external_call=partial(
+            gemini.reason, verify_consent=partial(check_consent, "gemini-vision", True)
+        )
+        if run and isinstance(gemini, GeminiVisualReasoner)
+        else None,
     )
 
 
@@ -68,6 +80,13 @@ def build_retrieval_service(
     provider = cast(
         Callable[[], TextEmbeddingProvider], request.app.state.embedding_provider_factory
     )()
+    reranker = cast(TextReranker, request.app.state.reranker)
+    missing_collection = None
+    if run:
+        routed_embedding = RoutedQueryEmbedding(run, provider)
+        provider = routed_embedding
+        missing_collection = routed_embedding.missing_collection
+        reranker = RoutedReranker(run, reranker)
     retrieval = RetrieveTranscript(
         lexical=PostgresTranscriptLexicalSearch(repository.session),
         dense=PgVectorTranscriptSearch(
@@ -75,8 +94,9 @@ def build_retrieval_service(
             videos=repository,
             provider=provider,
             require_existing=run is not None,
+            on_missing_collection=missing_collection,
         ),
-        reranker=cast(TextReranker, request.app.state.reranker),
+        reranker=reranker,
         config=RetrievalConfig(
             fusion_limit=cast(Settings, request.app.state.settings).retrieval_fusion_limit
         ),
@@ -85,6 +105,8 @@ def build_retrieval_service(
         VisualEmbeddingProvider | None,
         getattr(request.app.state, "visual_embedding_provider", None),
     )
+    if run and visual_provider:
+        visual_provider = RoutedVisualQueryEmbedding(run, visual_provider)
     return SearchTranscript(
         retrieval=RetrieveTemporalEvidence(videos=repository, retrieval=retrieval),
         traces=PostgresRetrievalTraces(repository.session),
@@ -92,8 +114,14 @@ def build_retrieval_service(
         reasoning=build_visual_reasoning(request, repository.session, run),
         visual=AdaptiveVisualRetrieval(
             ocr_lexical=PostgresOCRLexicalSearch(repository.session),
-            ocr_dense=PgVectorOCRSearch(session=repository.session, provider=provider),
-            visual=PgVectorVisualSearch(repository.session, visual_provider)
+            ocr_dense=PgVectorOCRSearch(
+                session=repository.session,
+                provider=provider,
+                require_existing=bool(run and run.policy.evaluation),
+            ),
+            visual=PgVectorVisualSearch(
+                repository.session, visual_provider, require_existing=run is not None
+            )
             if visual_provider
             else None,
             provider=visual_provider.identity if visual_provider else None,

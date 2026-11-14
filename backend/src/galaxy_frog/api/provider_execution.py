@@ -40,7 +40,23 @@ from galaxy_frog.domain.providers import (
     ProviderProfile,
     ProviderSelection,
 )
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
+from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
+from galaxy_frog.domain.retrieval.reranking import (
+    RerankCandidate,
+    RerankerError,
+    RerankerErrorCode,
+    RerankResult,
+    TextReranker,
+)
+from galaxy_frog.domain.vision.visual import (
+    VisualEmbedding,
+    VisualFailureCode,
+    VisualFrame,
+    VisualProviderError,
+)
+from galaxy_frog.domain.vision.visual_ports import VisualEmbeddingProvider
 
 
 class ApiProviderRun:
@@ -53,10 +69,13 @@ class ApiProviderRun:
         self.catalog = provider_catalog(settings)
         self.attempts: list[ProviderAttempt] = []
         self.usage: dict[str, int] | None = None
+        self.observed_revisions: dict[str, str] = {}
 
     def router(self, capability: Capability) -> ProviderRouting:
         async def record(attempt: ProviderAttempt) -> None:
             entry = next(item for item in self.catalog if item.provider_id == attempt.provider_id)
+            if revision := self.observed_revisions.get(entry.provider_id):
+                attempt = attempt.model_copy(update={"revision": revision})
             await self.runtime.record(
                 capability,
                 attempt,
@@ -71,6 +90,21 @@ class ApiProviderRun:
             if default:
                 policy = policy.model_copy(update={"candidates": {capability: default}})
         return ProviderRouting(policy, self.catalog, self.runtime.admit, record)
+
+    async def skipped(self, capability: Capability, provider_id: str, reason: ProviderCode) -> None:
+        entry = next(item for item in self.catalog if item.provider_id == provider_id)
+        attempt = ProviderAttempt(
+            provider_id=entry.provider_id,
+            provider=entry.provider,
+            model=entry.model,
+            revision=entry.revision,
+            device=entry.device,
+            status="skipped",
+            reason=reason,
+            requested_mode=self.policy.mode,
+            requested_candidates=self.policy.candidates.get(capability, ()),
+        )
+        await self.runtime.record(capability, attempt, pricing=entry.pricing)
 
 
 async def api_provider_run(
@@ -195,6 +229,7 @@ class RoutedTextGeneration:
                 and self._run.settings.generation_model_revision != observed_revision
             ):
                 raise ProviderFailure(ProviderCode.SETUP_REQUIRED)
+            self._run.observed_revisions["ollama-text"] = observed_revision
             try:
                 return await local()
             except GenerationProviderError as exc:
@@ -203,11 +238,15 @@ class RoutedTextGeneration:
         async def cloud_action() -> GenerationDraft:
             settings = self._run.settings
             assert settings.aws_bearer_token_bedrock is not None
+            entry = next(
+                entry for entry in self._run.catalog if entry.provider_id == "bedrock-nova-lite"
+            )
             async with httpx.AsyncClient(timeout=75, trust_env=False) as client:
                 provider = BedrockGeneration(
                     settings.bedrock_region,
                     settings.aws_bearer_token_bedrock.get_secret_value(),
                     client,
+                    verify_consent=partial(self._run.runtime.verify_consent, entry, dispatch=True),
                 )
                 try:
                     return await cloud(provider)
@@ -221,7 +260,120 @@ class RoutedTextGeneration:
         )
 
 
+class RoutedQueryEmbedding:
+    def __init__(self, run: ApiProviderRun, provider: TextEmbeddingProvider) -> None:
+        self._run, self._provider = run, provider
+        self.spec = provider.spec
+
+    async def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        async def embed() -> tuple[tuple[float, ...], ...]:
+            models = await probe_ollama_models(self._run.settings.ollama_base_url)
+            observed = models.get(self.spec.model) or models.get(f"{self.spec.model}:latest")
+            if not observed or self.spec.revision not in {"ollama", observed}:
+                raise ProviderFailure(ProviderCode.INCOMPATIBLE)
+            self._run.observed_revisions["ollama-embedding"] = observed
+            try:
+                return await self._provider.embed(texts)
+            except EmbeddingProviderError as exc:
+                raise ProviderFailure(ProviderCode.UNAVAILABLE) from exc
+
+        capability = Capability.TEXT_EMBEDDING
+        try:
+            return await self._run.router(capability).execute(
+                capability,
+                {"ollama-embedding": embed},
+                compatible=frozenset({"ollama-embedding"}),
+                timeout_seconds=60,
+            )
+        except ProviderFailure as exc:
+            raise EmbeddingProviderError(exc.code.value) from exc
+
+    async def missing_collection(self) -> None:
+        await self._run.skipped(
+            Capability.TEXT_EMBEDDING, "ollama-embedding", ProviderCode.INCOMPATIBLE
+        )
+
+
+class RoutedReranker:
+    def __init__(self, run: ApiProviderRun, provider: TextReranker) -> None:
+        self._run, self._provider = run, provider
+
+    async def rerank(self, query: str, candidates: tuple[RerankCandidate, ...]) -> RerankResult:
+        error: RerankerError | None = None
+
+        async def rerank() -> RerankResult:
+            nonlocal error
+            try:
+                return await self._provider.rerank(query, candidates)
+            except RerankerError as exc:
+                error = exc
+                code = (
+                    ProviderCode.TIMEOUT
+                    if exc.code is RerankerErrorCode.TIMEOUT
+                    else ProviderCode.UNAVAILABLE
+                )
+                raise ProviderFailure(code) from exc
+
+        capability = Capability.RERANKING
+        try:
+            return await self._run.router(capability).execute(
+                capability,
+                {"bge-reranker": rerank},
+                timeout_seconds=self._run.settings.reranker_timeout_seconds,
+            )
+        except ProviderFailure as exc:
+            if error is not None:
+                raise error from exc
+            code = {
+                ProviderCode.TIMEOUT: RerankerErrorCode.TIMEOUT,
+                ProviderCode.BUSY: RerankerErrorCode.BUSY,
+            }.get(exc.code, RerankerErrorCode.NOT_CONFIGURED)
+            raise RerankerError(code) from exc
+
+
+class RoutedVisualQueryEmbedding:
+    def __init__(self, run: ApiProviderRun, provider: VisualEmbeddingProvider) -> None:
+        self._run, self._provider = run, provider
+        self.collection = provider.collection
+        self.identity = provider.identity
+
+    async def embed_frames(self, frames: tuple[VisualFrame, ...]) -> tuple[VisualEmbedding, ...]:
+        return await self._provider.embed_frames(frames)
+
+    async def embed_query(self, query: str) -> tuple[float, ...]:
+        error: VisualProviderError | None = None
+
+        async def embed() -> tuple[float, ...]:
+            nonlocal error
+            try:
+                return await self._provider.embed_query(query)
+            except VisualProviderError as exc:
+                error = exc
+                raise ProviderFailure(ProviderCode.UNAVAILABLE) from exc
+
+        capability = Capability.VISUAL_EMBEDDING
+        try:
+            return await self._run.router(capability).execute(
+                capability,
+                {"siglip": embed},
+                compatible=frozenset({"siglip"}),
+                timeout_seconds=self._run.settings.visual_timeout_seconds,
+            )
+        except ProviderFailure as exc:
+            if error is not None:
+                raise error from exc
+            raise VisualProviderError(VisualFailureCode.UNAVAILABLE) from exc
+
+
 def provider_api_error(error: ProviderFailure, trace_id: UUID) -> ApiError:
+    action = {
+        ProviderCode.CONSENT_REQUIRED: "Grant consent for a new run or choose a local profile.",
+        ProviderCode.QUOTA_EXHAUSTED: "Wait for quota to reset or select a local profile.",
+        ProviderCode.RATE_LIMITED: "Wait before retrying or select a local profile.",
+        ProviderCode.OUTCOME_UNKNOWN: "Check the provider's activity and usage before starting a new run.",
+        ProviderCode.INCOMPATIBLE: "Select a compatible provider or use lexical retrieval.",
+        ProviderCode.SETUP_REQUIRED: "Review the selected model and configuration in provider settings.",
+    }.get(error.code, "Review provider health before retrying.")
     return ApiError(
         status_code=429
         if error.code in {ProviderCode.RATE_LIMITED, ProviderCode.QUOTA_EXHAUSTED}
@@ -229,7 +381,7 @@ def provider_api_error(error: ProviderFailure, trace_id: UUID) -> ApiError:
         code=error.code.value,
         message="The selected provider route could not complete.",
         retryable=error.code not in {ProviderCode.SAFETY_BLOCKED, ProviderCode.INCOMPATIBLE},
-        suggested_action="Review provider health and consent before retrying.",
+        suggested_action=action,
         details={
             "trace_id": str(trace_id),
             "retry_at": error.retry_at.isoformat() if error.retry_at else None,

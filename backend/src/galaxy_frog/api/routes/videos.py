@@ -320,7 +320,11 @@ async def get_frame_image(
 @router.post(
     "/{video_id}/questions",
     response_model=AnswerResponse,
-    responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+    responses={
+        404: {"model": ErrorResponse},
+        429: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
 )
 async def ask_question(
     video_id: UUID,

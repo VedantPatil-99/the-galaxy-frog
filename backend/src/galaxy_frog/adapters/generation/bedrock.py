@@ -1,12 +1,13 @@
 """Grounded text generation through the in-region Bedrock Converse API."""
 
 import json
+from collections.abc import Awaitable, Callable
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from galaxy_frog.adapters.generation.ollama import grounded_draft, moment_prompt, question_prompt
-from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure, retry_after_at
 from galaxy_frog.application.provider_registry import BEDROCK_MODEL
 from galaxy_frog.domain.generation.models import GenerationDraft, GroundingText
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
@@ -36,9 +37,17 @@ class _Converse(BaseModel):
 
 
 class BedrockGeneration:
-    def __init__(self, region: str, token: str, client: httpx.AsyncClient) -> None:
+    def __init__(
+        self,
+        region: str,
+        token: str,
+        client: httpx.AsyncClient,
+        *,
+        verify_consent: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         self._url = f"https://bedrock-runtime.{region}.amazonaws.com/model/{BEDROCK_MODEL}/converse"
         self._token, self._client = token, client
+        self._verify_consent = verify_consent
         self.usage: dict[str, int] | None = None
 
     async def generate(
@@ -54,6 +63,8 @@ class BedrockGeneration:
     async def _generate(self, prompt: str) -> GenerationDraft:
         if len(prompt.encode()) > 65_536:
             raise ProviderFailure(ProviderCode.INPUT_LIMIT)
+        if self._verify_consent:
+            await self._verify_consent()
         try:
             async with self._client.stream(
                 "POST",
@@ -67,7 +78,10 @@ class BedrockGeneration:
                 if response.status_code in {401, 403}:
                     raise ProviderFailure(ProviderCode.AUTH_FAILED)
                 if response.status_code == 429:
-                    raise ProviderFailure(ProviderCode.RATE_LIMITED)
+                    raise ProviderFailure(
+                        ProviderCode.RATE_LIMITED,
+                        retry_at=retry_after_at(response.headers.get("retry-after")),
+                    )
                 if response.status_code in {408, 424} or response.status_code >= 500:
                     raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN)
                 if response.status_code != 200:

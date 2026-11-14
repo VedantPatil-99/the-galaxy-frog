@@ -1361,6 +1361,18 @@
             "default": "USD",
             "title": "Currency"
           },
+          "list_rate_per_unit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Rate Per Unit"
+          },
           "source_url": {
             "title": "Source Url",
             "type": "string"
@@ -4940,6 +4952,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Provider Consent Options",
@@ -5104,6 +5126,67 @@
           }
         },
         "summary": "Save Provider Profile",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/v1/provider-runs/import/{run_id}/consent": {
+      "get": {
+        "operationId": "import_provider_consent_v1_provider_runs_import__run_id__consent_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProviderConsent"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Import Provider Consent V1 Provider Runs Import  Run Id  Consent Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Import Provider Consent",
         "tags": [
           "providers"
         ]
@@ -5962,6 +6045,16 @@
             },
             "description": "Unprocessable Content"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -6104,6 +6197,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "503": {
             "content": {

@@ -1,8 +1,10 @@
 """Exercise cloud adapter contracts and fail-closed provider routing."""
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,6 +18,7 @@ from galaxy_frog.application.provider_policy import (
     ProviderCode,
     ProviderFailure,
     ProviderRouting,
+    retry_after_at,
 )
 from galaxy_frog.application.provider_registry import ProviderEntry, provider_catalog
 from galaxy_frog.config import Settings
@@ -23,6 +26,118 @@ from galaxy_frog.domain.media import AudioFallbackReason
 from galaxy_frog.domain.providers import Capability, Location, ProviderMode, ProviderProfile
 from galaxy_frog.domain.transcription import TranscriptionRequest
 from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
+
+
+@pytest.mark.parametrize(
+    ("header", "seconds"),
+    [
+        (None, None),
+        ("unavailable", None),
+        ("17", 17),
+        ("100000", 86400),
+        ("Sat, 14 Nov 2026 00:01:00 GMT", 60),
+    ],
+)
+def test_retry_after_returns_bounded_utc_deadline(header: str | None, seconds: int | None) -> None:
+    now = datetime(2026, 11, 14, tzinfo=UTC)
+    assert retry_after_at(header, now) == (
+        now + timedelta(seconds=seconds) if seconds is not None else None
+    )
+
+
+@pytest.mark.parametrize(
+    ("failure", "compatible", "fallback", "expected", "statuses"),
+    [
+        (ProviderCode.UNAVAILABLE, None, True, "result", ["failed", "succeeded"]),
+        (ProviderCode.UNAVAILABLE, None, False, "PROVIDER_UNAVAILABLE", ["failed"]),
+        (ProviderCode.SAFETY_BLOCKED, None, True, "PROVIDER_SAFETY_BLOCKED", ["failed"]),
+        (ProviderCode.OUTCOME_UNKNOWN, None, True, "PROVIDER_OUTCOME_UNKNOWN", ["failed"]),
+        (None, frozenset({"ollama-text"}), True, "result", ["skipped", "succeeded"]),
+        (None, None, False, "cached", ["cached"]),
+    ],
+)
+@pytest.mark.asyncio
+async def test_manual_order_and_strict_failures(
+    failure: ProviderCode | None,
+    compatible: frozenset[str] | None,
+    fallback: bool,
+    expected: str,
+    statuses: list[str],
+) -> None:
+    entries = tuple(
+        entry.model_copy(update={"readiness": "configured"})
+        for entry in provider_catalog(Settings())
+    )
+    attempts: list[ProviderAttempt] = []
+
+    @asynccontextmanager
+    async def admit(_entry: ProviderEntry) -> AsyncGenerator[None]:
+        yield
+
+    async def record(attempt: ProviderAttempt) -> None:
+        attempts.append(attempt)
+
+    async def primary() -> str:
+        if failure:
+            raise ProviderFailure(failure)
+        return "cached"
+
+    async def alternate() -> str:
+        return "result"
+
+    capability = Capability.GENERATION
+    routing = ProviderRouting(
+        ProviderProfile(
+            mode=ProviderMode.MANUAL, candidates={capability: ("bedrock-nova-lite", "ollama-text")}
+        ),
+        entries,
+        admit,
+        record,
+    )
+    try:
+        actual = await routing.execute(
+            capability,
+            {"bedrock-nova-lite": primary, "ollama-text": alternate},
+            timeout_seconds=1,
+            compatible=compatible,
+            fallback=fallback,
+            is_cached=lambda value: value == "cached",
+        )
+    except ProviderFailure as exc:
+        actual = exc.code.value
+    assert actual == expected
+    assert [item.status for item in attempts] == statuses
+
+
+@pytest.mark.parametrize(
+    ("provider_id", "expected"),
+    [("ollama-text", "PROVIDER_TIMEOUT"), ("bedrock-nova-lite", "PROVIDER_OUTCOME_UNKNOWN")],
+)
+@pytest.mark.asyncio
+async def test_deadline_marks_ambiguous_hosted_outcome(provider_id: str, expected: str) -> None:
+    @asynccontextmanager
+    async def admit(_entry: ProviderEntry) -> AsyncGenerator[None]:
+        yield
+
+    async def record(_attempt: ProviderAttempt) -> None:
+        pass
+
+    async def wait() -> None:
+        await asyncio.Event().wait()
+
+    capability = Capability.GENERATION
+    entries = tuple(
+        entry.model_copy(update={"readiness": "configured"})
+        for entry in provider_catalog(Settings())
+    )
+    routing = ProviderRouting(
+        ProviderProfile(mode=ProviderMode.MANUAL, candidates={capability: (provider_id,)}),
+        entries,
+        admit,
+        record,
+    )
+    with pytest.raises(ProviderFailure, match=expected):
+        await routing.execute(capability, {provider_id: wait}, timeout_seconds=0.001)
 
 
 @pytest.mark.asyncio
@@ -166,3 +281,67 @@ async def test_bedrock_returns_validated_shape_and_usage() -> None:
         result = await provider.generate_moment("Explain a test moment", ())
     assert result.answer == "An answer"
     assert provider.usage == {"input_tokens": 10, "output_tokens": 4}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "payload", "expected"),
+    [
+        (401, {}, "PROVIDER_AUTH_FAILED"),
+        (403, {}, "PROVIDER_AUTH_FAILED"),
+        (429, {}, "RATE_LIMITED"),
+        (424, {}, "PROVIDER_OUTCOME_UNKNOWN"),
+        (500, {}, "PROVIDER_OUTCOME_UNKNOWN"),
+        (404, {}, "PROVIDER_UNAVAILABLE"),
+        (200, {}, "PROVIDER_INVALID_OUTPUT"),
+        (
+            200,
+            {"stopReason": "content_filtered", "output": {"message": {"content": [{"text": "a"}]}}},
+            "PROVIDER_SAFETY_BLOCKED",
+        ),
+        (
+            200,
+            {"stopReason": "max_tokens", "output": {"message": {"content": [{"text": "a"}]}}},
+            "PROVIDER_INVALID_OUTPUT",
+        ),
+    ],
+)
+async def test_bedrock_normalizes_hosted_failures(
+    status: int, payload: dict[str, object], expected: str
+) -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(status, json=payload, headers={"Retry-After": "3"})
+        )
+    ) as client:
+        with pytest.raises(ProviderFailure, match=expected):
+            await BedrockGeneration("us-east-1", "fixture", client).generate("Fixture", ())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "data", "expected"),
+    [
+        (401, b"{}", "PROVIDER_AUTH_FAILED"),
+        (413, b"{}", "PROVIDER_INPUT_LIMIT"),
+        (500, b"{}", "PROVIDER_OUTCOME_UNKNOWN"),
+        (429, b"", "RATE_LIMITED"),
+        (200, b"{}", "PROVIDER_INVALID_OUTPUT"),
+        (200, b'{"success":false}', "PROVIDER_INVALID_OUTPUT"),
+        (
+            200,
+            b'{"success":true,"result":{"segments":[{"start":0.8,"end":0.7,"text":"x"}]}}',
+            "PROVIDER_INVALID_OUTPUT",
+        ),
+    ],
+)
+async def test_cloudflare_normalizes_hosted_failures(
+    tmp_path: Path, status: int, data: bytes, expected: str
+) -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(status, content=data))
+    ) as client:
+        with pytest.raises(ProviderFailure, match=expected):
+            await CloudflareTranscription("fixture", "fixture", client).transcribe(
+                audio_request(tmp_path)
+            )

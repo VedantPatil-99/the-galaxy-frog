@@ -1,5 +1,6 @@
 """Typed configuration for the Galaxy Frog application."""
 
+import re
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
@@ -82,6 +83,15 @@ class Settings(BaseSettings):
     bedrock_text_enabled: bool = False
     bedrock_region: Literal["us-east-1", "us-east-2", "us-west-2"] = "us-east-1"
     aws_bearer_token_bedrock: SecretStr | None = None
+
+    @field_validator("cloudflare_account_id")
+    @classmethod
+    def validate_cloudflare_account_id(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if re.fullmatch(r"[a-fA-F0-9]{32}", value.strip()) is None:
+            raise ValueError("CLOUDFLARE_ACCOUNT_ID must be a 32-character account ID")
+        return value.strip()
 
     @field_validator("llama_cloud_api_key")
     @classmethod

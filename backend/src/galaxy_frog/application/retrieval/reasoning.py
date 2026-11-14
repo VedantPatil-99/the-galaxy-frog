@@ -76,7 +76,9 @@ class AdaptiveVisualReasoning:
         external_enabled: bool = False,
         routing: ProviderRouting | None = None,
         candidates: dict[str, VisualReasoningProvider] | None = None,
-        check_consent: Callable[[str], Awaitable[None]] | None = None,
+        check_consent: Callable[[str, bool], Awaitable[None]] | None = None,
+        external_call: Callable[[VisualReasoningRequest], Awaitable[VisualReasoningResult]]
+        | None = None,
     ) -> None:
         self._provider, self._cache, self._verifier, self._external_enabled = (
             provider,
@@ -87,6 +89,7 @@ class AdaptiveVisualReasoning:
         self._routing = routing
         self._candidates = candidates or {}
         self._check_consent = check_consent
+        self._external_call = external_call
 
     @property
     def configuration(self) -> dict[str, object]:
@@ -222,6 +225,7 @@ class AdaptiveVisualReasoning:
                     },
                     timeout_seconds=180,
                     fallback=allow_fallback,
+                    is_cached=lambda result: result.cache_hit,
                 )
             except ProviderFailure as exc:
                 if (
@@ -320,18 +324,21 @@ class AdaptiveVisualReasoning:
                 and permitted
                 and provider.identity.location is ExecutionLocation.EXTERNAL
             ):
-                await self._check_consent(provider_id)
+                await self._check_consent(provider_id, False)
             result = await self._cache.get(video_id, key)
             cache_hit = result is not None
             if result is None:
-                if (
-                    provider_id
-                    and self._check_consent
-                    and permitted
-                    and provider.identity.location is ExecutionLocation.EXTERNAL
-                ):
-                    await self._check_consent(provider_id)
-                result = await provider.reason(request)
+                if self._external_call and provider.identity.location is ExecutionLocation.EXTERNAL:
+                    result = await self._external_call(request)
+                else:
+                    if (
+                        provider_id
+                        and self._check_consent
+                        and permitted
+                        and provider.identity.location is ExecutionLocation.EXTERNAL
+                    ):
+                        await self._check_consent(provider_id, True)
+                    result = await provider.reason(request)
             if result.provider != provider.identity or not set(result.cited_frame_ids).issubset(
                 {frame.frame_id for frame in selected}
             ):

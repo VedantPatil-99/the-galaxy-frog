@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, text
@@ -34,6 +35,22 @@ CONSENT_DATA = {
     "gemini-vision": ExternalData.FRAMES_AND_TEXT,
     "bedrock-nova-lite": ExternalData.PAID_TEXT,
 }
+
+
+def estimate_list_cost(
+    provider_id: str, input_duration_ms: int | None, pricing: PricingSource | None
+) -> str | None:
+    # Workers AI publishes a per-model list price before credits and account terms.
+    if (
+        provider_id == "cloudflare-whisper"
+        and pricing is not None
+        and not pricing.stale
+        and input_duration_ms is not None
+        and pricing.list_rate_per_unit is not None
+    ):
+        minutes = Decimal(input_duration_ms) / Decimal(60_000)
+        return format((minutes * pricing.list_rate_per_unit).quantize(Decimal("0.000001")), "f")
+    return None
 
 
 def consent_response(row: ProviderConsentRow) -> ProviderConsent:
@@ -115,7 +132,7 @@ class PostgresProviderRuntime:
     async def admit(self, entry: ProviderEntry) -> AsyncGenerator[None]:
         now = datetime.now(UTC)
         # Hold a physical connection for the cross-process lock without locking rows during inference.
-        async with self.sessions() as session, self.engine.connect() as connection:
+        async with self.engine.connect() as connection:
             acquired = await connection.scalar(
                 text("SELECT pg_try_advisory_lock(hashtextextended(:key, 817))"),
                 {"key": entry.provider_id},
@@ -123,25 +140,27 @@ class PostgresProviderRuntime:
             if not acquired:
                 raise ProviderFailure(ProviderCode.BUSY)
             try:
-                await self._start(session, entry, now)
-                try:
-                    yield
-                except TimeoutError:
-                    await self._observe(
-                        session,
-                        entry,
-                        ProviderFailure(
-                            ProviderCode.TIMEOUT
-                            if entry.location is Location.LOCAL
-                            else ProviderCode.OUTCOME_UNKNOWN
-                        ),
-                    )
-                    raise
-                except ProviderFailure as exc:
-                    await self._observe(session, entry, exc)
-                    raise
-                else:
-                    await self._observe(session, entry, None)
+                await connection.commit()
+                async with AsyncSession(bind=connection, expire_on_commit=False) as session:
+                    await self._start(session, entry, now)
+                    try:
+                        yield
+                    except TimeoutError:
+                        await self._observe(
+                            session,
+                            entry,
+                            ProviderFailure(
+                                ProviderCode.TIMEOUT
+                                if entry.location is Location.LOCAL
+                                else ProviderCode.OUTCOME_UNKNOWN
+                            ),
+                        )
+                        raise
+                    except ProviderFailure as exc:
+                        await self._observe(session, entry, exc)
+                        raise
+                    else:
+                        await self._observe(session, entry, None)
             finally:
                 await connection.execute(
                     text("SELECT pg_advisory_unlock(hashtextextended(:key, 817))"),
@@ -153,42 +172,40 @@ class PostgresProviderRuntime:
         if row and row.blocked_until is not None and row.blocked_until > now:
             raise ProviderFailure(ProviderCode(row.state), retry_at=row.blocked_until)
         if entry.location is not Location.LOCAL:
-            if self.worker_id is not None:
-                job = await session.scalar(
-                    select(IngestionJobRow)
-                    .where(IngestionJobRow.id == self.run_id)
-                    .with_for_update()
-                )
-                if (
-                    job is None
-                    or job.lease_owner != self.worker_id
-                    or job.lease_expires_at is None
-                    or job.lease_expires_at <= datetime.now(UTC)
-                    or job.cancel_requested_at is not None
-                ):
-                    raise ProviderFailure(ProviderCode.UNAVAILABLE)
-            grant = await self._authorize(session, entry)
+            await self._verify_lease(session)
+            await self._authorize(session, entry)
             if await self._outstanding_dispatch(session, entry):
                 raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN)
-            grant.dispatch_count += 1
-            session.add(self._dispatch_record(entry, "dispatch_started"))
         await session.commit()
 
+    async def _verify_lease(self, session: AsyncSession) -> None:
+        if self.worker_id is None:
+            return
+        job = await session.scalar(
+            select(IngestionJobRow).where(IngestionJobRow.id == self.run_id).with_for_update()
+        )
+        if (
+            job is None
+            or job.lease_owner != self.worker_id
+            or job.lease_expires_at is None
+            or job.lease_expires_at <= datetime.now(UTC)
+            or job.cancel_requested_at is not None
+        ):
+            raise ProviderFailure(ProviderCode.UNAVAILABLE)
+
     async def _outstanding_dispatch(self, session: AsyncSession, entry: ProviderEntry) -> bool:
-        rows = await session.scalars(
-            select(ProviderAttemptRow)
+        status = await session.scalar(
+            select(ProviderAttemptRow.payload["status"].as_string())
             .where(
                 ProviderAttemptRow.operation == self.operation,
                 ProviderAttemptRow.run_id == self.run_id,
+                ProviderAttemptRow.payload["provider_id"].as_string() == entry.provider_id,
+                ProviderAttemptRow.payload["consent_id"].as_string() == str(self.consent_id),
             )
             .order_by(ProviderAttemptRow.created_at.desc())
+            .limit(1)
         )
-        for row in rows:
-            if row.payload.get("provider_id") == entry.provider_id and row.payload.get(
-                "consent_id"
-            ) == str(self.consent_id):
-                return row.payload.get("status") == "dispatch_started"
-        return False
+        return status == "dispatch_started"
 
     def _dispatch_record(self, entry: ProviderEntry, status: str) -> ProviderAttemptRow:
         return ProviderAttemptRow(
@@ -211,7 +228,8 @@ class PostgresProviderRuntime:
         )
 
     async def _authorize(self, session: AsyncSession, entry: ProviderEntry) -> ProviderConsentRow:
-        if self.consent_id is None:
+        data = CONSENT_DATA.get(entry.provider_id)
+        if self.consent_id is None or data is None:
             raise ProviderFailure(ProviderCode.CONSENT_REQUIRED)
         grant = await locked_consent(session, self.consent_id)
         if (
@@ -222,16 +240,19 @@ class PostgresProviderRuntime:
             or grant.profile_id != self.profile.profile_id
             or grant.profile_version != self.profile.version
             or grant.run_id not in {None, self.run_id}
-            or {"provider_id": entry.provider_id, "data": CONSENT_DATA[entry.provider_id].value}
-            not in grant.scopes
+            or {"provider_id": entry.provider_id, "data": data.value} not in grant.scopes
         ):
             raise ProviderFailure(ProviderCode.CONSENT_REQUIRED)
         grant.run_id = self.run_id
         return grant
 
-    async def verify_consent(self, entry: ProviderEntry) -> None:
+    async def verify_consent(self, entry: ProviderEntry, *, dispatch: bool = False) -> None:
         async with self.sessions() as session:
-            await self._authorize(session, entry)
+            await self._verify_lease(session)
+            grant = await self._authorize(session, entry)
+            if dispatch:
+                grant.dispatch_count += 1
+                session.add(self._dispatch_record(entry, "dispatch_started"))
             await session.commit()
 
     async def _observe(
@@ -295,6 +316,11 @@ class PostgresProviderRuntime:
                         if pricing
                         else None,
                         "usage": usage,
+                        "estimated_cost": estimate_list_cost(
+                            attempt.provider_id, input_duration_ms, pricing
+                        )
+                        if attempt.status == "succeeded"
+                        else None,
                     },
                     created_at=datetime.now(UTC),
                 )

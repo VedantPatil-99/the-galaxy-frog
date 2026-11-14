@@ -43,7 +43,7 @@ from galaxy_frog.api.schemas import ErrorResponse
 from galaxy_frog.application.provider_policy import ProviderFailure
 from galaxy_frog.application.retrieval.explain_moment import ExplainMoment, MomentTextProvider
 from galaxy_frog.application.retrieval.moment import InvalidMomentTimestamp, RetrieveMomentEvidence
-from galaxy_frog.application.retrieval.temporal import RetrievalVideoNotFound
+from galaxy_frog.application.retrieval.temporal import RetrievalStatus, RetrievalVideoNotFound
 from galaxy_frog.db.models import OCRBlockRow, VideoFrameRow
 from galaxy_frog.db.moment_evidence import SqlAlchemyMomentEvidenceReader
 from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
@@ -72,6 +72,7 @@ def get_moment_service(request: Request, repository: VideoRepositoryDependency) 
     responses={
         404: {"model": ErrorResponse},
         422: {"model": ErrorResponse},
+        429: {"model": ErrorResponse},
         503: {"model": ErrorResponse},
     },
 )
@@ -186,6 +187,8 @@ async def search_video(
         trace_id=trace_id if run else None,
         policy_strict=bool(run and run.policy.evaluation),
     )
+    if execution.result.status is not RetrievalStatus.RESOLVED:
+        return search_response(execution, body.mode)
     if execution.visual is not None:
         return search_response(execution, body.mode)
     frames = await vision_repository.get_frames(video_id, only_kept=True)

@@ -8,7 +8,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from galaxy_frog.api.dependencies import build_retrieval_service, get_video_repository
 from galaxy_frog.api.errors import ApiError
+from galaxy_frog.api.provider_execution import provider_api_error
 from galaxy_frog.api.retrieval_schemas import RetrievalOptions
+from galaxy_frog.application.provider_policy import ProviderFailure
 from galaxy_frog.application.retrieval.search import (
     SearchExecution,
     SearchTranscript,
@@ -69,6 +71,8 @@ async def run_search(
             retryable=False,
         ) from exc
     except TracedRetrievalFailure as exc:
+        if isinstance(exc.cause, ProviderFailure):
+            raise provider_api_error(exc.cause, exc.trace.trace_id) from exc
         invalid_input = isinstance(exc.cause, (InvalidAnchor, TemporalResolutionRequired))
         integrity = exc.code == "RETRIEVAL_INTEGRITY_FAILED"
         raise ApiError(
