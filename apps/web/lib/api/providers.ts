@@ -79,6 +79,14 @@ export function revokeProviderConsent(consentId: string) {
   )
 }
 
+export function getImportConsent(jobId: string) {
+  return requestApi(
+    `/v1/provider-runs/import/${encodeURIComponent(jobId)}/consent`,
+    (value): value is Consent | null => value === null || record(value) && typeof value.consent_id === "string",
+    fetch,
+  )
+}
+
 export function getProviderRun(operation: ProviderOperation, runId: string) {
   return requestApi(
     `/v1/provider-runs/${operation}/${encodeURIComponent(runId)}`,

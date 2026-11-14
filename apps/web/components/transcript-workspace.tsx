@@ -14,6 +14,7 @@ import {
   askVideoQuestion,
   cancelIngestionJob,
   getIngestionEvents,
+  getIngestionJob,
   getTranscript,
   importVideo,
   retryIngestionJob,
@@ -28,6 +29,7 @@ import type {
   SearchResponse,
   RetrievalMode,
 } from "@/lib/api/contracts"
+import { getImportConsent } from "@/lib/api/providers"
 import { seekCommands, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 import { timestamp } from "@/lib/timestamp"
 
@@ -79,15 +81,27 @@ export function TranscriptWorkspace() {
   const importPolicy = useProviderSelection("import")
   const questionPolicy = useProviderSelection("question")
   const [storedJobId, setStoredJobId] = useState<string | null>(null)
+  const setImportGrant = importPolicy.setGrantId
 
   const restoreRequest = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const params = new URL(window.location.href).searchParams
     const id = params.get("video")
-    if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return
+    const jobId = params.get("job")
     const abort = new AbortController()
     restoreRequest.current = abort
+    if (jobId && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(jobId)) {
+      void Promise.all([getIngestionJob(jobId), getIngestionEvents(jobId), getImportConsent(jobId)])
+        .then(([restored, history, consent]) => {
+          if (abort.signal.aborted) return
+          setJob(restored)
+          setEvents(history.events)
+          setSourceUrl(restored.canonical_url)
+          if (consent && !consent.revoked_at) setImportGrant(consent.consent_id)
+        }).catch(() => {})
+    }
+    if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return () => abort.abort()
     void getTranscript(id, (input, init) => fetch(input, { ...init, signal: abort.signal }))
       .then((loaded) => {
         if (abort.signal.aborted) return
@@ -99,7 +113,7 @@ export function TranscriptWorkspace() {
         if (!abort.signal.aborted) setError(errorMessage(caught))
       })
     return () => abort.abort()
-  }, [])
+  }, [setImportGrant])
 
   function seekTo(milliseconds: number) {
     for (const command of seekCommands(milliseconds)) {
@@ -170,6 +184,10 @@ export function TranscriptWorkspace() {
       const selected = await importPolicy.selection(youtubeSourceId(sourceUrl))
       const imported = await importVideo(sourceUrl, fetch, selected)
       rememberJob(imported.job.job_id)
+      if (imported.reused && selected?.consent_id) {
+        const canonical = await getImportConsent(imported.job.job_id).catch(() => null)
+        importPolicy.setGrantId(canonical && !canonical.revoked_at ? canonical.consent_id : null)
+      }
       setNotice(
         imported.reused
           ? "Following the existing durable job and its persisted event trail."
@@ -242,7 +260,11 @@ export function TranscriptWorkspace() {
     try {
       const options = { mode: retrievalMode, selected_anchor: selectedAnchor, limit: 8, allow_fallback: true, allow_external_frames: false }
       if (evidenceOnly) {
-        setRetrieval(await searchVideo(transcript.video.video_id, { ...options, query: question }))
+        const profile = questionPolicy.profile()
+        setRetrieval(await searchVideo(transcript.video.video_id, {
+          ...options, query: question,
+          provider_selection: profile ? { profile } : undefined,
+        }))
       } else {
         const selected = await questionPolicy.selection(transcript.video.video_id)
         const response = await askVideoQuestion(transcript.video.video_id, question, fetch, {

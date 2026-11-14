@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 import {
   getConsentOptions,
@@ -29,6 +29,7 @@ export function useProviderSelection(operation: ProviderOperation) {
   const [grantId, setGrantId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const optionsSequence = useRef(0)
 
   useEffect(() => {
     let current = true
@@ -41,6 +42,7 @@ export function useProviderSelection(operation: ProviderOperation) {
   }, [])
 
   async function choose(id: string) {
+    const sequence = ++optionsSequence.current
     setSelected(id)
     setApproved([])
     setScopes([])
@@ -49,24 +51,29 @@ export function useProviderSelection(operation: ProviderOperation) {
     if (!profile) return
     setLoading(true)
     try {
-      setScopes(await getConsentOptions(profile, operation))
+      const options = await getConsentOptions(profile, operation)
+      if (sequence === optionsSequence.current) setScopes(options)
     } catch {
-      setMessage("Could not load the sharing options for this profile.")
+      if (sequence === optionsSequence.current) setMessage("Could not load the sharing options for this profile.")
     } finally {
-      setLoading(false)
+      if (sequence === optionsSequence.current) setLoading(false)
     }
   }
 
-  async function selection(source: string): Promise<ProviderSelection | undefined> {
+  function profile() {
     const chosen = profiles.find(item => item.profile_id === selected)
+    return chosen ? { profile_id: chosen.profile_id, version: chosen.version } : undefined
+  }
+
+  async function selection(source: string): Promise<ProviderSelection | undefined> {
+    const chosen = profile()
     if (!chosen) return undefined
-    const profile = { profile_id: chosen.profile_id, version: chosen.version }
     const permitted = scopes.filter(scope => approved.includes(scope.provider_id))
     setApproved([])
-    if (permitted.length === 0) return { profile }
-    const grant = await grantProviderConsent(profile, operation, source, permitted)
+    if (permitted.length === 0) return { profile: chosen }
+    const grant = await grantProviderConsent(chosen, operation, source, permitted)
     setGrantId(grant.consent_id)
-    return { profile, consent_id: grant.consent_id }
+    return { profile: chosen, consent_id: grant.consent_id }
   }
 
   async function revoke() {
@@ -82,7 +89,7 @@ export function useProviderSelection(operation: ProviderOperation) {
     }
   }
 
-  return { profiles, selected, scopes, approved, setApproved, grantId, message, loading, choose, selection, revoke }
+  return { profiles, selected, scopes, approved, setApproved, grantId, setGrantId, message, loading, choose, profile, selection, revoke }
 }
 
 export function ProviderSelectionFields({ control, busy = false, evidenceOnly = false }: {
