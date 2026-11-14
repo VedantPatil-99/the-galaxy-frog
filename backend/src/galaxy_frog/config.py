@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     gemini_visual_model: str | None = None
     gemini_visual_revision: str | None = None
+    cloudflare_asr_enabled: bool = False
+    cloudflare_account_id: str | None = None
+    cloudflare_api_token: SecretStr | None = None
+    bedrock_text_enabled: bool = False
+    bedrock_region: Literal["us-east-1", "us-east-2", "us-west-2"] = "us-east-1"
+    aws_bearer_token_bedrock: SecretStr | None = None
 
     @field_validator("llama_cloud_api_key")
     @classmethod

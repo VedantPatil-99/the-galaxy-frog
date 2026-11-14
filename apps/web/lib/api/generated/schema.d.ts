@@ -141,6 +141,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/provider-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provider Profiles */
+        get: operations["provider_profiles_v1_provider_profiles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-profiles/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Provider Profile */
+        put: operations["save_provider_profile_v1_provider_profiles__profile_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/providers/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capabilities */
+        get: operations["capabilities_v1_providers_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/videos/{video_id}": {
         parameters: {
             query?: never;
@@ -421,6 +472,11 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
+        /**
+         * Capability
+         * @enum {string}
+         */
+        Capability: "transcription" | "text_embedding" | "visual_embedding" | "reranking" | "ocr" | "vision" | "generation" | "study";
         /**
          * CaptionKind
          * @description Whether a caption track was authored or generated automatically.
@@ -780,6 +836,11 @@ export interface components {
          */
         IngestionStage: "source_resolution" | "metadata" | "caption_retrieval" | "audio_acquisition" | "transcription" | "chunking" | "persistence" | "embedding" | "indexing" | "cleanup" | "completed";
         JsonValue: unknown;
+        /**
+         * Location
+         * @enum {string}
+         */
+        Location: "local" | "free_cloud" | "aws";
         /** MomentCitation */
         MomentCitation: {
             /** End Ms */
@@ -898,6 +959,106 @@ export interface components {
             provider: string;
             /** Provider Revision */
             provider_revision: string;
+        };
+        /** PricingSource */
+        PricingSource: {
+            /** Billing Unit */
+            billing_unit: string;
+            /**
+             * Currency
+             * @default USD
+             */
+            currency: string | null;
+            /** Source Url */
+            source_url: string;
+            /** Stale */
+            readonly stale: boolean;
+            /** Tier Note */
+            tier_note: string;
+            /**
+             * Verified At
+             * Format: date
+             * @default 2026-11-14
+             */
+            verified_at: string;
+        };
+        ProfileId: string;
+        /** ProviderEntry */
+        ProviderEntry: {
+            capability: components["schemas"]["Capability"];
+            /** Capability Url */
+            capability_url?: string | null;
+            /** Code Switching */
+            code_switching?: ("verified" | "unverified") | null;
+            /** Confidence */
+            confidence?: string | null;
+            /** Device */
+            device?: string | null;
+            /** Diarization */
+            diarization?: boolean | null;
+            /** Hardware */
+            hardware?: string | null;
+            /** Language Coverage */
+            language_coverage?: string | null;
+            /** Local Execution Evidence */
+            local_execution_evidence?: string | null;
+            location: components["schemas"]["Location"];
+            /** Measured Speed */
+            measured_speed?: string | null;
+            /** Model */
+            model: string;
+            pricing?: components["schemas"]["PricingSource"] | null;
+            /** Privacy */
+            privacy: string;
+            /** Provider */
+            provider: string;
+            /** Provider Id */
+            provider_id: string;
+            /**
+             * Readiness
+             * @enum {string}
+             */
+            readiness: "configured" | "disabled" | "setup_required" | "catalog_only";
+            /** Revision */
+            revision?: string | null;
+            /** Summary */
+            summary: string;
+            /** Timestamp Granularity */
+            timestamp_granularity?: string | null;
+        };
+        ProviderId: string;
+        /**
+         * ProviderMode
+         * @enum {string}
+         */
+        ProviderMode: "automatic_local_only" | "automatic_cloud_permitted" | "manual";
+        /** ProviderProfile */
+        ProviderProfile: {
+            /** Candidates */
+            candidates: {
+                [key: string]: components["schemas"]["ProviderId"][];
+            };
+            /**
+             * Evaluation
+             * @default false
+             */
+            evaluation: boolean;
+            mode: components["schemas"]["ProviderMode"];
+        };
+        /** ProviderProfileEdit */
+        ProviderProfileEdit: {
+            /** Expected Version */
+            expected_version: number;
+            policy: components["schemas"]["ProviderProfile"];
+        };
+        /** ProviderProfileVersion */
+        ProviderProfileVersion: {
+            /** Created At */
+            created_at?: string | null;
+            policy: components["schemas"]["ProviderProfile"];
+            profile_id: components["schemas"]["ProfileId"];
+            /** Version */
+            version: number;
         };
         /** QueryAnalysis */
         QueryAnalysis: {
@@ -2068,6 +2229,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    provider_profiles_v1_provider_profiles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileVersion"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_provider_profile_v1_provider_profiles__profile_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderProfileEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileVersion"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    capabilities_v1_providers_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderEntry"][];
                 };
             };
         };

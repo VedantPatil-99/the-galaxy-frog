@@ -29,6 +29,16 @@ class Base(DeclarativeBase):
     """Declarative metadata root used by migrations and repositories."""
 
 
+class ProviderProfileVersionRow(Base):
+    __tablename__ = "provider_profile_versions"
+    __table_args__ = (CheckConstraint("version > 0", name="ck_provider_profile_version"),)
+
+    profile_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    version: Mapped[int] = mapped_column(primary_key=True)
+    policy: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class VideoRow(Base):
     __tablename__ = "videos"
     __table_args__ = (UniqueConstraint("source_kind", "external_id", name="uq_videos_source"),)

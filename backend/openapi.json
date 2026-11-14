@@ -108,6 +108,20 @@
         "title": "AnswerResponse",
         "type": "object"
       },
+      "Capability": {
+        "enum": [
+          "transcription",
+          "text_embedding",
+          "visual_embedding",
+          "reranking",
+          "ocr",
+          "vision",
+          "generation",
+          "study"
+        ],
+        "title": "Capability",
+        "type": "string"
+      },
       "CaptionKind": {
         "description": "Whether a caption track was authored or generated automatically.",
         "enum": [
@@ -948,6 +962,15 @@
         "type": "string"
       },
       "JsonValue": {},
+      "Location": {
+        "enum": [
+          "local",
+          "free_cloud",
+          "aws"
+        ],
+        "title": "Location",
+        "type": "string"
+      },
       "MomentCitation": {
         "properties": {
           "end_ms": {
@@ -1271,6 +1294,344 @@
           "provider_revision"
         ],
         "title": "OCRProviderSpec",
+        "type": "object"
+      },
+      "PricingSource": {
+        "properties": {
+          "billing_unit": {
+            "title": "Billing Unit",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "USD",
+            "title": "Currency"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "stale": {
+            "readOnly": true,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "tier_note": {
+            "title": "Tier Note",
+            "type": "string"
+          },
+          "verified_at": {
+            "default": "2026-11-14",
+            "format": "date",
+            "title": "Verified At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_url",
+          "billing_unit",
+          "tier_note",
+          "stale"
+        ],
+        "title": "PricingSource",
+        "type": "object"
+      },
+      "ProfileId": {
+        "pattern": "^[a-z][a-z0-9_-]{0,39}$",
+        "type": "string"
+      },
+      "ProviderEntry": {
+        "properties": {
+          "capability": {
+            "$ref": "#/components/schemas/Capability"
+          },
+          "capability_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability Url"
+          },
+          "code_switching": {
+            "anyOf": [
+              {
+                "enum": [
+                  "verified",
+                  "unverified"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Switching"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device"
+          },
+          "diarization": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diarization"
+          },
+          "hardware": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hardware"
+          },
+          "language_coverage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Coverage"
+          },
+          "local_execution_evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Execution Evidence"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "measured_speed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured Speed"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "pricing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "privacy": {
+            "title": "Privacy",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "readiness": {
+            "enum": [
+              "configured",
+              "disabled",
+              "setup_required",
+              "catalog_only"
+            ],
+            "title": "Readiness",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "timestamp_granularity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp Granularity"
+          }
+        },
+        "required": [
+          "provider_id",
+          "capability",
+          "location",
+          "provider",
+          "model",
+          "readiness",
+          "privacy",
+          "summary"
+        ],
+        "title": "ProviderEntry",
+        "type": "object"
+      },
+      "ProviderId": {
+        "maxLength": 240,
+        "minLength": 1,
+        "type": "string"
+      },
+      "ProviderMode": {
+        "enum": [
+          "automatic_local_only",
+          "automatic_cloud_permitted",
+          "manual"
+        ],
+        "title": "ProviderMode",
+        "type": "string"
+      },
+      "ProviderProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ProviderId"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "title": "Candidates",
+            "type": "object"
+          },
+          "evaluation": {
+            "default": false,
+            "title": "Evaluation",
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ProviderMode"
+          }
+        },
+        "required": [
+          "mode",
+          "candidates"
+        ],
+        "title": "ProviderProfile",
+        "type": "object"
+      },
+      "ProviderProfileEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProviderProfile"
+          }
+        },
+        "required": [
+          "expected_version",
+          "policy"
+        ],
+        "title": "ProviderProfileEdit",
+        "type": "object"
+      },
+      "ProviderProfileVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProviderProfile"
+          },
+          "profile_id": {
+            "$ref": "#/components/schemas/ProfileId"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "profile_id",
+          "version",
+          "policy"
+        ],
+        "title": "ProviderProfileVersion",
         "type": "object"
       },
       "QueryAnalysis": {
@@ -3931,6 +4292,139 @@
         "summary": "Retry Job",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/v1/provider-profiles": {
+      "get": {
+        "operationId": "provider_profiles_v1_provider_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderProfileVersion"
+                  },
+                  "title": "Response Provider Profiles V1 Provider Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Provider Profiles",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/v1/provider-profiles/{profile_id}": {
+      "put": {
+        "operationId": "save_provider_profile_v1_provider_profiles__profile_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,39}$",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderProfileEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProfileVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Save Provider Profile",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/v1/providers/capabilities": {
+      "get": {
+        "operationId": "capabilities_v1_providers_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderEntry"
+                  },
+                  "title": "Response Capabilities V1 Providers Capabilities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "providers"
         ]
       }
     },
