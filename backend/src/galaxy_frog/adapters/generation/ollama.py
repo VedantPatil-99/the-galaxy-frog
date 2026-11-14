@@ -16,6 +16,26 @@ from galaxy_frog.domain.generation.models import (
 from galaxy_frog.domain.generation.models import GenerationProviderError as GenerationProviderError
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
 
+_GROUNDED_ANSWER_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "required": ["answer", "confidence", "citations"],
+    "properties": {
+        "answer": {"type": "string", "minLength": 1},
+        "confidence": {"enum": [value.value for value in AnswerConfidence]},
+        "citations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["retrieval_unit_id", "quote"],
+                "properties": {
+                    "retrieval_unit_id": {"type": "string"},
+                    "quote": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
 
 class OllamaGenerationProvider:
     """Ask a configured local Qwen model for evidence-bound JSON output."""
@@ -61,7 +81,7 @@ class OllamaGenerationProvider:
                     "model": self._model,
                     "prompt": prompt,
                     "stream": False,
-                    "format": "json",
+                    "format": _GROUNDED_ANSWER_SCHEMA,
                     "think": False,
                     "options": {"temperature": 0},
                 },

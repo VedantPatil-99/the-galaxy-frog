@@ -171,7 +171,7 @@ async def test_generation_provider_parses_structured_json() -> None:
         request_body = json.loads(request.content)
         assert request_body["model"] == "qwen3:4b"
         assert request_body["stream"] is False
-        assert request_body["format"] == "json"
+        assert request_body["format"]["required"] == ["answer", "confidence", "citations"]
         assert request_body["think"] is False
         assert request_body["options"] == {"temperature": 0}
         return httpx.Response(200, json={"response": json.dumps(body)})
