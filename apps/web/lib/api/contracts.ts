@@ -224,8 +224,8 @@ function isTranscriptionRun(
     typeof value.provider_revision === "string" &&
     typeof value.model === "string" &&
     typeof value.model_revision === "string" &&
-    (value.device === "cpu" || value.device === "cuda") &&
-    ["int8", "int8_float16", "float16", "float32"].includes(
+    (value.device === "cpu" || value.device === "cuda" || value.device === "cloud") &&
+    ["int8", "int8_float16", "float16", "float32", "unknown"].includes(
       String(value.compute_type),
     ) &&
     typeof value.language_code === "string" &&
