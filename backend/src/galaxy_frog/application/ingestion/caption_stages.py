@@ -335,10 +335,20 @@ class TranscriptionStage(_TranscriptStage):
         except TranscriptionError as exc:
             self._raise_transcription_error(exc)
         except ProviderFailure as exc:
+            message = {
+                ProviderCode.QUOTA_EXHAUSTED: "Cloud ASR quota is exhausted. Wait for the reset or retry with a local profile.",
+                ProviderCode.RATE_LIMITED: "Cloud ASR is temporarily throttled. Check the retry time in Provider decisions.",
+                ProviderCode.CONSENT_REQUIRED: "This run lacks cloud audio consent. Retry locally or grant fresh consent.",
+                ProviderCode.INPUT_LIMIT: "The audio exceeds the cloud ASR limit. Retry with a local profile.",
+                ProviderCode.OUTCOME_UNKNOWN: "The cloud ASR outcome is unknown. Check provider activity before submitting again.",
+            }.get(
+                exc.code,
+                "The selected transcription route could not complete. Check provider health.",
+            )
             raise IngestionStageError(
                 exc.code,
-                "The selected transcription route could not complete. Check provider health and consent.",
-                retryable=exc.code is not ProviderCode.SAFETY_BLOCKED,
+                message,
+                retryable=exc.code not in {ProviderCode.SAFETY_BLOCKED, ProviderCode.INVALID_INPUT},
             ) from exc
         checkpoint = await checkpoints.save(asset.asset_id, result)
         return self._result(checkpoint, reused=False)

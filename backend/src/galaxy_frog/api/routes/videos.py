@@ -45,7 +45,7 @@ from galaxy_frog.api.video_schemas import (
 )
 from galaxy_frog.application.ingestion.create_job import CreateIngestionJob
 from galaxy_frog.application.ingestion.dispatch import JobDispatcher
-from galaxy_frog.application.provider_policy import ProviderFailure
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
 from galaxy_frog.application.questions.answer_question import (
     AnswerQuestion,
     CitationValidationError,
@@ -59,7 +59,7 @@ from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.domain.generation.ports import GenerationProvider
-from galaxy_frog.domain.providers import ProviderOperation
+from galaxy_frog.domain.providers import Capability, ProviderOperation
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.videos.records import TranscriptRecord, VideoRecord
@@ -356,6 +356,8 @@ async def ask_question(
     )
     metadata = search_response(execution, body.mode)
     if execution.result.status != RetrievalStatus.RESOLVED:
+        if run:
+            await run.skipped(Capability.GENERATION, "ollama-text", ProviderCode.NOT_NEEDED)
         return AnswerResponse(
             answer="",
             confidence="low",
@@ -416,6 +418,8 @@ async def ask_question(
         for group in execution.result.groups
         for unit in group.units
     )
+    if not evidence and run:
+        await run.skipped(Capability.GENERATION, "ollama-text", ProviderCode.NOT_NEEDED)
     try:
         answer = await service.execute_with_evidence(video_id, body.question, evidence)
         window = execution.result.window

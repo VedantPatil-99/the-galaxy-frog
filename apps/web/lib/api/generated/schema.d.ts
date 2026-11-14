@@ -1109,7 +1109,7 @@ export interface components {
          * ProviderCode
          * @enum {string}
          */
-        ProviderCode: "PROVIDER_NOT_SELECTED" | "PROVIDER_SETUP_REQUIRED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_INCOMPATIBLE" | "PROVIDER_CONSENT_REQUIRED" | "PROVIDER_CIRCUIT_OPEN" | "PROVIDER_BUSY" | "QUOTA_EXHAUSTED" | "RATE_LIMITED" | "PROVIDER_AUTH_FAILED" | "PROVIDER_TIMEOUT" | "PROVIDER_INVALID_OUTPUT" | "PROVIDER_INPUT_LIMIT" | "PROVIDER_SAFETY_BLOCKED" | "PROVIDER_OUTCOME_UNKNOWN";
+        ProviderCode: "PROVIDER_NOT_SELECTED" | "PROVIDER_NOT_NEEDED" | "PROVIDER_SETUP_REQUIRED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_INCOMPATIBLE" | "PROVIDER_CONSENT_REQUIRED" | "PROVIDER_CIRCUIT_OPEN" | "PROVIDER_BUSY" | "QUOTA_EXHAUSTED" | "RATE_LIMITED" | "PROVIDER_AUTH_FAILED" | "PROVIDER_TIMEOUT" | "PROVIDER_INVALID_OUTPUT" | "PROVIDER_INPUT_LIMIT" | "PROVIDER_INVALID_INPUT" | "PROVIDER_SAFETY_BLOCKED" | "PROVIDER_OUTCOME_UNKNOWN";
         /** ProviderConsent */
         ProviderConsent: {
             /**
@@ -1162,6 +1162,8 @@ export interface components {
             device?: string | null;
             /** Diarization */
             diarization?: boolean | null;
+            /** Expected Quality */
+            expected_quality?: string | null;
             /** Hardware */
             hardware?: string | null;
             /** Language Coverage */

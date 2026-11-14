@@ -7,6 +7,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from galaxy_frog.adapters.generation.bedrock import BedrockGeneration
@@ -24,9 +25,15 @@ from galaxy_frog.application.provider_registry import (
 )
 from galaxy_frog.application.retrieval.explain_moment import MomentTextProvider
 from galaxy_frog.config import Settings
-from galaxy_frog.db.models import EmbeddingCollectionRow
+from galaxy_frog.db.models import (
+    EmbeddingCollectionRow,
+    RetrievalUnitRow,
+    TextEmbeddingRow,
+    VideoFrameRow,
+)
 from galaxy_frog.db.provider_profiles import PostgresProviderProfiles
 from galaxy_frog.db.provider_runtime import PostgresProviderRuntime
+from galaxy_frog.db.visual_models import VisualEmbeddingRow
 from galaxy_frog.domain.generation.models import (
     GenerationDraft,
     GenerationProviderError,
@@ -67,7 +74,6 @@ class ApiProviderRun:
         self.policy = policy
         self.runtime = runtime
         self.catalog = provider_catalog(settings)
-        self.attempts: list[ProviderAttempt] = []
         self.usage: dict[str, int] | None = None
         self.observed_revisions: dict[str, str] = {}
 
@@ -82,7 +88,6 @@ class ApiProviderRun:
                 pricing=entry.pricing,
                 usage=self.usage if entry.provider_id == "bedrock-nova-lite" else None,
             )
-            self.attempts.append(attempt)
 
         policy = self.policy
         if capability not in policy.candidates and not policy.evaluation:
@@ -92,7 +97,9 @@ class ApiProviderRun:
         return ProviderRouting(policy, self.catalog, self.runtime.admit, record)
 
     async def skipped(self, capability: Capability, provider_id: str, reason: ProviderCode) -> None:
-        entry = next(item for item in self.catalog if item.provider_id == provider_id)
+        requested = self.policy.candidates.get(capability, ())
+        selected = requested[0] if requested else provider_id
+        entry = next(item for item in self.catalog if item.provider_id == selected)
         attempt = ProviderAttempt(
             provider_id=entry.provider_id,
             provider=entry.provider,
@@ -102,7 +109,7 @@ class ApiProviderRun:
             status="skipped",
             reason=reason,
             requested_mode=self.policy.mode,
-            requested_candidates=self.policy.candidates.get(capability, ()),
+            requested_candidates=requested,
         )
         await self.runtime.record(capability, attempt, pricing=entry.pricing)
 
@@ -149,7 +156,11 @@ async def api_provider_run(
             or entry.readiness != "configured"
             or entry.revision != pins[provider_id]
             or entry.revision in {None, "ollama"}
-            or (entry.provider == "ollama" and models.get(entry.model) != entry.revision)
+            or (
+                entry.provider == "ollama"
+                and (models.get(entry.model) or models.get(f"{entry.model}:latest"))
+                != entry.revision
+            )
             for provider_id in pins
         )
         collections = version.policy.embedding_collections or {}
@@ -176,11 +187,33 @@ async def api_provider_run(
                 != (entry.provider, entry.model, entry.revision, dimension, "l2")
             ):
                 invalid = True
+        if not invalid:
+            text_exists = (
+                select(TextEmbeddingRow.retrieval_unit_id)
+                .join(RetrievalUnitRow, RetrievalUnitRow.id == TextEmbeddingRow.retrieval_unit_id)
+                .where(
+                    TextEmbeddingRow.collection_id == collections[Capability.TEXT_EMBEDDING],
+                    RetrievalUnitRow.video_id == video_id,
+                )
+                .exists()
+            )
+            visual_exists = (
+                select(VisualEmbeddingRow.frame_id)
+                .join(VideoFrameRow, VideoFrameRow.id == VisualEmbeddingRow.frame_id)
+                .where(
+                    VisualEmbeddingRow.collection_id == collections[Capability.VISUAL_EMBEDDING],
+                    VideoFrameRow.video_id == video_id,
+                    VideoFrameRow.is_duplicate.is_(False),
+                    VisualEmbeddingRow.content_sha256 == VideoFrameRow.content_sha256,
+                )
+                .exists()
+            )
+            invalid = not await session.scalar(select(text_exists & visual_exists))
         if invalid:
             raise ApiError(
                 status_code=422,
                 code="PROVIDER_EVALUATION_UNVERIFIABLE",
-                message="This evaluation profile contains an unverified runtime revision or collection.",
+                message="Verify the pinned revisions and index this video in both pinned collections.",
                 retryable=False,
             )
     runtime = PostgresProviderRuntime(

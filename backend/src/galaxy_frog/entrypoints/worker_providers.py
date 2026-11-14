@@ -17,6 +17,7 @@ from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.transcription import (
     TranscriptionError,
+    TranscriptionErrorCode,
     TranscriptionProvider,
     TranscriptionRequest,
     TranscriptionResult,
@@ -37,7 +38,11 @@ class RoutedTranscription:
             try:
                 return await self._local.transcribe(request)
             except TranscriptionError as exc:
-                raise ProviderFailure(ProviderCode.UNAVAILABLE) from exc
+                code = {
+                    TranscriptionErrorCode.INVALID_AUDIO: ProviderCode.INVALID_INPUT,
+                    TranscriptionErrorCode.TIMEOUT: ProviderCode.TIMEOUT,
+                }.get(exc.code, ProviderCode.UNAVAILABLE)
+                raise ProviderFailure(code) from exc
 
         async def cloud(verify: Callable[[], Awaitable[None]]) -> TranscriptionResult:
             settings = self._settings

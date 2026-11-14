@@ -17,6 +17,7 @@ from galaxy_frog.domain.providers import Capability, Location, ProviderMode, Pro
 
 class ProviderCode(StrEnum):
     NOT_SELECTED = "PROVIDER_NOT_SELECTED"
+    NOT_NEEDED = "PROVIDER_NOT_NEEDED"
     SETUP_REQUIRED = "PROVIDER_SETUP_REQUIRED"
     UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     INCOMPATIBLE = "PROVIDER_INCOMPATIBLE"
@@ -29,6 +30,7 @@ class ProviderCode(StrEnum):
     TIMEOUT = "PROVIDER_TIMEOUT"
     INVALID_OUTPUT = "PROVIDER_INVALID_OUTPUT"
     INPUT_LIMIT = "PROVIDER_INPUT_LIMIT"
+    INVALID_INPUT = "PROVIDER_INVALID_INPUT"
     SAFETY_BLOCKED = "PROVIDER_SAFETY_BLOCKED"
     OUTCOME_UNKNOWN = "PROVIDER_OUTCOME_UNKNOWN"
 
@@ -76,6 +78,7 @@ _STOP = frozenset(
     {
         ProviderCode.SAFETY_BLOCKED,
         ProviderCode.OUTCOME_UNKNOWN,
+        ProviderCode.INVALID_INPUT,
     }
 )
 
@@ -109,6 +112,7 @@ class ProviderRouting:
         if not fallback:
             chain = chain[:1]
         failures: list[ProviderFailure] = []
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
         for provider_id in chain:
             entry = self._entries.get(provider_id)
             if entry is None:
@@ -120,13 +124,15 @@ class ProviderRouting:
                 if reason is not None:
                     raise ProviderFailure(reason)
                 async with self._admit(entry):
+                    if asyncio.get_running_loop().time() >= deadline:
+                        raise ProviderFailure(ProviderCode.TIMEOUT)
                     status = "failed"
-                    async with asyncio.timeout(timeout_seconds):
+                    async with asyncio.timeout_at(deadline):
                         result = await actions[provider_id]()
             except TimeoutError:
                 failure = ProviderFailure(
                     ProviderCode.TIMEOUT
-                    if entry.location is Location.LOCAL
+                    if status == "skipped" or entry.location is Location.LOCAL
                     else ProviderCode.OUTCOME_UNKNOWN
                 )
             except ProviderFailure as exc:

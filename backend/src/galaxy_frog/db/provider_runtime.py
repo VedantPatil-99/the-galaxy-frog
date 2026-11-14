@@ -285,8 +285,10 @@ class PostgresProviderRuntime:
             .values(provider_id=entry.provider_id, **values)
             .on_conflict_do_update(index_elements=[ProviderRuntimeRow.provider_id], set_=values)
         )
-        if entry.location is not Location.LOCAL and (
-            failure is None or failure.code != ProviderCode.OUTCOME_UNKNOWN
+        if (
+            entry.location is not Location.LOCAL
+            and (failure is None or failure.code != ProviderCode.OUTCOME_UNKNOWN)
+            and await self._outstanding_dispatch(session, entry)
         ):
             session.add(self._dispatch_record(entry, "dispatch_finished"))
         await session.commit()

@@ -52,6 +52,7 @@ def test_retry_after_returns_bounded_utc_deadline(header: str | None, seconds: i
         (ProviderCode.UNAVAILABLE, None, False, "PROVIDER_UNAVAILABLE", ["failed"]),
         (ProviderCode.SAFETY_BLOCKED, None, True, "PROVIDER_SAFETY_BLOCKED", ["failed"]),
         (ProviderCode.OUTCOME_UNKNOWN, None, True, "PROVIDER_OUTCOME_UNKNOWN", ["failed"]),
+        (ProviderCode.INVALID_INPUT, None, True, "PROVIDER_INVALID_INPUT", ["failed"]),
         (None, frozenset({"ollama-text"}), True, "result", ["skipped", "succeeded"]),
         (None, None, False, "cached", ["cached"]),
     ],
@@ -138,6 +139,40 @@ async def test_deadline_marks_ambiguous_hosted_outcome(provider_id: str, expecte
     )
     with pytest.raises(ProviderFailure, match=expected):
         await routing.execute(capability, {provider_id: wait}, timeout_seconds=0.001)
+
+
+@pytest.mark.asyncio
+async def test_expiry_while_waiting_for_admission_prevents_hosted_dispatch() -> None:
+    attempts: list[ProviderAttempt] = []
+
+    @asynccontextmanager
+    async def admit(_entry: ProviderEntry) -> AsyncGenerator[None]:
+        await asyncio.sleep(0.01)
+        yield
+
+    async def record(attempt: ProviderAttempt) -> None:
+        attempts.append(attempt)
+
+    async def dispatch() -> None:
+        pytest.fail("The expired route sent evidence to the hosted provider.")
+
+    provider_id = "bedrock-nova-lite"
+    routing = ProviderRouting(
+        ProviderProfile(
+            mode=ProviderMode.MANUAL, candidates={Capability.GENERATION: (provider_id,)}
+        ),
+        tuple(
+            entry.model_copy(update={"readiness": "configured"})
+            for entry in provider_catalog(Settings())
+        ),
+        admit,
+        record,
+    )
+    with pytest.raises(ProviderFailure, match="PROVIDER_TIMEOUT"):
+        await routing.execute(Capability.GENERATION, {provider_id: dispatch}, timeout_seconds=0.001)
+    assert [(attempt.status, attempt.reason) for attempt in attempts] == [
+        ("skipped", ProviderCode.TIMEOUT)
+    ]
 
 
 @pytest.mark.asyncio

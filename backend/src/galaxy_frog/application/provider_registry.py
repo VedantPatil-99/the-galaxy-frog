@@ -79,6 +79,7 @@ class ProviderEntry(BaseModel):
     hardware: str | None = None
     privacy: str
     summary: str
+    expected_quality: str | None = None
     local_execution_evidence: str | None = None
     measured_speed: str | None = None
     pricing: PricingSource | None = None
@@ -119,6 +120,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             hardware=f"Provisioned {settings.asr_device} runtime ({settings.asr_compute_type})",
             privacy="Audio stays on this machine.",
             summary="Default for imports with unavailable or unusable captions.",
+            expected_quality="Depends on model size, language, and audio quality. In-app code-switching quality is unverified.",
             local_execution_evidence="Phase 2 exit gate used the multilingual small model on CUDA.",
             measured_speed="31.72 s for an 11 s speech fixture on RTX 2050 (Phase 2 probe).",
             capability_url="https://github.com/SYSTRAN/faster-whisper",
@@ -276,6 +278,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             diarization=False,
             privacy="Sends bounded normalized audio to Cloudflare Workers AI.",
             summary="Opt-in fallback for captionless imports within the cloud audio limit.",
+            expected_quality="In-app word error rate and code-switching quality are unverified.",
             pricing=PricingSource(
                 source_url="https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/",
                 billing_unit="Audio minute",
