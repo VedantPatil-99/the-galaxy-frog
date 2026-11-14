@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react"
 
+import { ProviderRun } from "@/components/provider-run"
 import {
   listStudy,
   readStudyRun,
@@ -282,6 +283,7 @@ export function StudyWorkspace({ videoId, onSeek }: { videoId: string; onSeek: (
           ? run.failure.message + " " + run.failure.suggested_action
           : "Generation failed.")}
       </p>}
+      {run && <ProviderRun operation="study" runId={run.run_id} refresh={run.state === "succeeded" || run.state === "failed" ? 1 : 0} />}
       {running && run.warnings.length > 0 && <details className="text-sm text-muted-foreground">
         <summary>Run warnings</summary><ul className="list-inside list-disc">{run.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
       </details>}

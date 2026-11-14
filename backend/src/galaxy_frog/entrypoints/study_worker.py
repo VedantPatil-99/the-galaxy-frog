@@ -14,13 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.adapters.generation.study_ollama import OllamaStudyGenerator
 from galaxy_frog.application.provider_policy import ProviderAttempt, ProviderCode
-from galaxy_frog.application.provider_registry import provider_catalog
+from galaxy_frog.application.provider_registry import probe_ollama_models, provider_catalog
 from galaxy_frog.application.study_generation import StudyGenerator, generate_study
 from galaxy_frog.config import Settings
 from galaxy_frog.db.provider_runtime import PostgresProviderRuntime
 from galaxy_frog.db.study_evidence import StudyEvidenceReader
 from galaxy_frog.db.study_repository import ClaimedStudyRun, StudyLeaseLost, StudyRepository
-from galaxy_frog.domain.providers import Capability, ProfileRef, ProviderOperation
+from galaxy_frog.domain.providers import Capability, ProfileRef, ProviderMode, ProviderOperation
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.study import StudyError, StudyFailure, StudyKind
 
@@ -150,9 +150,24 @@ async def run_study_worker(
             )
             started = perf_counter()
             status = "failed"
+            reason: ProviderCode | None = ProviderCode.UNAVAILABLE
+            revision = entry.revision
             try:
+                models = await probe_ollama_models(settings.ollama_base_url)
+                observed = models.get(entry.model) or models.get(f"{entry.model}:latest")
+                if not observed or (revision and revision != observed):
+                    status = "skipped"
+                    reason = ProviderCode.SETUP_REQUIRED
+                    raise StudyError(
+                        "STUDY_PROVIDER_UNAVAILABLE",
+                        "The configured Ollama model is unavailable locally.",
+                        retryable=True,
+                        action="Check the installed model and configured revision, then retry.",
+                    )
+                revision = observed
                 await execute_study_run(claim, sessions, spec, provider)
                 status = "succeeded"
+                reason = None
             finally:
                 await runtime.record(
                     Capability.STUDY,
@@ -160,11 +175,15 @@ async def run_study_worker(
                         provider_id=entry.provider_id,
                         provider=entry.provider,
                         model=entry.model,
-                        revision=entry.revision,
+                        revision=revision,
                         device=entry.device,
                         status=status,
-                        reason=None if status == "succeeded" else ProviderCode.UNAVAILABLE,
-                        processing_ms=round((perf_counter() - started) * 1000),
+                        reason=reason,
+                        processing_ms=round((perf_counter() - started) * 1000)
+                        if status != "skipped"
+                        else None,
+                        requested_mode=ProviderMode.LOCAL_ONLY,
+                        requested_candidates=(entry.provider_id,),
                     ),
                 )
 

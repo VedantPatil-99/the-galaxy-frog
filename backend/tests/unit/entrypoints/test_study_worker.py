@@ -7,8 +7,9 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from galaxy_frog.application.provider_policy import ProviderCode
 from galaxy_frog.application.study_generation import GeneratedStudy
 from galaxy_frog.config import Settings
 from galaxy_frog.db.study_evidence import StudyEvidenceReader
@@ -156,3 +157,48 @@ async def test_worker_retries_transient_polling_and_classifies_run_failures(
     monkeypatch.setattr(study_worker, "execute_study_run", fake_execute)
     await study_worker.run_study_worker(Settings(ingestion_poll_seconds=0.001), sessions, stop)
     assert steps == 3 and fake_execute.await_count == 1
+
+
+@pytest.mark.parametrize("digest", [None, "different", "pinned"])
+@pytest.mark.asyncio
+async def test_study_worker_checks_and_records_the_local_model(
+    monkeypatch: pytest.MonkeyPatch, digest: str | None
+) -> None:
+    settings = Settings(generation_model_revision="pinned", ingestion_poll_seconds=0.001)
+    engine = create_async_engine("postgresql+asyncpg://localhost/db")
+    sessions = async_sessionmaker(engine)
+    stop = asyncio.Event()
+    claimed = claim()
+    execute = AsyncMock()
+    record = AsyncMock()
+    fail = AsyncMock()
+
+    async def claim_once() -> ClaimedStudyRun:
+        stop.set()
+        return claimed
+
+    monkeypatch.setattr(StudyRepository, "claim", AsyncMock(side_effect=claim_once))
+    monkeypatch.setattr(StudyRepository, "fail", fail)
+    monkeypatch.setattr(study_worker, "execute_study_run", execute)
+    monkeypatch.setattr(study_worker.PostgresProviderRuntime, "record", record)
+    monkeypatch.setattr(
+        study_worker,
+        "probe_ollama_models",
+        AsyncMock(return_value={settings.generation_model: digest} if digest else {}),
+    )
+    try:
+        await study_worker.run_study_worker(settings, sessions, stop, engine=engine)
+    finally:
+        await engine.dispose()
+    record.assert_awaited_once()
+    call = record.await_args
+    assert call is not None
+    attempt = call.args[1]
+    if digest == "pinned":
+        execute.assert_awaited_once()
+        fail.assert_not_awaited()
+        assert attempt.status == "succeeded" and attempt.revision == digest
+    else:
+        execute.assert_not_awaited()
+        fail.assert_awaited_once()
+        assert attempt.status == "skipped" and attempt.reason == ProviderCode.SETUP_REQUIRED
