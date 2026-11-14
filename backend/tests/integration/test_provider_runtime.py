@@ -221,7 +221,8 @@ async def test_provider_concurrency_quota_and_revocation_are_shared(tmp_path: Pa
             history = await provider_attempt_rows(session, ProviderOperation.IMPORT, run_id)
         success = history[-1].payload
         assert success["status"] == "succeeded" and success["input_duration_ms"] == 3000
-        assert success["estimated_cost"] == "0.000026"
+        assert entry.pricing is not None
+        assert success["estimated_cost"] == (None if entry.pricing.stale else "0.000026")
         async with runtime.admit(entry):
             await runtime.verify_consent(entry, dispatch=True)
             with pytest.raises(ProviderFailure, match="PROVIDER_BUSY"):

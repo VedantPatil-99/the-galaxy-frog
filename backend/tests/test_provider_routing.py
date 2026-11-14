@@ -5,6 +5,7 @@ import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -20,8 +21,9 @@ from galaxy_frog.application.provider_policy import (
     ProviderRouting,
     retry_after_at,
 )
-from galaxy_frog.application.provider_registry import ProviderEntry, provider_catalog
+from galaxy_frog.application.provider_registry import PricingSource, ProviderEntry, provider_catalog
 from galaxy_frog.config import Settings
+from galaxy_frog.db.provider_runtime import estimate_list_cost
 from galaxy_frog.domain.media import AudioFallbackReason
 from galaxy_frog.domain.providers import Capability, Location, ProviderMode, ProviderProfile
 from galaxy_frog.domain.transcription import TranscriptionRequest
@@ -43,6 +45,18 @@ def test_retry_after_returns_bounded_utc_deadline(header: str | None, seconds: i
     assert retry_after_at(header, now) == (
         now + timedelta(seconds=seconds) if seconds is not None else None
     )
+
+
+@pytest.mark.parametrize(("age", "estimate"), [(0, "0.000026"), (31, None)])
+def test_cost_estimate_uses_only_recent_published_rates(age: int, estimate: str | None) -> None:
+    pricing = PricingSource(
+        source_url="https://example.test/pricing",
+        billing_unit="Audio minute",
+        tier_note="Fixture",
+        list_rate_per_unit=Decimal("0.000513"),
+        verified_at=datetime.now(UTC).date() - timedelta(days=age),
+    )
+    assert estimate_list_cost("cloudflare-whisper", 3000, pricing) == estimate
 
 
 @pytest.mark.parametrize(
