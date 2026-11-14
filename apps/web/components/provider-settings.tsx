@@ -102,7 +102,7 @@ export function ProviderSettings() {
                   <article key={entry.provider_id} className="space-y-2 rounded-xl border bg-card p-4 text-sm">
                     <h4 className="font-semibold">{entry.model}</h4>
                     <p className="text-xs text-muted-foreground">{entry.capability.replaceAll("_", " ")} · {entry.readiness.replaceAll("_", " ")} · health {observed?.state.toLowerCase().replaceAll("_", " ") ?? "unknown"}</p>
-                    {observed?.blocked_until ? <p className="text-xs text-muted-foreground">Retry after {new Date(observed.blocked_until).toLocaleString()}</p> : null}
+                    {observed?.blocked_until && observed.state !== "probe_available" ? <p className="text-xs text-muted-foreground">Retry after {new Date(observed.blocked_until).toLocaleString()}</p> : null}
                     <p>{entry.summary}</p>
                     <p className="text-xs text-muted-foreground">{entry.privacy}</p>
                     <dl className="grid gap-1 text-xs">
@@ -111,7 +111,8 @@ export function ProviderSettings() {
                         ["Languages", entry.language_coverage], ["Code-switching", entry.code_switching],
                         ["Timestamps", entry.timestamp_granularity], ["Confidence", entry.confidence],
                         ["Diarization", entry.diarization == null ? null : entry.diarization ? "Supported" : "Unavailable"],
-                        ["Observed speed", entry.measured_speed], ["Local evidence", entry.local_execution_evidence],
+                        ["Expected quality", entry.expected_quality ?? "Unmeasured"],
+                        ["Observed speed", entry.measured_speed ?? "Unmeasured"], ["Local evidence", entry.local_execution_evidence],
                       ].filter(([, value]) => value).map(([name, value]) => (
                         <div key={name} className="flex flex-wrap gap-x-2"><dt className="font-medium">{name}</dt><dd className="break-all text-muted-foreground">{value}</dd></div>
                       ))}

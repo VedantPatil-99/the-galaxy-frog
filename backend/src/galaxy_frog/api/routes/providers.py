@@ -130,7 +130,11 @@ async def provider_health(request: Request, repository: Profiles) -> tuple[Provi
     return tuple(
         ProviderHealth(
             provider_id=entry.provider_id,
-            state=row.state,
+            state=(
+                "probe_available"
+                if row.blocked_until is not None and row.blocked_until <= datetime.now(UTC)
+                else row.state
+            ),
             observed_at=row.observed_at,
             blocked_until=row.blocked_until,
         )

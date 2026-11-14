@@ -27,7 +27,7 @@ const stagePresentation: Record<IngestionStage, StagePresentation> = {
   },
   caption_retrieval: {
     label: "Checking captions",
-    description: "Preferring viable timestamped captions before local ASR.",
+    description: "Preferring viable timestamped captions before transcription.",
     progress: 28,
   },
   audio_acquisition: {
@@ -36,8 +36,8 @@ const stagePresentation: Record<IngestionStage, StagePresentation> = {
     progress: 40,
   },
   transcription: {
-    label: "Transcribing locally",
-    description: "Generating multilingual timestamp cues with the configured ASR model.",
+    label: "Transcribing audio",
+    description: "Generating timestamped cues under the selected provider profile.",
     progress: 58,
   },
   chunking: {

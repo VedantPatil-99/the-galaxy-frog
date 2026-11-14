@@ -56,22 +56,22 @@ test("renders active ASR stage, durable events, and cancellation", () => {
     />,
   )
 
-  expect(markup).toContain("Transcribing locally")
-  expect(markup).toContain("Stage completed: Transcribing locally")
+  expect(markup).toContain("Transcribing audio")
+  expect(markup).toContain("Stage completed: Transcribing audio")
   expect(markup).toContain("Cancel job")
   expect(markup).toContain("Attempt 1")
   expect(markup).toContain("cuda/int8_float16")
 })
 
-test("renders safe retry guidance for a recoverable failure", () => {
+test("renders cloud quota recovery from the durable job", () => {
   const markup = renderToStaticMarkup(
     <IngestionProgress
       job={{
         ...baseJob,
         status: "failed",
         completed_at: "2026-09-11T09:00:02Z",
-        last_error_code: "ASR_EXECUTION_FAILED",
-        last_error_message: "Local transcription could not finish.",
+        last_error_code: "QUOTA_EXHAUSTED",
+        last_error_message: "Cloud ASR quota is exhausted. Wait for the reset or retry with a local profile.",
         last_error_retryable: true,
       }}
       events={[]}
@@ -81,7 +81,8 @@ test("renders safe retry guidance for a recoverable failure", () => {
     />,
   )
 
-  expect(markup).toContain("ASR_EXECUTION_FAILED")
+  expect(markup).toContain("QUOTA_EXHAUSTED")
+  expect(markup).toContain("Wait for the reset or retry with a local profile.")
   expect(markup).toContain("Retry from checkpoint")
   expect(markup).toContain("The durable checkpoint is safe to retry.")
   expect(markup).not.toContain("Cancel job")

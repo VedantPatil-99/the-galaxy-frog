@@ -21,6 +21,7 @@ export function MomentPlayer({ video, iframeRef }: {
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedTrace, setFailedTrace] = useState<string | null>(null)
   const [result, setResult] = useState<ExplainMomentResponse | null>(null)
   const policy = useProviderSelection("moment")
   const { external_id: externalId, title } = video
@@ -70,6 +71,7 @@ export function MomentPlayer({ video, iframeRef }: {
   async function explain() {
     if (!player.current || pending.current) return
     setError(null)
+    setFailedTrace(null)
     setResult(null)
     try {
       const timestampMs = pausedPlayheadMs(player.current, video.duration_ms)
@@ -87,6 +89,8 @@ export function MomentPlayer({ video, iframeRef }: {
       setResult(response)
     } catch (caught) {
       const action = caught instanceof ApiClientError ? caught.response?.error.suggested_action : null
+      const trace = caught instanceof ApiClientError ? caught.response?.error.details?.trace_id : null
+      if (typeof trace === "string") setFailedTrace(trace)
       const message = caught instanceof Error ? caught.message : "The moment could not be explained."
       setError(action ? `${message} ${action}` : message)
     } finally {
@@ -115,7 +119,7 @@ export function MomentPlayer({ video, iframeRef }: {
         {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         <div aria-live="polite" aria-busy={busy}>
           {result ? <MomentEvidence result={result} onSeek={seek} /> : null}
-          {result ? <ProviderRun operation="moment" runId={result.trace_id} /> : null}
+          {result || failedTrace ? <ProviderRun operation="moment" runId={result?.trace_id ?? failedTrace ?? ""} /> : null}
         </div>
       </div>
     </>

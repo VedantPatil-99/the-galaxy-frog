@@ -69,6 +69,7 @@ export function TranscriptWorkspace() {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
   const [answer, setAnswer] = useState<AnswerResponse | null>(null)
   const [retrieval, setRetrieval] = useState<SearchResponse | null>(null)
+  const [failedQuery, setFailedQuery] = useState<{ operation: "search" | "question"; traceId: string } | null>(null)
   const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("reranked")
   const [evidenceOnly, setEvidenceOnly] = useState(false)
   const [job, setJob] = useState<IngestionJobResponse | null>(null)
@@ -155,13 +156,13 @@ export function TranscriptWorkspace() {
     setTranscript(loaded)
     if (loaded.transcription !== null) {
       setNotice(
-        "Local ASR transcript ready — exact cue intervals and execution provenance were retained.",
+        "ASR transcript ready. See Provider decisions for the model and device used.",
       )
     } else {
       setNotice(
         reused
           ? "Existing durable job reused — no transcript rows were duplicated."
-          : "Caption transcript imported and indexed without invoking local ASR.",
+          : "Caption transcript imported and indexed.",
       )
     }
   }
@@ -227,7 +228,9 @@ export function TranscriptWorkspace() {
     setError(null)
     setNotice(null)
     try {
-      const selected = await importPolicy.selection(job.external_id)
+      const selected = await importPolicy.selection(job.external_id) ?? {
+        profile: { profile_id: "local", version: 1 },
+      }
       const retried = await retryIngestionJob(job.job_id, fetch, selected)
       setJobActionPending(false)
       setNotice(`Retry queued from the ${retried.stage.replaceAll("_", " ")} checkpoint.`)
@@ -248,6 +251,7 @@ export function TranscriptWorkspace() {
   function clearResults() {
     setAnswer(null)
     setRetrieval(null)
+    setFailedQuery(null)
     setError(null)
   }
 
@@ -257,6 +261,7 @@ export function TranscriptWorkspace() {
     setError(null)
     setAnswer(null)
     setRetrieval(null)
+    setFailedQuery(null)
     try {
       const options = { mode: retrievalMode, selected_anchor: selectedAnchor, limit: 8, allow_fallback: true, allow_external_frames: false }
       if (evidenceOnly) {
@@ -274,6 +279,10 @@ export function TranscriptWorkspace() {
         setAnswer(response.retrieval_status === "anchor_selection_required" || response.retrieval_status === "anchor_unresolved" ? null : response)
       }
     } catch (caught) {
+      const traceId = caught instanceof ApiClientError ? caught.response?.error.details?.trace_id : null
+      if (typeof traceId === "string") {
+        setFailedQuery({ operation: evidenceOnly ? "search" : "question", traceId })
+      }
       setError(errorMessage(caught))
     } finally {
       setAsking(false)
@@ -285,7 +294,7 @@ export function TranscriptWorkspace() {
       <div className="mb-7 max-w-3xl">
         <p className="mb-3 font-mono text-xs tracking-[0.22em] text-primary uppercase">Phase 3 · Temporal evidence</p>
         <h1 id="workspace-title" className="font-heading text-4xl leading-tight font-semibold tracking-[-0.04em] sm:text-5xl">Ask the video. Keep the receipts.</h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public YouTube video. Galaxy Frog uses viable captions first, falls back to bounded local multilingual ASR only when needed, and keeps every answer linked to exact evidence.</p>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public YouTube video. Galaxy Frog uses viable captions first and transcribes locally by default. Answers link to the original evidence.</p>
       </div>
 
       <form onSubmit={handleImport} className="rounded-2xl border bg-card p-3 shadow-sm sm:flex sm:items-center sm:gap-3">
@@ -399,6 +408,7 @@ export function TranscriptWorkspace() {
               ) : null}
               {retrieval ? <RetrievalEvidence key={retrieval.trace_id} result={retrieval} pending={asking} onSelectAnchor={submitQuery} onSeek={seekTo} /> : null}
               {retrieval ? <ProviderRun operation={evidenceOnly ? "search" : "question"} runId={retrieval.trace_id} /> : null}
+              {failedQuery ? <ProviderRun operation={failedQuery.operation} runId={failedQuery.traceId} /> : null}
             </article>
           </div>
 
