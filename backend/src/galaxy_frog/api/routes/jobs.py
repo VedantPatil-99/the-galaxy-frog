@@ -22,6 +22,7 @@ from galaxy_frog.db.ingestion_repository import (
     PostgresIngestionRepository,
 )
 from galaxy_frog.domain.ingestion.models import IngestionJob
+from galaxy_frog.domain.providers import ProviderSelection
 
 router = APIRouter(prefix="/v1/jobs", tags=["ingestion"])
 
@@ -98,12 +99,17 @@ async def retry_job(
     job_id: UUID,
     repository: RepositoryDependency,
     dispatcher: DispatcherDependency,
+    provider_selection: ProviderSelection | None = None,
 ) -> IngestionJobResponse:
     """Requeue an eligible retryable failure from its persisted checkpoint."""
 
     await _job_or_404(repository, job_id)
     try:
-        job = await repository.retry(job_id)
+        job = (
+            await repository.retry(job_id, provider_selection=provider_selection)
+            if provider_selection is not None
+            else await repository.retry(job_id)
+        )
     except IngestionRepositoryError as exc:
         _raise_transition_error(exc)
     await dispatch_ingestion_job(dispatcher, job.job_id)

@@ -74,12 +74,25 @@ class _ModelFactory(Protocol):
     ) -> _Model: ...
 
 
-def _load_model_factory() -> _ModelFactory:
+class _WhisperLoader(Protocol):
+    def __call__(
+        self,
+        model: str,
+        *,
+        device: str,
+        compute_type: str,
+        revision: str,
+        num_workers: int,
+        local_files_only: bool,
+    ) -> _Model: ...
+
+
+def _load_model_factory() -> _WhisperLoader:
     """Import the optional native runtime only when a transcription actually starts."""
 
     from faster_whisper import WhisperModel  # pyright: ignore[reportMissingTypeStubs]
 
-    return cast(_ModelFactory, WhisperModel)
+    return cast(_WhisperLoader, WhisperModel)
 
 
 def _default_model_factory(
@@ -97,6 +110,7 @@ def _default_model_factory(
         compute_type=compute_type,
         revision=revision,
         num_workers=num_workers,
+        local_files_only=True,
     )
 
 

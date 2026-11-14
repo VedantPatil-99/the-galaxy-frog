@@ -43,6 +43,9 @@ async def run_search(
     service: SearchTranscript,
     *,
     reason: bool = False,
+    trace_id: UUID | None = None,
+    policy_strict: bool = False,
+    external_permission: bool = False,
 ) -> SearchExecution:
     try:
         if await repository.get_video(video_id) is None:
@@ -53,9 +56,10 @@ async def run_search(
             mode=options.mode,
             limit=options.limit,
             selected_anchor=options.selected_anchor,
-            allow_fallback=options.allow_fallback,
+            allow_fallback=options.allow_fallback and not policy_strict,
             reason=reason,
-            external_permission=options.allow_external_frames,
+            external_permission=external_permission,
+            **({"trace_id": trace_id} if trace_id is not None else {}),
         )
     except RetrievalVideoNotFound as exc:
         raise ApiError(

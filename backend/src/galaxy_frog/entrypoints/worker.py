@@ -36,6 +36,7 @@ from galaxy_frog.db.ingestion_artifacts import (
     PostgresAudioAssetRepository,
     PostgresTranscriptionCheckpointRepository,
 )
+from galaxy_frog.db.ingestion_provider_routing import IngestionProviderRouting
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
@@ -48,7 +49,9 @@ from galaxy_frog.domain.transcription import (
     TranscriptionDevice,
     TranscriptionProvider,
 )
+from galaxy_frog.domain.vision.ports import OCRProvider
 from galaxy_frog.entrypoints.study_worker import run_study_worker
+from galaxy_frog.entrypoints.worker_providers import RoutedOCR, RoutedTranscription
 
 EngineFactory = Callable[[Settings], AsyncEngine]
 logger = logging.getLogger(__name__)
@@ -104,6 +107,7 @@ def build_worker(
     settings: Settings,
     session: AsyncSession,
     worker_id: str,
+    engine: AsyncEngine | None = None,
 ) -> IngestionWorker:
     """Compose one worker session without exposing providers to domain code."""
 
@@ -121,6 +125,8 @@ def build_worker(
         ),
     )
     lease_duration = timedelta(seconds=settings.ingestion_lease_seconds)
+    routing = IngestionProviderRouting(engine, settings, worker_id) if engine else None
+    asr = build_transcription_provider(settings)
     handlers = caption_ingestion_handlers(
         sources=(YouTubeSource(js_runtime=settings.yt_dlp_js_runtime),),
         videos=videos,
@@ -128,9 +134,23 @@ def build_worker(
         audio_acquirer=build_audio_acquirer(settings),
         audio_assets=audio_assets,
         transcription_checkpoints=transcription_checkpoints,
-        transcription_provider=build_transcription_provider(settings),
+        transcription_provider=RoutedTranscription(asr, settings, routing) if routing else asr,
     )
     if settings.vision_ingestion_enabled:
+        ocr: OCRProvider | None = None
+        if routing and settings.llama_cloud_api_key:
+            ocr = RoutedOCR(
+                LlamaParseOCRAdapter(
+                    api_key=settings.llama_cloud_api_key,
+                    base_url=settings.llama_cloud_base_url,
+                    timeout_seconds=settings.ocr_timeout_seconds,
+                    poll_interval_seconds=settings.ocr_poll_interval_seconds,
+                    max_poll_seconds=settings.ocr_max_poll_seconds,
+                    external_permitted=settings.external_frame_processing_enabled
+                    and settings.ocr_external_frames_permitted,
+                ),
+                routing,
+            )
         index = PersistVisionIndex(
             videos=videos,
             vision=SqlAlchemyVisionRepository(session),
@@ -145,17 +165,7 @@ def build_worker(
             )
             if settings.visual_embedding_enabled
             else None,
-            ocr=LlamaParseOCRAdapter(
-                api_key=settings.llama_cloud_api_key,
-                base_url=settings.llama_cloud_base_url,
-                timeout_seconds=settings.ocr_timeout_seconds,
-                poll_interval_seconds=settings.ocr_poll_interval_seconds,
-                max_poll_seconds=settings.ocr_max_poll_seconds,
-                external_permitted=settings.external_frame_processing_enabled
-                and settings.ocr_external_frames_permitted,
-            )
-            if settings.llama_cloud_api_key
-            else None,
+            ocr=ocr,
             ocr_permitted=settings.external_frame_processing_enabled
             and settings.ocr_external_frames_permitted,
         )
@@ -249,9 +259,12 @@ async def run_worker(
                 settings=resolved_settings,
                 session=session,
                 worker_id=worker_id,
+                engine=engine,
             )
             stop = stop_event or asyncio.Event()
-            study = asyncio.create_task(run_study_worker(resolved_settings, sessions, stop))
+            study = asyncio.create_task(
+                run_study_worker(resolved_settings, sessions, stop, engine=engine)
+            )
             try:
                 processed_jobs = await worker.run_until_stopped(stop)
             finally:

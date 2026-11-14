@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     embedding_model: str = "bge-m3"
     embedding_model_revision: str = "ollama"
     generation_model: str = "qwen3:4b"
+    generation_model_revision: str | None = None
     ingestion_worker_id: str | None = None
     ingestion_lease_seconds: int = Field(default=120, ge=30)
     ingestion_poll_seconds: float = Field(default=1.0, gt=0)

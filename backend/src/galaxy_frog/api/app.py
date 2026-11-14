@@ -24,6 +24,7 @@ from galaxy_frog.api.routes.providers import router as providers_router
 from galaxy_frog.api.routes.retrieval import router as retrieval_router
 from galaxy_frog.api.routes.study import router as study_router
 from galaxy_frog.api.routes.videos import router as videos_router
+from galaxy_frog.application.provider_registry import local_ollama_origin
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
 
@@ -68,25 +69,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         else None
     )
     application.state.visual_reasoning_provider = None
-    if resolved_settings.vlm_provider == "ollama":
-        application.state.visual_reasoning_provider = OllamaQwenVisualReasoner(
+    visual_reasoners: dict[str, OllamaQwenVisualReasoner | GeminiVisualReasoner] = {}
+    if resolved_settings.vlm_provider != "disabled" and local_ollama_origin(
+        resolved_settings.ollama_base_url
+    ):
+        visual_reasoners["ollama-vision"] = OllamaQwenVisualReasoner(
             base_url=resolved_settings.ollama_base_url,
             revision=resolved_settings.qwen_visual_revision,
             timeout_seconds=resolved_settings.vlm_timeout_seconds,
         )
-    elif (
-        resolved_settings.vlm_provider == "gemini"
+    if (
+        resolved_settings.vlm_provider != "disabled"
         and resolved_settings.gemini_api_key
         and resolved_settings.gemini_visual_model
         and resolved_settings.gemini_visual_revision
     ):
-        application.state.visual_reasoning_provider = GeminiVisualReasoner(
+        visual_reasoners["gemini-vision"] = GeminiVisualReasoner(
             model=resolved_settings.gemini_visual_model,
             revision=resolved_settings.gemini_visual_revision,
             api_key=resolved_settings.gemini_api_key.get_secret_value(),
             external_enabled=resolved_settings.external_frame_processing_enabled,
             timeout_seconds=resolved_settings.vlm_timeout_seconds,
         )
+    application.state.visual_reasoning_candidates = visual_reasoners
+    application.state.visual_reasoning_provider = (
+        visual_reasoners.get(
+            "ollama-vision" if resolved_settings.vlm_provider == "ollama" else "gemini-vision"
+        )
+        if resolved_settings.vlm_provider != "disabled"
+        else None
+    )
     application.state.video_sources = (
         YouTubeSource(js_runtime=resolved_settings.yt_dlp_js_runtime),
     )

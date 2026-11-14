@@ -30,6 +30,32 @@ class PricingSource(BaseModel):
         return datetime.now(UTC).date() - self.verified_at > timedelta(days=30)
 
 
+async def probe_ollama_models(base_url: str) -> dict[str, str]:
+    import httpx
+
+    if not local_ollama_origin(base_url):
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=2, trust_env=False) as client:
+            async with client.stream("GET", f"{base_url.rstrip('/')}/api/tags") as response:
+                response.raise_for_status()
+                payload = bytearray()
+                async for chunk in response.aiter_bytes():
+                    payload.extend(chunk)
+                    if len(payload) > 262_144:
+                        return {}
+                import json
+
+                response_data = json.loads(payload)
+            return {
+                str(item["model"]): str(item["digest"])
+                for item in response_data["models"]
+                if not item.get("remote_model") and not item.get("remote_host")
+            }
+    except httpx.HTTPError, KeyError, TypeError, ValueError, AttributeError:
+        return {}
+
+
 class ProviderEntry(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -58,7 +84,8 @@ class ProviderEntry(BaseModel):
 def local_ollama_origin(value: str) -> bool:
     parsed = urlsplit(value)
     return (
-        parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        parsed.scheme == "http"
+        and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
         and parsed.username is None
         and parsed.password is None
     )
@@ -158,6 +185,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
                 location=Location.LOCAL,
                 provider="ollama",
                 model=settings.generation_model,
+                revision=settings.generation_model_revision,
                 readiness=local,
                 hardware="Provisioned Ollama model",
                 privacy="Selected text stays in local Ollama.",
@@ -186,7 +214,8 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             revision=settings.gemini_visual_revision,
             readiness=(
                 "configured"
-                if settings.external_frame_processing_enabled
+                if settings.vlm_provider != "disabled"
+                and settings.external_frame_processing_enabled
                 and secret_present(settings.gemini_api_key)
                 and settings.gemini_visual_model
                 and settings.gemini_visual_revision
@@ -345,4 +374,13 @@ def profile_validation_error(
                 return "The provider is outside the selected mode."
             if policy.evaluation and entry.location is not Location.LOCAL:
                 return "Evaluation requires local providers."
+    if policy.evaluation:
+        selected = {item for chain in policy.candidates.values() for item in chain}
+        if set(policy.pinned_revisions or {}) != selected or set(
+            policy.embedding_collections or {}
+        ) != {
+            Capability.TEXT_EMBEDDING,
+            Capability.VISUAL_EMBEDDING,
+        }:
+            return "Evaluation requires model revisions and both embedding collection IDs."
     return None

@@ -202,6 +202,23 @@
         "title": "ChapterRequest",
         "type": "object"
       },
+      "ConsentScope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ExternalData"
+          },
+          "provider_id": {
+            "$ref": "#/components/schemas/ProviderId"
+          }
+        },
+        "required": [
+          "provider_id",
+          "data"
+        ],
+        "title": "ConsentScope",
+        "type": "object"
+      },
       "EmbeddingCollectionSpec": {
         "description": "Identity of one non-interchangeable embedding space.",
         "properties": {
@@ -476,6 +493,16 @@
             "title": "Allow External Frames",
             "type": "boolean"
           },
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "timestamp_ms": {
             "minimum": 0.0,
             "title": "Timestamp Ms",
@@ -557,6 +584,16 @@
         "title": "ExplainMomentResponse",
         "type": "object"
       },
+      "ExternalData": {
+        "enum": [
+          "audio",
+          "frames",
+          "frames_and_text",
+          "paid_text"
+        ],
+        "title": "ExternalData",
+        "type": "string"
+      },
       "FlashcardItem": {
         "properties": {
           "answer": {
@@ -627,6 +664,16 @@
       "ImportVideoRequest": {
         "description": "A caller-supplied video locator accepted by the source registry.",
         "properties": {
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_url": {
             "format": "uri",
             "maxLength": 2083,
@@ -1347,6 +1394,173 @@
         "pattern": "^[a-z][a-z0-9_-]{0,39}$",
         "type": "string"
       },
+      "ProfileRef": {
+        "additionalProperties": false,
+        "properties": {
+          "profile_id": {
+            "$ref": "#/components/schemas/ProfileId"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "profile_id",
+          "version"
+        ],
+        "title": "ProfileRef",
+        "type": "object"
+      },
+      "ProviderCode": {
+        "enum": [
+          "PROVIDER_NOT_SELECTED",
+          "PROVIDER_SETUP_REQUIRED",
+          "PROVIDER_UNAVAILABLE",
+          "PROVIDER_INCOMPATIBLE",
+          "PROVIDER_CONSENT_REQUIRED",
+          "PROVIDER_CIRCUIT_OPEN",
+          "PROVIDER_BUSY",
+          "QUOTA_EXHAUSTED",
+          "RATE_LIMITED",
+          "PROVIDER_AUTH_FAILED",
+          "PROVIDER_TIMEOUT",
+          "PROVIDER_INVALID_OUTPUT",
+          "PROVIDER_INPUT_LIMIT",
+          "PROVIDER_SAFETY_BLOCKED",
+          "PROVIDER_OUTCOME_UNKNOWN"
+        ],
+        "title": "ProviderCode",
+        "type": "string"
+      },
+      "ProviderConsent": {
+        "additionalProperties": false,
+        "properties": {
+          "consent_id": {
+            "format": "uuid",
+            "title": "Consent Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dispatch_count": {
+            "title": "Dispatch Count",
+            "type": "integer"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/ProviderOperation"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileRef"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentScope"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "source": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "operation",
+          "source",
+          "scopes",
+          "consent_id",
+          "created_at",
+          "revoked_at",
+          "run_id",
+          "dispatch_count"
+        ],
+        "title": "ProviderConsent",
+        "type": "object"
+      },
+      "ProviderConsentOptions": {
+        "properties": {
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentScope"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scopes"
+        ],
+        "title": "ProviderConsentOptions",
+        "type": "object"
+      },
+      "ProviderConsentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/ProviderOperation"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileRef"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentScope"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "source": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "operation",
+          "source",
+          "scopes"
+        ],
+        "title": "ProviderConsentRequest",
+        "type": "object"
+      },
       "ProviderEntry": {
         "properties": {
           "capability": {
@@ -1534,6 +1748,48 @@
         "title": "ProviderEntry",
         "type": "object"
       },
+      "ProviderHealth": {
+        "properties": {
+          "blocked_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked Until"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed At"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "state"
+        ],
+        "title": "ProviderHealth",
+        "type": "object"
+      },
       "ProviderId": {
         "maxLength": 240,
         "minLength": 1,
@@ -1546,6 +1802,17 @@
           "manual"
         ],
         "title": "ProviderMode",
+        "type": "string"
+      },
+      "ProviderOperation": {
+        "enum": [
+          "import",
+          "search",
+          "question",
+          "moment",
+          "study"
+        ],
+        "title": "ProviderOperation",
         "type": "string"
       },
       "ProviderProfile": {
@@ -1564,6 +1831,24 @@
             "title": "Candidates",
             "type": "object"
           },
+          "embedding_collections": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Capability"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Collections"
+          },
           "evaluation": {
             "default": false,
             "title": "Evaluation",
@@ -1571,6 +1856,23 @@
           },
           "mode": {
             "$ref": "#/components/schemas/ProviderMode"
+          },
+          "pinned_revisions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "$ref": "#/components/schemas/ProviderId"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned Revisions"
           }
         },
         "required": [
@@ -1632,6 +1934,206 @@
           "policy"
         ],
         "title": "ProviderProfileVersion",
+        "type": "object"
+      },
+      "ProviderRunAttempt": {
+        "properties": {
+          "actual_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Cost"
+          },
+          "capability": {
+            "$ref": "#/components/schemas/Capability"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "input_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Duration Ms"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "pricing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "processing_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Ms"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileRef"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requested_candidates": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Requested Candidates",
+            "type": "array"
+          },
+          "requested_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retry_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry At"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          }
+        },
+        "required": [
+          "provider_id",
+          "provider",
+          "model",
+          "revision",
+          "device",
+          "status",
+          "profile",
+          "capability",
+          "created_at"
+        ],
+        "title": "ProviderRunAttempt",
+        "type": "object"
+      },
+      "ProviderSelection": {
+        "additionalProperties": false,
+        "description": "Profile and optional one-operation grant supplied by the client.",
+        "properties": {
+          "consent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Id"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileRef"
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "title": "ProviderSelection",
         "type": "object"
       },
       "QueryAnalysis": {
@@ -1707,6 +2209,16 @@
           "mode": {
             "$ref": "#/components/schemas/RetrievalMode",
             "default": "reranked"
+          },
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "question": {
             "maxLength": 2000,
@@ -2080,6 +2592,16 @@
           "mode": {
             "$ref": "#/components/schemas/RetrievalMode",
             "default": "reranked"
+          },
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "query": {
             "maxLength": 2000,
@@ -3320,7 +3842,8 @@
               "int8",
               "int8_float16",
               "float16",
-              "float32"
+              "float32",
+              "unknown"
             ],
             "title": "Compute Type",
             "type": "string"
@@ -3328,7 +3851,8 @@
           "device": {
             "enum": [
               "cpu",
-              "cuda"
+              "cuda",
+              "cloud"
             ],
             "title": "Device",
             "type": "string"
@@ -4237,6 +4761,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ProviderSelection"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Provider Selection"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -4292,6 +4833,171 @@
         "summary": "Retry Job",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/v1/provider-consents": {
+      "post": {
+        "operationId": "grant_provider_consent_v1_provider_consents_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderConsentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConsent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Grant Provider Consent",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/v1/provider-consents/options": {
+      "get": {
+        "operationId": "provider_consent_options_v1_provider_consents_options_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,39}$",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "operation",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProviderOperation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConsentOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Consent Options",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/v1/provider-consents/{consent_id}": {
+      "delete": {
+        "operationId": "revoke_provider_consent_v1_provider_consents__consent_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "consent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConsent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Provider Consent",
+        "tags": [
+          "providers"
         ]
       }
     },
@@ -4403,6 +5109,71 @@
         ]
       }
     },
+    "/v1/provider-runs/{operation}/{run_id}": {
+      "get": {
+        "operationId": "read_provider_run_v1_provider_runs__operation___run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProviderOperation"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderRunAttempt"
+                  },
+                  "title": "Response Read Provider Run V1 Provider Runs  Operation   Run Id  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read Provider Run",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
     "/v1/providers/capabilities": {
       "get": {
         "operationId": "capabilities_v1_providers_capabilities_get",
@@ -4423,6 +5194,41 @@
           }
         },
         "summary": "Capabilities",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/v1/providers/health": {
+      "get": {
+        "operationId": "provider_health_v1_providers_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderHealth"
+                  },
+                  "title": "Response Provider Health V1 Providers Health Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Provider Health",
         "tags": [
           "providers"
         ]

@@ -5,17 +5,22 @@ import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from time import perf_counter
 
 import httpx
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.adapters.generation.study_ollama import OllamaStudyGenerator
+from galaxy_frog.application.provider_policy import ProviderAttempt, ProviderCode
+from galaxy_frog.application.provider_registry import provider_catalog
 from galaxy_frog.application.study_generation import StudyGenerator, generate_study
 from galaxy_frog.config import Settings
+from galaxy_frog.db.provider_runtime import PostgresProviderRuntime
 from galaxy_frog.db.study_evidence import StudyEvidenceReader
 from galaxy_frog.db.study_repository import ClaimedStudyRun, StudyLeaseLost, StudyRepository
+from galaxy_frog.domain.providers import Capability, ProfileRef, ProviderOperation
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.study import StudyError, StudyFailure, StudyKind
 
@@ -112,7 +117,11 @@ async def _record_failure(
 
 
 async def run_study_worker(
-    settings: Settings, sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event
+    settings: Settings,
+    sessions: async_sessionmaker[AsyncSession],
+    stop: asyncio.Event,
+    *,
+    engine: AsyncEngine | None = None,
 ) -> None:
     spec = EmbeddingCollectionSpec(
         provider="ollama",
@@ -125,7 +134,39 @@ async def run_study_worker(
         provider = OllamaStudyGenerator(settings.ollama_base_url, settings.generation_model, client)
 
         async def execute(claim: ClaimedStudyRun) -> None:
-            await execute_study_run(claim, sessions, spec, provider)
+            if engine is None:
+                await execute_study_run(claim, sessions, spec, provider)
+                return
+            entry = next(
+                item for item in provider_catalog(settings) if item.capability is Capability.STUDY
+            )
+            runtime = PostgresProviderRuntime(
+                sessions,
+                engine=engine,
+                profile=ProfileRef(profile_id="local", version=1),
+                operation=ProviderOperation.STUDY,
+                run_id=claim.run.run_id,
+                source=str(claim.run.video_id),
+            )
+            started = perf_counter()
+            status = "failed"
+            try:
+                await execute_study_run(claim, sessions, spec, provider)
+                status = "succeeded"
+            finally:
+                await runtime.record(
+                    Capability.STUDY,
+                    ProviderAttempt(
+                        provider_id=entry.provider_id,
+                        provider=entry.provider,
+                        model=entry.model,
+                        revision=entry.revision,
+                        device=entry.device,
+                        status=status,
+                        reason=None if status == "succeeded" else ProviderCode.UNAVAILABLE,
+                        processing_ms=round((perf_counter() - started) * 1000),
+                    ),
+                )
 
         while not stop.is_set():
             try:

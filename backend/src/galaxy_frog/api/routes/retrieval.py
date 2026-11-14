@@ -1,18 +1,29 @@
 """Retrieval-only search and video-scoped durable trace inspection."""
 
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from typing import Annotated, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.exc import SQLAlchemyError
 
-from galaxy_frog.api.dependencies import build_visual_reasoning, get_vision_repository
+from galaxy_frog.api.dependencies import (
+    build_retrieval_service,
+    build_visual_reasoning,
+    get_video_repository,
+    get_vision_repository,
+)
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.moment_schemas import (
     ExplainMomentRequest,
     ExplainMomentResponse,
     moment_response,
+)
+from galaxy_frog.api.provider_execution import (
+    RoutedTextGeneration,
+    api_provider_run,
+    provider_api_error,
 )
 from galaxy_frog.api.retrieval import (
     SearchDependency,
@@ -29,6 +40,7 @@ from galaxy_frog.api.retrieval_schemas import (
     trace_response,
 )
 from galaxy_frog.api.schemas import ErrorResponse
+from galaxy_frog.application.provider_policy import ProviderFailure
 from galaxy_frog.application.retrieval.explain_moment import ExplainMoment, MomentTextProvider
 from galaxy_frog.application.retrieval.moment import InvalidMomentTimestamp, RetrieveMomentEvidence
 from galaxy_frog.application.retrieval.temporal import RetrievalVideoNotFound
@@ -36,6 +48,7 @@ from galaxy_frog.db.models import OCRBlockRow, VideoFrameRow
 from galaxy_frog.db.moment_evidence import SqlAlchemyMomentEvidenceReader
 from galaxy_frog.db.retrieval_traces import PostgresRetrievalTraces
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
+from galaxy_frog.domain.providers import ProviderOperation
 from galaxy_frog.domain.retrieval.traces import TraceLimitExceeded
 
 router = APIRouter(prefix="/v1/videos", tags=["retrieval"])
@@ -66,11 +79,50 @@ async def explain_video_moment(
     video_id: UUID,
     body: ExplainMomentRequest,
     service: Annotated[ExplainMoment, Depends(get_moment_service)],
+    request: Request,
 ) -> ExplainMomentResponse:
+    trace_id = uuid4()
     try:
-        result = await service.execute(
-            video_id, body.timestamp_ms, external_permission=body.allow_external_frames
-        )
+        if request.app.state.database_engine is not None:
+            async with asynccontextmanager(get_video_repository)(request) as repository:
+                run = await api_provider_run(
+                    request,
+                    repository,
+                    operation=ProviderOperation.MOMENT,
+                    selection=body.provider_selection,
+                    video_id=video_id,
+                    run_id=trace_id,
+                )
+                assert run is not None
+                local = cast(
+                    Callable[[], MomentTextProvider], request.app.state.generation_provider_factory
+                )()
+                routed = ExplainMoment(
+                    evidence=RetrieveMomentEvidence(
+                        SqlAlchemyMomentEvidenceReader(repository.session)
+                    ),
+                    text=RoutedTextGeneration(run, local),
+                    visual=build_visual_reasoning(request, repository.session, run),
+                    traces=PostgresRetrievalTraces(repository.session),
+                )
+                return moment_response(
+                    await routed.execute(
+                        video_id,
+                        body.timestamp_ms,
+                        trace_id=trace_id,
+                        allow_fallback=not run.policy.evaluation,
+                    )
+                )
+        if body.provider_selection is not None:
+            raise ApiError(
+                status_code=503,
+                code="DATABASE_UNAVAILABLE",
+                message="Provider policy requires PostgreSQL.",
+                retryable=True,
+            )
+        result = await service.execute(video_id, body.timestamp_ms, external_permission=False)
+    except ProviderFailure as exc:
+        raise provider_api_error(exc, trace_id) from exc
     except RetrievalVideoNotFound as exc:
         raise ApiError(
             status_code=404,
@@ -114,8 +166,26 @@ async def search_video(
     repository: VideoRepositoryDependency,
     service: SearchDependency,
     vision_repository: VisionRepositoryDependency,
+    request: Request,
 ) -> SearchResponse:
-    execution = await run_search(video_id, body.query, body, repository, service)
+    trace_id = uuid4()
+    run = await api_provider_run(
+        request,
+        repository,
+        operation=ProviderOperation.SEARCH,
+        selection=body.provider_selection,
+        video_id=video_id,
+        run_id=trace_id,
+    )
+    execution = await run_search(
+        video_id,
+        body.query,
+        body,
+        repository,
+        build_retrieval_service(request, repository, run) if run else service,
+        trace_id=trace_id if run else None,
+        policy_strict=bool(run and run.policy.evaluation),
+    )
     if execution.visual is not None:
         return search_response(execution, body.mode)
     frames = await vision_repository.get_frames(video_id, only_kept=True)
@@ -134,13 +204,18 @@ async def search_video(
             frame_blocks = ocr_by_frame.get(frame.id, [])
             query_lower = body.query.lower()
             text_matches = any(query_lower in b.text.lower() for b in frame_blocks)
-            time_matches = (
-                window.overlaps(frame.start_ms, frame.end_ms)
-                if window is not None
-                else any(
+            if window is not None:
+                time_matches = (
+                    frame.capture_ms is not None
+                    and frame.capture_ms >= window.start_ms
+                    and (window.end_ms is None or frame.capture_ms < window.end_ms)
+                )
+                if not time_matches:
+                    continue
+            else:
+                time_matches = any(
                     max(frame.start_ms, g.start_ms) < min(frame.end_ms, g.end_ms) for g in groups
                 )
-            )
             if time_matches or text_matches:
                 matching_frames.append(frame)
 
@@ -155,6 +230,7 @@ async def search_video(
                     sequence=frame.sequence,
                     start_ms=frame.start_ms,
                     end_ms=frame.end_ms,
+                    capture_ms=frame.capture_ms,
                     image_url=f"/v1/videos/{video_id}/frames/{frame.sequence}/image",
                     ocr_text=combined_text,
                     confidence=avg_confidence,

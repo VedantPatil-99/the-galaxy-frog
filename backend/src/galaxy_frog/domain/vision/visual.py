@@ -151,6 +151,10 @@ class VisualFailureCode(StrEnum):
     PRIVACY_DENIED = "external_processing_not_permitted"
     TIMEOUT = "visual_timeout"
     BUSY = "visual_busy"
+    RATE_LIMITED = "visual_rate_limited"
+    AUTH_FAILED = "visual_auth_failed"
+    SAFETY_BLOCKED = "visual_safety_blocked"
+    OUTCOME_UNKNOWN = "visual_outcome_unknown"
 
 
 class VisualProviderError(RuntimeError):

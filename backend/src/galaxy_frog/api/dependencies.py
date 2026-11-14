@@ -7,6 +7,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.adapters.vision.reasoning import LocalReasoningFrameVerifier
+from galaxy_frog.api.provider_execution import ApiProviderRun
 from galaxy_frog.application.ingestion.dispatch import DispatchSignatureVerifier, JobDispatcher
 from galaxy_frog.application.retrieval.reasoning import AdaptiveVisualReasoning
 from galaxy_frog.application.retrieval.search import SearchTranscript
@@ -24,6 +25,7 @@ from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.db.visual_search import PgVectorVisualSearch
+from galaxy_frog.domain.providers import Capability
 from galaxy_frog.domain.retrieval.pipeline import RetrievalConfig
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.retrieval.reranking import TextReranker
@@ -32,7 +34,18 @@ from galaxy_frog.domain.vision.visual_ports import VisualEmbeddingProvider, Visu
 type DatabaseProbe = Callable[[], Awaitable[None]]
 
 
-def build_visual_reasoning(request: Request, session: AsyncSession) -> AdaptiveVisualReasoning:
+def build_visual_reasoning(
+    request: Request, session: AsyncSession, run: ApiProviderRun | None = None
+) -> AdaptiveVisualReasoning:
+    candidates = cast(
+        dict[str, VisualReasoningProvider], request.app.state.visual_reasoning_candidates
+    )
+
+    async def check_consent(provider_id: str) -> None:
+        assert run is not None
+        entry = next(entry for entry in run.catalog if entry.provider_id == provider_id)
+        await run.runtime.verify_consent(entry)
+
     return AdaptiveVisualReasoning(
         provider=cast(
             VisualReasoningProvider | None,
@@ -43,11 +56,14 @@ def build_visual_reasoning(request: Request, session: AsyncSession) -> AdaptiveV
         external_enabled=cast(
             Settings, request.app.state.settings
         ).external_frame_processing_enabled,
+        routing=run.router(Capability.VISION) if run else None,
+        candidates=candidates,
+        check_consent=check_consent if run else None,
     )
 
 
 def build_retrieval_service(
-    request: Request, repository: SqlAlchemyVideoRepository
+    request: Request, repository: SqlAlchemyVideoRepository, run: ApiProviderRun | None = None
 ) -> SearchTranscript:
     provider = cast(
         Callable[[], TextEmbeddingProvider], request.app.state.embedding_provider_factory
@@ -55,7 +71,10 @@ def build_retrieval_service(
     retrieval = RetrieveTranscript(
         lexical=PostgresTranscriptLexicalSearch(repository.session),
         dense=PgVectorTranscriptSearch(
-            session=repository.session, videos=repository, provider=provider
+            session=repository.session,
+            videos=repository,
+            provider=provider,
+            require_existing=run is not None,
         ),
         reranker=cast(TextReranker, request.app.state.reranker),
         config=RetrievalConfig(
@@ -70,7 +89,7 @@ def build_retrieval_service(
         retrieval=RetrieveTemporalEvidence(videos=repository, retrieval=retrieval),
         traces=PostgresRetrievalTraces(repository.session),
         embedding_spec=provider.spec,
-        reasoning=build_visual_reasoning(request, repository.session),
+        reasoning=build_visual_reasoning(request, repository.session, run),
         visual=AdaptiveVisualRetrieval(
             ocr_lexical=PostgresOCRLexicalSearch(repository.session),
             ocr_dense=PgVectorOCRSearch(session=repository.session, provider=provider),

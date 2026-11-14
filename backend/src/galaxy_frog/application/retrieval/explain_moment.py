@@ -167,7 +167,13 @@ class ExplainMoment:
         self._traces = traces
 
     async def execute(
-        self, video_id: UUID, timestamp_ms: int, *, external_permission: bool = False
+        self,
+        video_id: UUID,
+        timestamp_ms: int,
+        *,
+        external_permission: bool = False,
+        trace_id: UUID | None = None,
+        allow_fallback: bool = True,
     ) -> MomentExplanation:
         evidence = await self._evidence.execute(video_id, timestamp_ms)
         context = _context(evidence)
@@ -209,6 +215,7 @@ class ExplainMoment:
                     ).hexdigest(),
                     decision_reason="moment_requires_image_understanding",
                     external_permission=external_permission,
+                    allow_fallback=allow_fallback,
                 )
                 warnings.extend(reasoning.warnings)
                 visual_result = reasoning.result
@@ -243,6 +250,8 @@ class ExplainMoment:
                 draft = await self._text.generate_moment(task, text_context)
                 citations = _validate_citations(draft, context)
             except GenerationProviderError:
+                if not allow_fallback:
+                    raise
                 warnings.append(
                     RetrievalWarning(
                         "moment_text_unavailable",
@@ -267,7 +276,7 @@ class ExplainMoment:
         related = tuple(
             frame for frame in (evidence.frames.previous, evidence.frames.next) if frame
         )
-        trace_id = uuid4()
+        trace_id = trace_id or uuid4()
         payload = cast(
             dict[str, TraceValue],
             json.loads(

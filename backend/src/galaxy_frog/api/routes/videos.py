@@ -5,7 +5,7 @@ from collections.abc import Callable
 from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from anyio import Path as AnyPath
 from fastapi import APIRouter, Depends, Request
@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from galaxy_frog.adapters.generation.ollama import GenerationProviderError
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.api.dependencies import (
+    build_retrieval_service,
     get_ingestion_repository,
     get_job_dispatcher,
     get_video_repository,
@@ -22,6 +23,11 @@ from galaxy_frog.api.dependencies import (
 from galaxy_frog.api.dispatching import dispatch_ingestion_job
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.job_schemas import ingestion_job_response
+from galaxy_frog.api.provider_execution import (
+    RoutedTextGeneration,
+    api_provider_run,
+    provider_api_error,
+)
 from galaxy_frog.api.retrieval import SearchDependency, run_search
 from galaxy_frog.api.retrieval_schemas import search_response, visual_frame_response
 from galaxy_frog.api.schemas import ErrorResponse
@@ -39,16 +45,21 @@ from galaxy_frog.api.video_schemas import (
 )
 from galaxy_frog.application.ingestion.create_job import CreateIngestionJob
 from galaxy_frog.application.ingestion.dispatch import JobDispatcher
+from galaxy_frog.application.provider_policy import ProviderFailure
 from galaxy_frog.application.questions.answer_question import (
     AnswerQuestion,
     CitationValidationError,
 )
 from galaxy_frog.application.retrieval.temporal import RetrievalStatus
-from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
+from galaxy_frog.db.ingestion_repository import (
+    IngestionRepositoryError,
+    PostgresIngestionRepository,
+)
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.domain.generation.ports import GenerationProvider
+from galaxy_frog.domain.providers import ProviderOperation
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.videos.records import TranscriptRecord, VideoRecord
@@ -191,9 +202,16 @@ async def import_video(
     )
     service = CreateIngestionJob(sources=sources, repository=repository)
     try:
-        result = await service.execute(str(body.source_url))
+        result = await service.execute(str(body.source_url), body.provider_selection)
     except VideoSourceError as exc:
         raise _source_error(exc) from exc
+    except IngestionRepositoryError as exc:
+        raise ApiError(
+            status_code=422,
+            code="INGESTION_PROVIDER_SELECTION_INVALID",
+            message="The provider profile or consent grant could not be used for this import.",
+            retryable=False,
+        ) from exc
     await dispatch_ingestion_job(dispatcher, result.job.job_id)
     return ImportVideoResponse(
         job=ingestion_job_response(result.job),
@@ -313,8 +331,24 @@ async def ask_question(
 ) -> AnswerResponse:
     """Retrieve transcript evidence and return a deterministically validated answer."""
 
+    trace_id = uuid4()
+    run = await api_provider_run(
+        request,
+        repository,
+        operation=ProviderOperation.QUESTION,
+        selection=body.provider_selection,
+        video_id=video_id,
+        run_id=trace_id,
+    )
     execution = await run_search(
-        video_id, body.question, body, repository, retrieval_service, reason=True
+        video_id,
+        body.question,
+        body,
+        repository,
+        build_retrieval_service(request, repository, run) if run else retrieval_service,
+        reason=True,
+        trace_id=trace_id if run else None,
+        policy_strict=bool(run and run.policy.evaluation),
     )
     metadata = search_response(execution, body.mode)
     if execution.result.status != RetrievalStatus.RESOLVED:
@@ -369,9 +403,8 @@ async def ask_question(
     provider_factory = cast(
         Callable[[], GenerationProvider], request.app.state.generation_provider_factory
     )
-    service = AnswerQuestion(
-        provider=provider_factory(),
-    )
+    local = provider_factory()
+    service = AnswerQuestion(provider=RoutedTextGeneration(run, local) if run else local)
     # Expansion keeps whole original units. Original citation validation remains
     # authoritative; no synthetic merged unit IDs enter generation.
     evidence = tuple(
@@ -411,6 +444,8 @@ async def ask_question(
                 raise CitationValidationError(
                     "Citation falls outside the selected time constraint."
                 )
+    except ProviderFailure as exc:
+        raise provider_api_error(exc, execution.trace.trace_id) from exc
     except GenerationProviderError as exc:
         raise ApiError(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,

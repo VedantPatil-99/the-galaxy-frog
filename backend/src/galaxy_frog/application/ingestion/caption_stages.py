@@ -15,6 +15,7 @@ from galaxy_frog.application.ingestion.runner import (
     StageContext,
     StageResult,
 )
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
 from galaxy_frog.application.videos.import_video import ImportVideo, select_caption_track
 from galaxy_frog.application.videos.ports import VideoRepository
 from galaxy_frog.domain.ingestion.models import (
@@ -330,6 +331,12 @@ class TranscriptionStage(_TranscriptStage):
             )
         except TranscriptionError as exc:
             self._raise_transcription_error(exc)
+        except ProviderFailure as exc:
+            raise IngestionStageError(
+                exc.code,
+                "The selected transcription route could not complete. Check provider health and consent.",
+                retryable=exc.code is not ProviderCode.SAFETY_BLOCKED,
+            ) from exc
         checkpoint = await checkpoints.save(asset.asset_id, result)
         return self._result(checkpoint, reused=False)
 

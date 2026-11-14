@@ -141,6 +141,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/provider-consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant Provider Consent */
+        post: operations["grant_provider_consent_v1_provider_consents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-consents/{consent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Provider Consent */
+        delete: operations["revoke_provider_consent_v1_provider_consents__consent_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-consents/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provider Consent Options */
+        get: operations["provider_consent_options_v1_provider_consents_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/provider-profiles": {
         parameters: {
             query?: never;
@@ -175,6 +226,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/provider-runs/{operation}/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Provider Run */
+        get: operations["read_provider_run_v1_provider_runs__operation___run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/providers/capabilities": {
         parameters: {
             query?: never;
@@ -184,6 +252,23 @@ export interface paths {
         };
         /** Capabilities */
         get: operations["capabilities_v1_providers_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/providers/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provider Health */
+        get: operations["provider_health_v1_providers_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -508,6 +593,11 @@ export interface components {
              */
             request_id: string;
         };
+        /** ConsentScope */
+        ConsentScope: {
+            data: components["schemas"]["ExternalData"];
+            provider_id: components["schemas"]["ProviderId"];
+        };
         /**
          * EmbeddingCollectionSpec
          * @description Identity of one non-interchangeable embedding space.
@@ -636,6 +726,7 @@ export interface components {
              * @default false
              */
             allow_external_frames: boolean;
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /** Timestamp Ms */
             timestamp_ms: number;
         };
@@ -664,6 +755,11 @@ export interface components {
             warnings: components["schemas"]["RetrievalWarning"][];
             window: components["schemas"]["ExaminedWindow"];
         };
+        /**
+         * ExternalData
+         * @enum {string}
+         */
+        ExternalData: "audio" | "frames" | "frames_and_text" | "paid_text";
         /** FlashcardItem */
         FlashcardItem: {
             /** Answer */
@@ -706,6 +802,7 @@ export interface components {
          * @description A caller-supplied video locator accepted by the source registry.
          */
         ImportVideoRequest: {
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /**
              * Source Url
              * Format: uri
@@ -983,6 +1080,56 @@ export interface components {
             verified_at: string;
         };
         ProfileId: string;
+        /** ProfileRef */
+        ProfileRef: {
+            profile_id: components["schemas"]["ProfileId"];
+            /** Version */
+            version: number;
+        };
+        /**
+         * ProviderCode
+         * @enum {string}
+         */
+        ProviderCode: "PROVIDER_NOT_SELECTED" | "PROVIDER_SETUP_REQUIRED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_INCOMPATIBLE" | "PROVIDER_CONSENT_REQUIRED" | "PROVIDER_CIRCUIT_OPEN" | "PROVIDER_BUSY" | "QUOTA_EXHAUSTED" | "RATE_LIMITED" | "PROVIDER_AUTH_FAILED" | "PROVIDER_TIMEOUT" | "PROVIDER_INVALID_OUTPUT" | "PROVIDER_INPUT_LIMIT" | "PROVIDER_SAFETY_BLOCKED" | "PROVIDER_OUTCOME_UNKNOWN";
+        /** ProviderConsent */
+        ProviderConsent: {
+            /**
+             * Consent Id
+             * Format: uuid
+             */
+            consent_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Dispatch Count */
+            dispatch_count: number;
+            operation: components["schemas"]["ProviderOperation"];
+            profile: components["schemas"]["ProfileRef"];
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Run Id */
+            run_id: string | null;
+            /** Scopes */
+            scopes: components["schemas"]["ConsentScope"][];
+            /** Source */
+            source: string;
+        };
+        /** ProviderConsentOptions */
+        ProviderConsentOptions: {
+            /** Scopes */
+            scopes: components["schemas"]["ConsentScope"][];
+        };
+        /** ProviderConsentRequest */
+        ProviderConsentRequest: {
+            operation: components["schemas"]["ProviderOperation"];
+            profile: components["schemas"]["ProfileRef"];
+            /** Scopes */
+            scopes: components["schemas"]["ConsentScope"][];
+            /** Source */
+            source: string;
+        };
         /** ProviderEntry */
         ProviderEntry: {
             capability: components["schemas"]["Capability"];
@@ -1026,24 +1173,48 @@ export interface components {
             /** Timestamp Granularity */
             timestamp_granularity?: string | null;
         };
+        /** ProviderHealth */
+        ProviderHealth: {
+            /** Blocked Until */
+            blocked_until?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
+            /** Provider Id */
+            provider_id: string;
+            /** State */
+            state: string;
+        };
         ProviderId: string;
         /**
          * ProviderMode
          * @enum {string}
          */
         ProviderMode: "automatic_local_only" | "automatic_cloud_permitted" | "manual";
+        /**
+         * ProviderOperation
+         * @enum {string}
+         */
+        ProviderOperation: "import" | "search" | "question" | "moment" | "study";
         /** ProviderProfile */
         ProviderProfile: {
             /** Candidates */
             candidates: {
                 [key: string]: components["schemas"]["ProviderId"][];
             };
+            /** Embedding Collections */
+            embedding_collections?: {
+                [key: string]: string;
+            } | null;
             /**
              * Evaluation
              * @default false
              */
             evaluation: boolean;
             mode: components["schemas"]["ProviderMode"];
+            /** Pinned Revisions */
+            pinned_revisions?: {
+                [key: string]: string;
+            } | null;
         };
         /** ProviderProfileEdit */
         ProviderProfileEdit: {
@@ -1059,6 +1230,59 @@ export interface components {
             profile_id: components["schemas"]["ProfileId"];
             /** Version */
             version: number;
+        };
+        /** ProviderRunAttempt */
+        ProviderRunAttempt: {
+            /** Actual Cost */
+            actual_cost?: string | null;
+            capability: components["schemas"]["Capability"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Device */
+            device: string | null;
+            /** Estimated Cost */
+            estimated_cost?: string | null;
+            /** Input Duration Ms */
+            input_duration_ms?: number | null;
+            /** Model */
+            model: string;
+            pricing?: components["schemas"]["PricingSource"] | null;
+            /** Processing Ms */
+            processing_ms?: number | null;
+            profile: components["schemas"]["ProfileRef"];
+            /** Provider */
+            provider: string;
+            /** Provider Id */
+            provider_id: string;
+            reason?: components["schemas"]["ProviderCode"] | null;
+            /**
+             * Requested Candidates
+             * @default []
+             */
+            requested_candidates: string[];
+            requested_mode?: components["schemas"]["ProviderMode"] | null;
+            /** Retry At */
+            retry_at?: string | null;
+            /** Revision */
+            revision: string | null;
+            /** Status */
+            status: string;
+            /** Usage */
+            usage?: {
+                [key: string]: number;
+            } | null;
+        };
+        /**
+         * ProviderSelection
+         * @description Profile and optional one-operation grant supplied by the client.
+         */
+        ProviderSelection: {
+            /** Consent Id */
+            consent_id?: string | null;
+            profile: components["schemas"]["ProfileRef"];
         };
         /** QueryAnalysis */
         QueryAnalysis: {
@@ -1104,6 +1328,7 @@ export interface components {
             limit: number;
             /** @default reranked */
             mode: components["schemas"]["RetrievalMode"];
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /** Question */
             question: string;
             /** Selected Anchor */
@@ -1276,6 +1501,7 @@ export interface components {
             limit: number;
             /** @default reranked */
             mode: components["schemas"]["RetrievalMode"];
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /** Query */
             query: string;
             /** Selected Anchor */
@@ -1676,12 +1902,12 @@ export interface components {
              * Compute Type
              * @enum {string}
              */
-            compute_type: "int8" | "int8_float16" | "float16" | "float32";
+            compute_type: "int8" | "int8_float16" | "float16" | "float32" | "unknown";
             /**
              * Device
              * @enum {string}
              */
-            device: "cpu" | "cuda";
+            device: "cpu" | "cuda" | "cloud";
             /**
              * Fallback Reason
              * @enum {string}
@@ -2184,7 +2410,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProviderSelection"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2229,6 +2459,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    grant_provider_consent_v1_provider_consents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderConsent"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_provider_consent_v1_provider_consents__consent_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderConsent"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    provider_consent_options_v1_provider_consents_options_get: {
+        parameters: {
+            query: {
+                operation: components["schemas"]["ProviderOperation"];
+                profile_id: string;
+                version: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderConsentOptions"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2315,6 +2660,47 @@ export interface operations {
             };
         };
     };
+    read_provider_run_v1_provider_runs__operation___run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation: components["schemas"]["ProviderOperation"];
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderRunAttempt"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     capabilities_v1_providers_capabilities_get: {
         parameters: {
             query?: never;
@@ -2331,6 +2717,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderEntry"][];
+                };
+            };
+        };
+    };
+    provider_health_v1_providers_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderHealth"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

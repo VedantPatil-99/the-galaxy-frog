@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from galaxy_frog.application.retrieval.explain_moment import MomentCitation, MomentExplanation
 from galaxy_frog.application.retrieval.moment import MomentFrame
+from galaxy_frog.domain.providers import ProviderSelection
 from galaxy_frog.domain.retrieval.pipeline import RetrievalWarning
 from galaxy_frog.domain.vision.models import FrameSource
 
@@ -15,6 +16,7 @@ class ExplainMomentRequest(BaseModel):
 
     timestamp_ms: int = Field(ge=0)
     allow_external_frames: bool = False
+    provider_selection: ProviderSelection | None = None
 
 
 class ExaminedWindow(BaseModel):

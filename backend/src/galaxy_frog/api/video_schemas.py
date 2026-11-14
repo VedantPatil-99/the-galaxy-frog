@@ -9,12 +9,14 @@ from pydantic import BaseModel, Field, HttpUrl
 from galaxy_frog.api.job_schemas import IngestionJobResponse
 from galaxy_frog.api.retrieval_schemas import RetrievalOptions, SearchResponse, VisualFrameResponse
 from galaxy_frog.application.retrieval.temporal import RetrievalStatus
+from galaxy_frog.domain.providers import ProviderSelection
 
 
 class ImportVideoRequest(BaseModel):
     """A caller-supplied video locator accepted by the source registry."""
 
     source_url: HttpUrl
+    provider_selection: ProviderSelection | None = None
 
 
 class VideoResponse(BaseModel):
@@ -70,8 +72,8 @@ class TranscriptionRunResponse(BaseModel):
     provider_revision: str
     model: str
     model_revision: str
-    device: Literal["cpu", "cuda"]
-    compute_type: Literal["int8", "int8_float16", "float16", "float32"]
+    device: Literal["cpu", "cuda", "cloud"]
+    compute_type: Literal["int8", "int8_float16", "float16", "float32", "unknown"]
     language_code: str
     language_confidence: float | None = Field(ge=0, le=1)
     language_confidence_method: str | None

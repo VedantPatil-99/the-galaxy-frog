@@ -6,6 +6,7 @@ from hashlib import sha256
 
 from galaxy_frog.application.ingestion.ports import IngestionRepository
 from galaxy_frog.domain.ingestion.models import IngestionJob
+from galaxy_frog.domain.providers import ProviderSelection
 from galaxy_frog.domain.videos.models import SourceReference
 from galaxy_frog.domain.videos.source import VideoSource, VideoSourceError, VideoSourceErrorCode
 
@@ -58,14 +59,21 @@ class CreateIngestionJob:
         self._pipeline_revision = pipeline_revision
         self._preferred_languages = tuple(preferred_languages)
 
-    async def execute(self, locator: str) -> CreateIngestionJobResult:
+    async def execute(
+        self, locator: str, provider_selection: ProviderSelection | None = None
+    ) -> CreateIngestionJobResult:
         reference = self._resolve_source(locator)
         fingerprint = ingestion_input_fingerprint(
             reference,
             pipeline_revision=self._pipeline_revision,
             preferred_languages=self._preferred_languages,
         )
-        job, created = await self._repository.create_or_get(reference, fingerprint)
+        if provider_selection is None:
+            job, created = await self._repository.create_or_get(reference, fingerprint)
+        else:
+            job, created = await self._repository.create_or_get(
+                reference, fingerprint, provider_selection=provider_selection
+            )
         return CreateIngestionJobResult(job=job, created=created)
 
     def _resolve_source(self, locator: str) -> SourceReference:

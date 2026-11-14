@@ -254,7 +254,7 @@ class GeminiVisualReasoner:
         async with self._lock:
             started = perf_counter()
             client = self._client or httpx.AsyncClient(
-                timeout=self._timeout, follow_redirects=False
+                timeout=self._timeout, follow_redirects=False, trust_env=False
             )
             try:
                 async with asyncio.timeout(self._timeout):
@@ -295,6 +295,8 @@ class GeminiVisualReasoner:
                     if payload["modelVersion"] != self.identity.revision:
                         raise ValueError("Gemini returned a different model revision")
                     candidate = payload["candidates"][0]
+                    if candidate["finishReason"] in {"SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"}:
+                        raise VisualProviderError(VisualFailureCode.SAFETY_BLOCKED)
                     if candidate["finishReason"] != "STOP":
                         raise ValueError("Gemini response was incomplete")
                     return _validated(
@@ -305,8 +307,20 @@ class GeminiVisualReasoner:
                     )
             except (httpx.TimeoutException, TimeoutError) as exc:
                 raise VisualProviderError(VisualFailureCode.TIMEOUT) from exc
-            except httpx.HTTPError as exc:
-                raise VisualProviderError(VisualFailureCode.UNAVAILABLE) from exc
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                code = (
+                    VisualFailureCode.AUTH_FAILED
+                    if status in {401, 403}
+                    else VisualFailureCode.RATE_LIMITED
+                    if status == 429
+                    else VisualFailureCode.OUTCOME_UNKNOWN
+                    if status >= 500
+                    else VisualFailureCode.UNAVAILABLE
+                )
+                raise VisualProviderError(code) from exc
+            except httpx.RequestError as exc:
+                raise VisualProviderError(VisualFailureCode.OUTCOME_UNKNOWN) from exc
             except (KeyError, TypeError, ValueError, IndexError, OSError) as exc:
                 raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from exc
             finally:

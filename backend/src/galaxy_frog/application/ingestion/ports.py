@@ -5,6 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from galaxy_frog.domain.ingestion.models import IngestionEvent, IngestionJob, IngestionStage
+from galaxy_frog.domain.providers import ProviderSelection
 from galaxy_frog.domain.videos.models import SourceReference
 
 
@@ -16,6 +17,7 @@ class IngestionRepository(Protocol):
         source: SourceReference,
         input_fingerprint: str,
         *,
+        provider_selection: ProviderSelection | None = None,
         now: datetime | None = None,
     ) -> tuple[IngestionJob, bool]: ...
 

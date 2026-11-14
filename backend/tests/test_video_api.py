@@ -942,6 +942,7 @@ async def test_search_visual_frames_fallback_query_match_and_window(
         sequence=5,
         start_ms=20000,
         end_ms=25000,
+        capture_ms=22000,
         source="periodic",
         dhash=None,
         is_duplicate=False,

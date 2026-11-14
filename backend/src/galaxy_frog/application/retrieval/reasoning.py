@@ -1,13 +1,17 @@
 """Selective reasoning with current privacy checks, verified frames, and durable cache ports."""
 
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
+from functools import partial
 from hashlib import sha256
 from time import perf_counter
 from uuid import UUID
 
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure, ProviderRouting
 from galaxy_frog.application.retrieval.temporal import RetrievalStatus, TemporalRetrievalResult
 from galaxy_frog.application.retrieval.visual import VisualRetrievalResult, frame_lineage
+from galaxy_frog.domain.providers import Capability, ProviderMode
 from galaxy_frog.domain.retrieval.pipeline import RetrievalWarning
 from galaxy_frog.domain.vision.policy import VisualDecision, external_allowed
 from galaxy_frog.domain.vision.reasoning_cache import (
@@ -70,6 +74,9 @@ class AdaptiveVisualReasoning:
         cache: VisualReasoningCache,
         verifier: ReasoningFrameVerifier,
         external_enabled: bool = False,
+        routing: ProviderRouting | None = None,
+        candidates: dict[str, VisualReasoningProvider] | None = None,
+        check_consent: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._provider, self._cache, self._verifier, self._external_enabled = (
             provider,
@@ -77,6 +84,9 @@ class AdaptiveVisualReasoning:
             verifier,
             external_enabled,
         )
+        self._routing = routing
+        self._candidates = candidates or {}
+        self._check_consent = check_consent
 
     @property
     def configuration(self) -> dict[str, object]:
@@ -169,8 +179,104 @@ class AdaptiveVisualReasoning:
         external_permission: bool,
         allow_fallback: bool = True,
     ) -> ReasoningExecution:
+        if self._routing is not None:
+
+            async def attempt(
+                provider_id: str, provider: VisualReasoningProvider
+            ) -> ReasoningExecution:
+                try:
+                    return await self._reason(
+                        provider,
+                        video_id,
+                        question,
+                        frames,
+                        context,
+                        evidence_fingerprint=evidence_fingerprint,
+                        decision_reason=decision_reason,
+                        external_permission=provider.identity.location
+                        is ExecutionLocation.EXTERNAL,
+                        allow_fallback=False,
+                        provider_id=provider_id,
+                    )
+                except VisualProviderError as exc:
+                    code = {
+                        VisualFailureCode.OUTCOME_UNKNOWN: ProviderCode.OUTCOME_UNKNOWN,
+                        VisualFailureCode.SAFETY_BLOCKED: ProviderCode.SAFETY_BLOCKED,
+                        VisualFailureCode.RATE_LIMITED: ProviderCode.RATE_LIMITED,
+                        VisualFailureCode.AUTH_FAILED: ProviderCode.AUTH_FAILED,
+                        VisualFailureCode.INVALID_OUTPUT: ProviderCode.INVALID_OUTPUT,
+                        VisualFailureCode.TIMEOUT: (
+                            ProviderCode.OUTCOME_UNKNOWN
+                            if provider.identity.location is ExecutionLocation.EXTERNAL
+                            else ProviderCode.TIMEOUT
+                        ),
+                    }.get(exc.code, ProviderCode.UNAVAILABLE)
+                    raise ProviderFailure(code) from exc
+
+            try:
+                return await self._routing.execute(
+                    Capability.VISION,
+                    {
+                        provider_id: partial(attempt, provider_id, provider)
+                        for provider_id, provider in self._candidates.items()
+                    },
+                    timeout_seconds=180,
+                    fallback=allow_fallback,
+                )
+            except ProviderFailure as exc:
+                if (
+                    not allow_fallback
+                    or (
+                        self._routing.profile.mode is ProviderMode.MANUAL
+                        and len(self._routing.profile.candidates.get(Capability.VISION, ())) == 1
+                    )
+                    or exc.code in {ProviderCode.OUTCOME_UNKNOWN, ProviderCode.SAFETY_BLOCKED}
+                ):
+                    raise
+                return ReasoningExecution(
+                    VisualDecision.UNAVAILABLE,
+                    exc.code.value,
+                    None,
+                    (),
+                    None,
+                    False,
+                    None,
+                    False,
+                    0,
+                    (
+                        RetrievalWarning(
+                            exc.code.value,
+                            "Visual reasoning was unavailable. Retrieved evidence was retained.",
+                        ),
+                    ),
+                )
+        return await self._reason(
+            self._provider,
+            video_id,
+            question,
+            frames,
+            context,
+            evidence_fingerprint=evidence_fingerprint,
+            decision_reason=decision_reason,
+            external_permission=external_permission,
+            allow_fallback=allow_fallback,
+        )
+
+    async def _reason(
+        self,
+        provider: VisualReasoningProvider | None,
+        video_id: UUID,
+        question: str,
+        frames: tuple[VisualFrame, ...],
+        context: str,
+        *,
+        evidence_fingerprint: str,
+        decision_reason: str,
+        external_permission: bool,
+        allow_fallback: bool,
+        provider_id: str | None = None,
+    ) -> ReasoningExecution:
         started = perf_counter()
-        provider = self._provider
         identity = provider.identity if provider else None
         selected: tuple[VisualFrame, ...] = ()
         key = None
@@ -208,9 +314,23 @@ class AdaptiveVisualReasoning:
             )
             await self._verifier.verify(selected)
             key = reasoning_cache_key(request, provider.identity)
+            if (
+                provider_id
+                and self._check_consent
+                and permitted
+                and provider.identity.location is ExecutionLocation.EXTERNAL
+            ):
+                await self._check_consent(provider_id)
             result = await self._cache.get(video_id, key)
             cache_hit = result is not None
             if result is None:
+                if (
+                    provider_id
+                    and self._check_consent
+                    and permitted
+                    and provider.identity.location is ExecutionLocation.EXTERNAL
+                ):
+                    await self._check_consent(provider_id)
                 result = await provider.reason(request)
             if result.provider != provider.identity or not set(result.cited_frame_ids).issubset(
                 {frame.frame_id for frame in selected}

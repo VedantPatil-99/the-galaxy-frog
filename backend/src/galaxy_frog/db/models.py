@@ -39,6 +39,45 @@ class ProviderProfileVersionRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class ProviderConsentRow(Base):
+    __tablename__ = "provider_consents"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    profile_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    profile_version: Mapped[int] = mapped_column(nullable=False)
+    operation: Mapped[str] = mapped_column(String(16), nullable=False)
+    source: Mapped[str] = mapped_column(String(255), nullable=False)
+    scopes: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False)
+    run_id: Mapped[UUID | None]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dispatch_count: Mapped[int] = mapped_column(nullable=False, default=0)
+
+
+class ProviderRuntimeRow(Base):
+    __tablename__ = "provider_runtime"
+
+    provider_id: Mapped[str] = mapped_column(String(240), primary_key=True)
+    failure_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ProviderAttemptRow(Base):
+    __tablename__ = "provider_attempts"
+    __table_args__ = (Index("ix_provider_attempts_run", "operation", "run_id", "created_at"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    operation: Mapped[str] = mapped_column(String(16), nullable=False)
+    run_id: Mapped[UUID] = mapped_column(nullable=False)
+    profile_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    profile_version: Mapped[int] = mapped_column(nullable=False)
+    capability: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class VideoRow(Base):
     __tablename__ = "videos"
     __table_args__ = (UniqueConstraint("source_kind", "external_id", name="uq_videos_source"),)
@@ -187,6 +226,7 @@ class IngestionJobRow(Base):
     external_id: Mapped[str] = mapped_column(String(255), nullable=False)
     canonical_url: Mapped[str] = mapped_column(Text, nullable=False)
     input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_selection: Mapped[dict[str, object] | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     stage: Mapped[str] = mapped_column(String(32), nullable=False)
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
