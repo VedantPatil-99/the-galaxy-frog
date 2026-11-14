@@ -5,6 +5,7 @@ import json
 import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -18,6 +19,7 @@ from tests.integration.test_postgres_lexical_search import (
 )
 
 from galaxy_frog.adapters.generation.bedrock import BedrockGeneration
+from galaxy_frog.adapters.transcription.cloudflare import CloudflareTranscription
 from galaxy_frog.api import provider_execution as execution
 from galaxy_frog.api.app import create_app
 from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
@@ -28,6 +30,7 @@ from galaxy_frog.application.provider_registry import (
 )
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
+from galaxy_frog.db.ingestion_provider_routing import IngestionProviderRouting
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.models import (
     EmbeddingCollectionRow,
@@ -39,7 +42,12 @@ from galaxy_frog.db.models import (
     VideoRow,
 )
 from galaxy_frog.db.provider_profiles import PostgresProviderProfiles, ProfileVersionConflict
-from galaxy_frog.db.provider_runtime import PostgresProviderRuntime, create_consent, locked_consent
+from galaxy_frog.db.provider_runtime import (
+    PostgresProviderRuntime,
+    create_consent,
+    locked_consent,
+    provider_attempt_rows,
+)
 from galaxy_frog.domain.generation.models import (
     AnswerConfidence,
     GenerationCitation,
@@ -47,6 +55,7 @@ from galaxy_frog.domain.generation.models import (
     GroundingText,
 )
 from galaxy_frog.domain.ingestion.models import IngestionJobStatus
+from galaxy_frog.domain.media import AudioFallbackReason
 from galaxy_frog.domain.providers import (
     Capability,
     ConsentScope,
@@ -57,6 +66,7 @@ from galaxy_frog.domain.providers import (
     ProviderSelection,
 )
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
+from galaxy_frog.domain.transcription import TranscriptionRequest, TranscriptionResult
 from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
 
 pytestmark = pytest.mark.skipif(
@@ -95,8 +105,12 @@ async def test_profile_race_persists_one_immutable_version() -> None:
 
 
 @pytest.mark.asyncio
-async def test_provider_concurrency_quota_and_revocation_are_shared() -> None:
-    settings = Settings()
+async def test_provider_concurrency_quota_and_revocation_are_shared(tmp_path: Path) -> None:
+    settings = Settings(
+        cloudflare_asr_enabled=True,
+        cloudflare_account_id="e" * 32,
+        cloudflare_api_token=SecretStr("fixture-token"),
+    )
     engine = create_database_engine(settings)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     profile = ProfileRef(profile_id="free_cloud", version=1)
@@ -151,7 +165,63 @@ async def test_provider_concurrency_quota_and_revocation_are_shared() -> None:
         consent_id=grant.consent_id,
         worker_id="phase8-test",
     )
+    routing = IngestionProviderRouting(engine, settings, "phase8-test")
+    audio = tmp_path / "speech.wav"
+    audio.write_bytes(b"fixture")
+    request = TranscriptionRequest(
+        run_id,
+        1,
+        reference,
+        AudioFallbackReason.CAPTIONS_UNAVAILABLE,
+        audio,
+        0,
+        3000,
+    )
+    hosted_calls = 0
+
+    def hosted(_request: Request) -> Response:
+        nonlocal hosted_calls
+        hosted_calls += 1
+        return Response(
+            200,
+            json={
+                "success": True,
+                "result": {"segments": [{"start": 0.25, "end": 1.5, "text": "Grounded speech"}]},
+            },
+        )
+
+    async def local() -> TranscriptionResult:
+        raise ProviderFailure(ProviderCode.UNAVAILABLE)
+
+    async def cloud(verify: Callable[[], Awaitable[None]]) -> TranscriptionResult:
+        async with AsyncClient(transport=MockTransport(hosted)) as client:
+            return await CloudflareTranscription("fixture", "fixture", client).transcribe(
+                request, verify_consent=verify
+            )
+
+    async def transcribe() -> TranscriptionResult:
+        return await routing.execute(
+            run_id,
+            Capability.TRANSCRIPTION,
+            {"faster-whisper": local},
+            timeout_seconds=10,
+            input_duration_ms=3000,
+            external={"cloudflare-whisper": cloud},
+        )
+
     try:
+        result = await transcribe()
+        assert (result.spec.provider, result.cues[0].start_ms, result.cues[0].end_ms) == (
+            "cloudflare",
+            250,
+            1500,
+        )
+        assert hosted_calls == 1
+        async with sessions() as session:
+            history = await provider_attempt_rows(session, ProviderOperation.IMPORT, run_id)
+        success = history[-1].payload
+        assert success["status"] == "succeeded" and success["input_duration_ms"] == 3000
+        assert success["estimated_cost"] == "0.000026"
         async with runtime.admit(entry):
             await runtime.verify_consent(entry, dispatch=True)
             with pytest.raises(ProviderFailure, match="PROVIDER_BUSY"):
@@ -164,8 +234,8 @@ async def test_provider_concurrency_quota_and_revocation_are_shared() -> None:
                     ProviderCode.QUOTA_EXHAUSTED, retry_at=datetime.now(UTC) + timedelta(seconds=60)
                 )
         with pytest.raises(ProviderFailure, match="QUOTA_EXHAUSTED"):
-            async with runtime.admit(entry):
-                pytest.fail("The exhausted provider admitted a call.")
+            await transcribe()
+        assert hosted_calls == 1
         async with sessions.begin() as session:
             await session.execute(
                 delete(ProviderRuntimeRow).where(
@@ -174,11 +244,11 @@ async def test_provider_concurrency_quota_and_revocation_are_shared() -> None:
             )
             row = await locked_consent(session, grant.consent_id)
             assert row is not None
-            assert row.dispatch_count == 2
+            assert row.dispatch_count == 3
             row.revoked_at = datetime.now(UTC)
         with pytest.raises(ProviderFailure, match="PROVIDER_CONSENT_REQUIRED"):
-            async with runtime.admit(entry):
-                pytest.fail("A revoked grant admitted a call.")
+            await transcribe()
+        assert hosted_calls == 1
     finally:
         async with sessions.begin() as session:
             await session.execute(
