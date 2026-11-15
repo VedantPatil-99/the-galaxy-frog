@@ -21,7 +21,7 @@ export default function WorkflowPage() {
             Galaxy Frog
           </Link>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-            <Link href="/" className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm text-(--wf-muted) hover:text-(--wf-active)">
+            <Link href="/" className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm text-(--wf-muted) hover:text-(--wf-accent-text)">
               <ArrowLeftIcon size={15} aria-hidden="true" /> Workspace
             </Link>
             <ThemeToggle />
