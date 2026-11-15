@@ -345,6 +345,14 @@ async def test_bedrock_returns_validated_shape_and_usage() -> None:
         (200, {}, "PROVIDER_INVALID_OUTPUT"),
         (
             200,
+            {
+                "stopReason": "end_turn",
+                "output": {"message": {"content": [{"text": "invalid JSON"}]}},
+            },
+            "PROVIDER_INVALID_OUTPUT",
+        ),
+        (
+            200,
             {"stopReason": "content_filtered", "output": {"message": {"content": [{"text": "a"}]}}},
             "PROVIDER_SAFETY_BLOCKED",
         ),
@@ -393,4 +401,44 @@ async def test_cloudflare_normalizes_hosted_failures(
         with pytest.raises(ProviderFailure, match=expected):
             await CloudflareTranscription("fixture", "fixture", client).transcribe(
                 audio_request(tmp_path)
+            )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport_error", [httpx.ReadTimeout, httpx.ReadError])
+async def test_hosted_transport_failure_leaves_the_outcome_unknown(
+    tmp_path: Path, transport_error: type[httpx.RequestError]
+) -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise transport_error("Fixture lost the response.", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(fail)) as client:
+        with pytest.raises(ProviderFailure, match=ProviderCode.OUTCOME_UNKNOWN.value):
+            await BedrockGeneration("us-east-1", "test", client).generate("Fixture", ())
+        with pytest.raises(ProviderFailure, match=ProviderCode.OUTCOME_UNKNOWN.value):
+            await CloudflareTranscription("fixture", "test", client).transcribe(
+                audio_request(tmp_path)
+            )
+
+
+@pytest.mark.asyncio
+async def test_oversized_cloud_inputs_are_rejected_before_consent_or_dispatch(
+    tmp_path: Path,
+) -> None:
+    def unexpected_request(_request: httpx.Request) -> httpx.Response:
+        pytest.fail("An oversized payload was sent to a provider.")
+
+    async def unexpected_consent_check() -> None:
+        pytest.fail("An oversized payload reached the dispatch consent check.")
+
+    request = audio_request(tmp_path)
+    request.audio_path.write_bytes(b"a" * (10 * 1024 * 1024 + 1))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unexpected_request)) as client:
+        with pytest.raises(ProviderFailure, match=ProviderCode.INPUT_LIMIT.value):
+            await BedrockGeneration(
+                "us-east-1", "test", client, verify_consent=unexpected_consent_check
+            ).generate("a" * 65_537, ())
+        with pytest.raises(ProviderFailure, match=ProviderCode.INPUT_LIMIT.value):
+            await CloudflareTranscription("fixture", "test", client).transcribe(
+                request, verify_consent=unexpected_consent_check
             )

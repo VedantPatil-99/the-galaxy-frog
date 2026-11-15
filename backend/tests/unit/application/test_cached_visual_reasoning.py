@@ -1,5 +1,7 @@
 """Reason only when needed; privacy, model revisions, source identity, and cache isolation."""
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import cast
 from unittest.mock import AsyncMock
@@ -12,11 +14,18 @@ from tests.unit.application.test_temporal_retrieval import transcript
 from tests.unit.vision.test_visual_contracts import SPEC, frame, identity
 
 from galaxy_frog.api.app import create_app
+from galaxy_frog.application.provider_policy import (
+    ProviderCode,
+    ProviderFailure,
+    ProviderRouting,
+)
+from galaxy_frog.application.provider_registry import ProviderEntry, provider_catalog
 from galaxy_frog.application.retrieval.reasoning import AdaptiveVisualReasoning
 from galaxy_frog.application.retrieval.search import SearchTranscript
 from galaxy_frog.application.retrieval.temporal import RetrievalStatus, RetrieveTemporalEvidence
 from galaxy_frog.application.retrieval.visual import VisualRetrievalResult
 from galaxy_frog.config import Settings
+from galaxy_frog.domain.providers import Capability, ProviderMode, ProviderProfile
 from galaxy_frog.domain.retrieval.evidence import EvidenceGroup
 from galaxy_frog.domain.vision.policy import (
     EscalationDecision,
@@ -75,6 +84,60 @@ async def test_reasoning_cache_reuses_only_verified_matching_evidence() -> None:
     assert verifier.verify.await_count == 2
     assert "path" not in str(second.trace_payload())
     assert second.trace_payload()["provider_elapsed_ms"] == 10
+
+
+@pytest.mark.parametrize("mode", [ProviderMode.CLOUD_PERMITTED, ProviderMode.MANUAL])
+@pytest.mark.asyncio
+async def test_revoking_visual_consent_blocks_even_cached_cloud_reasoning(
+    mode: ProviderMode,
+) -> None:
+    visual = visual_result()
+    original = visual.hits[0].frame
+    provider, cache, verifier = AsyncMock(), AsyncMock(), AsyncMock()
+    provider.identity = replace(identity(), location=ExecutionLocation.EXTERNAL)
+    cached = VisualReasoningResult("blue", (original.frame_id,), provider.identity, 10)
+    cache.get.return_value = cached
+    consent, dispatch, record = AsyncMock(), AsyncMock(), AsyncMock()
+
+    @asynccontextmanager
+    async def admit(_entry: ProviderEntry) -> AsyncGenerator[None]:
+        yield
+
+    provider_id = "gemini-vision"
+    catalog = tuple(
+        entry.model_copy(update={"readiness": "configured"})
+        for entry in provider_catalog(Settings())
+    )
+    route = ProviderRouting(
+        ProviderProfile(mode=mode, candidates={Capability.VISION: (provider_id,)}),
+        catalog,
+        admit,
+        record,
+    )
+    service = AdaptiveVisualReasoning(
+        provider=None,
+        cache=cache,
+        verifier=verifier,
+        external_enabled=True,
+        routing=route,
+        candidates={provider_id: provider},
+        check_consent=consent,
+        external_call=dispatch,
+    )
+    first = await service.execute(original.video_id, "What color?", temporal(), visual)
+    assert first.result is cached and first.cache_hit
+    consent.assert_awaited_once_with(provider_id, False)
+
+    consent.side_effect = ProviderFailure(ProviderCode.CONSENT_REQUIRED)
+    if mode is ProviderMode.MANUAL:
+        with pytest.raises(ProviderFailure, match=ProviderCode.CONSENT_REQUIRED.value):
+            await service.execute(original.video_id, "What color?", temporal(), visual)
+    else:
+        second = await service.execute(original.video_id, "What color?", temporal(), visual)
+        assert second.result is None and second.warnings[0].code == ProviderCode.CONSENT_REQUIRED
+    cache.get.assert_awaited_once()
+    dispatch.assert_not_awaited()
+    provider.reason.assert_not_awaited()
 
 
 @pytest.mark.asyncio
