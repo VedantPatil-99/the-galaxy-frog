@@ -500,6 +500,10 @@ change rather than bypassing the frozen install.
 
 ### Windows Application Control blocks Python or Next.js modules
 
+If Application Control blocks `fastapi.exe` with error 4551, run `bun run dev:api` from the
+repository root. This command starts the FastAPI CLI through the existing Python environment with
+`python -m fastapi dev`.
+
 If Python reports that `_sqlite3`, `select`, or another standard-library DLL was blocked, or Next.js
 cannot load its native SWC module, stop and repair/allow the managed runtime through the machine's
 Application Control policy. Do not disable coverage, substitute generated contracts, or install a

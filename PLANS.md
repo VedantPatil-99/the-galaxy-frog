@@ -774,3 +774,9 @@ tests, ten PostgreSQL integration checks, the production build, and pre-commit. 
 
 Separate document uploads and alignment, new cloud processing, provider configuration,
 and the later evaluation platform are outside this phase.
+
+## Local development maintenance
+
+- 2026-11-16 — Launch FastAPI through `python -m fastapi dev` for Windows environments that block
+  the generated console launcher. `bun run dev` started the API and ingestion worker, and the
+  Next.js proxy returned HTTP 200 with PostgreSQL ready.

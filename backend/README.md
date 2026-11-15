@@ -10,7 +10,7 @@ From `backend/`:
 
 ```bash
 uv sync --locked
-uv run fastapi dev
+PYTHONUTF8=1 uv run python -m fastapi dev
 ```
 
 The development API runs at `http://127.0.0.1:8000`, with interactive documentation at
