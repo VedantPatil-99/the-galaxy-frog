@@ -18,6 +18,7 @@ from tests.integration.test_postgres_lexical_search import (
     _seed,  # pyright: ignore[reportPrivateUsage]
 )
 
+from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.bedrock import BedrockGeneration
 from galaxy_frog.adapters.transcription.cloudflare import CloudflareTranscription
 from galaxy_frog.api import provider_execution as execution
@@ -39,6 +40,8 @@ from galaxy_frog.db.models import (
     ProviderConsentRow,
     ProviderProfileVersionRow,
     ProviderRuntimeRow,
+    TextEmbeddingRow,
+    VideoFrameRow,
     VideoRow,
 )
 from galaxy_frog.db.provider_profiles import PostgresProviderProfiles, ProfileVersionConflict
@@ -48,6 +51,7 @@ from galaxy_frog.db.provider_runtime import (
     locked_consent,
     provider_attempt_rows,
 )
+from galaxy_frog.db.visual_models import VisualEmbeddingRow
 from galaxy_frog.domain.generation.models import (
     AnswerConfidence,
     GenerationCitation,
@@ -65,9 +69,16 @@ from galaxy_frog.domain.providers import (
     ProviderOperation,
     ProviderSelection,
 )
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
-from galaxy_frog.domain.transcription import TranscriptionRequest, TranscriptionResult
+from galaxy_frog.domain.transcription import (
+    TranscriptionError,
+    TranscriptionErrorCode,
+    TranscriptionRequest,
+    TranscriptionResult,
+)
 from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
+from galaxy_frog.entrypoints import worker_providers
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_DATABASE_INTEGRATION") != "1", reason="requires existing PostgreSQL/pgvector"
@@ -105,7 +116,9 @@ async def test_profile_race_persists_one_immutable_version() -> None:
 
 
 @pytest.mark.asyncio
-async def test_provider_concurrency_quota_and_revocation_are_shared(tmp_path: Path) -> None:
+async def test_provider_concurrency_quota_and_revocation_are_shared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     settings = Settings(
         cloudflare_asr_enabled=True,
         cloudflare_account_id="e" * 32,
@@ -190,27 +203,24 @@ async def test_provider_concurrency_quota_and_revocation_are_shared(tmp_path: Pa
             },
         )
 
-    async def local() -> TranscriptionResult:
-        raise ProviderFailure(ProviderCode.UNAVAILABLE)
+    class UnavailableTranscription:
+        spec = CloudflareTranscription.spec
 
-    async def cloud(verify: Callable[[], Awaitable[None]]) -> TranscriptionResult:
-        async with AsyncClient(transport=MockTransport(hosted)) as client:
-            return await CloudflareTranscription("fixture", "fixture", client).transcribe(
-                request, verify_consent=verify
+        async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
+            assert request.audio_job_id == run_id
+            raise TranscriptionError(
+                TranscriptionErrorCode.MODEL_UNAVAILABLE, "The local fixture model is unavailable."
             )
 
-    async def transcribe() -> TranscriptionResult:
-        return await routing.execute(
-            run_id,
-            Capability.TRANSCRIPTION,
-            {"faster-whisper": local},
-            timeout_seconds=10,
-            input_duration_ms=3000,
-            external={"cloudflare-whisper": cloud},
-        )
+    def mock_client(*, timeout: float, trust_env: bool) -> AsyncClient:
+        return AsyncClient(transport=MockTransport(hosted), timeout=timeout, trust_env=trust_env)
 
+    monkeypatch.setattr(worker_providers.httpx, "AsyncClient", mock_client)
+    transcription = worker_providers.RoutedTranscription(
+        UnavailableTranscription(), settings, routing
+    )
     try:
-        result = await transcribe()
+        result = await transcription.transcribe(request)
         assert (result.spec.provider, result.cues[0].start_ms, result.cues[0].end_ms) == (
             "cloudflare",
             250,
@@ -221,6 +231,7 @@ async def test_provider_concurrency_quota_and_revocation_are_shared(tmp_path: Pa
             history = await provider_attempt_rows(session, ProviderOperation.IMPORT, run_id)
         success = history[-1].payload
         assert success["status"] == "succeeded" and success["input_duration_ms"] == 3000
+        assert success["device"] == result.spec.device.value == "cloud"
         assert entry.pricing is not None
         assert success["estimated_cost"] == (None if entry.pricing.stale else "0.000026")
         async with runtime.admit(entry):
@@ -235,7 +246,7 @@ async def test_provider_concurrency_quota_and_revocation_are_shared(tmp_path: Pa
                     ProviderCode.QUOTA_EXHAUSTED, retry_at=datetime.now(UTC) + timedelta(seconds=60)
                 )
         with pytest.raises(ProviderFailure, match="QUOTA_EXHAUSTED"):
-            await transcribe()
+            await transcription.transcribe(request)
         assert hosted_calls == 1
         async with sessions.begin() as session:
             await session.execute(
@@ -248,7 +259,7 @@ async def test_provider_concurrency_quota_and_revocation_are_shared(tmp_path: Pa
             assert row.dispatch_count == 3
             row.revoked_at = datetime.now(UTC)
         with pytest.raises(ProviderFailure, match="PROVIDER_CONSENT_REQUIRED"):
-            await transcribe()
+            await transcription.transcribe(request)
         assert hosted_calls == 1
     finally:
         async with sessions.begin() as session:
@@ -393,7 +404,7 @@ async def test_routed_search_and_answers_share_preserved_evidence(
 
 
 @pytest.mark.asyncio
-async def test_evaluation_rejects_pinned_collections_without_video_evidence(
+async def test_evaluation_requires_video_evidence_and_disables_runtime_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     revision = f"fixture-{uuid4().hex}"
@@ -420,7 +431,7 @@ async def test_evaluation_rejects_pinned_collections_without_video_evidence(
     profile_id = f"test-{uuid4().hex}"
     collections: dict[Capability, UUID] = {}
     async with sessions() as session:
-        video_id, _ = await _seed(session, ("Evaluation evidence",))
+        video_id, (unit_id,) = await _seed(session, ("Evaluation evidence",))
         for capability, dimension in (
             (Capability.TEXT_EMBEDDING, 1024),
             (Capability.VISUAL_EMBEDDING, 768),
@@ -452,27 +463,83 @@ async def test_evaluation_rejects_pinned_collections_without_video_evidence(
             ),
         )
     app = create_app(settings)
+    embedder = OllamaBgeM3EmbeddingProvider(
+        base_url=settings.ollama_base_url,
+        model=settings.embedding_model,
+        revision=revision,
+    )
+    embed = AsyncMock(side_effect=EmbeddingProviderError("Fixture model failed."))
+    monkeypatch.setattr(embedder, "embed", embed)
+    app.state.embedding_provider_factory = lambda: embedder
+    trace_id: UUID | None = None
     try:
         async with (
             app.router.lifespan_context(app),
             AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
         ):
-            response = await client.post(
-                f"/v1/videos/{video_id}/search",
-                json={
-                    "query": "Evaluation evidence",
-                    "mode": "hybrid",
-                    "allow_fallback": True,
-                    "provider_selection": {
-                        "profile": {"profile_id": saved.profile_id, "version": saved.version}
-                    },
+            path = f"/v1/videos/{video_id}/search"
+            request = {
+                "query": "Evaluation evidence",
+                "mode": "hybrid",
+                "allow_fallback": True,
+                "provider_selection": {
+                    "profile": {"profile_id": saved.profile_id, "version": saved.version}
                 },
-            )
+            }
+            response = await client.post(path, json=request)
             assert response.status_code == 422, response.text
             assert response.json()["error"]["code"] == "PROVIDER_EVALUATION_UNVERIFIABLE"
+            embed.assert_not_awaited()
+
+            frame_id, fingerprint = uuid4(), "a" * 64
+            async with sessions.begin() as session:
+                session.add(
+                    VideoFrameRow(
+                        id=frame_id,
+                        video_id=video_id,
+                        sequence=0,
+                        start_ms=0,
+                        end_ms=10_000,
+                        source="periodic",
+                        capture_ms=5000,
+                        content_sha256=fingerprint,
+                        image_path="unused.jpg",
+                        created_at=datetime.now(UTC),
+                    )
+                )
+                await session.flush()
+                session.add_all(
+                    [
+                        TextEmbeddingRow(
+                            retrieval_unit_id=unit_id,
+                            collection_id=collections[Capability.TEXT_EMBEDDING],
+                            input_fingerprint=fingerprint,
+                            embedding=[1.0] + [0.0] * 1023,
+                        ),
+                        VisualEmbeddingRow(
+                            frame_id=frame_id,
+                            collection_id=collections[Capability.VISUAL_EMBEDDING],
+                            content_sha256=fingerprint,
+                            embedding=[1.0] + [0.0] * 767,
+                        ),
+                    ]
+                )
+
+            response = await client.post(path, json=request)
+            assert response.status_code == 503, response.text
+            trace_id = UUID(response.json()["error"]["details"]["trace_id"])
+            embed.assert_awaited_once_with(("Evaluation evidence",))
+            history = await client.get(f"/v1/provider-runs/search/{trace_id}")
+            (attempt,) = history.json()
+            assert attempt["provider_id"] == "ollama-embedding"
+            assert attempt["status"] == "failed"
     finally:
         async with sessions.begin() as session:
             await session.execute(delete(VideoRow).where(VideoRow.id == video_id))
+            if trace_id:
+                await session.execute(
+                    delete(ProviderAttemptRow).where(ProviderAttemptRow.run_id == trace_id)
+                )
             await session.execute(
                 delete(EmbeddingCollectionRow).where(
                     EmbeddingCollectionRow.id.in_(collections.values())
