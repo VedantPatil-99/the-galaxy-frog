@@ -1,10 +1,12 @@
 """Safe provider catalog and deterministic built-in profile chains."""
 
+import json
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlsplit
 
+import httpx
 from pydantic import BaseModel, ConfigDict, SecretStr, computed_field
 
 from galaxy_frog.adapters.vision.siglip import SIGLIP_MODEL, SIGLIP_REVISION
@@ -33,8 +35,6 @@ class PricingSource(BaseModel):
 
 
 async def probe_ollama_models(base_url: str) -> dict[str, str]:
-    import httpx
-
     if not local_ollama_origin(base_url):
         return {}
     try:
@@ -46,15 +46,17 @@ async def probe_ollama_models(base_url: str) -> dict[str, str]:
                     payload.extend(chunk)
                     if len(payload) > 262_144:
                         return {}
-                import json
-
                 response_data = json.loads(payload)
             return {
-                str(item["model"]): str(item["digest"])
+                model: digest
                 for item in response_data["models"]
-                if not item.get("remote_model")
+                if isinstance((model := item.get("model")), str)
+                and model.strip()
+                and isinstance((digest := item.get("digest")), str)
+                and digest.strip()
+                and not item.get("remote_model")
                 and not item.get("remote_host")
-                and not str(item["model"]).endswith((":cloud", "-cloud"))
+                and not model.endswith((":cloud", "-cloud"))
             }
     except httpx.HTTPError, KeyError, TypeError, ValueError, AttributeError:
         return {}
@@ -218,6 +220,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             provider="google-gemini",
             model=settings.gemini_visual_model or "Operator-selected Gemini model",
             revision=settings.gemini_visual_revision,
+            device="cloud",
             readiness=(
                 "configured"
                 if settings.vlm_provider != "disabled"
@@ -242,6 +245,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             location=Location.FREE_CLOUD,
             provider="llamaparse",
             model="LlamaParse OCR",
+            device="cloud",
             readiness=(
                 "configured"
                 if settings.external_frame_processing_enabled
@@ -264,6 +268,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             location=Location.FREE_CLOUD,
             provider="cloudflare",
             model=CLOUDFLARE_MODEL,
+            device="cloud",
             readiness=(
                 "configured"
                 if settings.cloudflare_asr_enabled
@@ -294,6 +299,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             provider="amazon-bedrock",
             model=BEDROCK_MODEL,
             revision="v1:0",
+            device="cloud",
             readiness=(
                 "configured"
                 if settings.bedrock_text_enabled
@@ -315,6 +321,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
             location=Location.AWS,
             provider="amazon-transcribe",
             model="Amazon Transcribe batch",
+            device="cloud",
             readiness="catalog_only",
             timestamp_granularity="Provider word timestamps",
             confidence="Provider word confidence",

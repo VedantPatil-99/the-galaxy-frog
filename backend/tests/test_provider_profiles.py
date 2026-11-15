@@ -2,9 +2,10 @@
 
 from datetime import UTC, datetime
 from typing import cast
+from uuid import uuid4
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
 from pydantic import SecretStr, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +13,8 @@ from sqlalchemy.sql.dml import Insert
 
 from galaxy_frog.api.app import create_app
 from galaxy_frog.api.dependencies import get_video_repository
-from galaxy_frog.application.provider_registry import builtin_profiles
+from galaxy_frog.application import provider_registry
+from galaxy_frog.application.provider_registry import builtin_profiles, profile_validation_error
 from galaxy_frog.config import Settings
 from galaxy_frog.db.models import ProviderProfileVersionRow
 from galaxy_frog.db.provider_profiles import PostgresProviderProfiles
@@ -53,6 +55,47 @@ class ProfileSession:
             raise SQLAlchemyError
 
 
+@pytest.mark.parametrize(
+    ("body", "status", "expected"),
+    [
+        (
+            b'{"models":[{"model":"local","digest":"pinned"},'
+            b'{"model":"proxied","digest":"pinned","remote_host":"cloud.example"},'
+            b'{"model":"routed","digest":"pinned","remote_model":"upstream"},'
+            b'{"model":"tag:cloud","digest":"pinned"},'
+            b'{"model":"missing","digest":null}]}',
+            200,
+            {"local": "pinned"},
+        ),
+        (b" " * 262_145, 200, {}),
+        (b"{}", 503, {}),
+        (b"invalid JSON", 200, {}),
+    ],
+    ids=["only-local", "oversized", "http-error", "invalid-json"],
+)
+@pytest.mark.asyncio
+async def test_ollama_probe_allows_only_local_models_with_revisions(
+    monkeypatch: pytest.MonkeyPatch,
+    body: bytes,
+    status: int,
+    expected: dict[str, str],
+) -> None:
+    requests: list[str] = []
+
+    def tags(request: Request) -> Response:
+        requests.append(str(request.url))
+        return Response(status, content=body)
+
+    def client(*, timeout: float, trust_env: bool) -> AsyncClient:
+        assert not trust_env
+        return AsyncClient(transport=MockTransport(tags), timeout=timeout, trust_env=trust_env)
+
+    monkeypatch.setattr(provider_registry.httpx, "AsyncClient", client)
+    assert await provider_registry.probe_ollama_models("https://remote.example") == {}
+    assert await provider_registry.probe_ollama_models("http://127.0.0.1:11434") == expected
+    assert requests == ["http://127.0.0.1:11434/api/tags"]
+
+
 @pytest.mark.asyncio
 async def test_catalog_distinguishes_configured_and_documented_without_leaking_credentials() -> (
     None
@@ -90,6 +133,7 @@ async def test_catalog_distinguishes_configured_and_documented_without_leaking_c
     ):
         entry = entries[provider_id]
         assert entry["readiness"] == "configured"
+        assert entry["device"] == "cloud"
         assert entry["pricing"]["source_url"].startswith("https://")
         assert isinstance(entry["pricing"]["stale"], bool)
     assert "-secret" not in response.text
@@ -150,6 +194,46 @@ def test_evaluation_requires_complete_exact_chains() -> None:
             candidates={Capability.GENERATION: ("ollama-text", "bedrock-nova-lite")},
             evaluation=True,
         )
+
+
+@pytest.mark.parametrize(
+    ("capability", "candidate", "mode", "message"),
+    [
+        (Capability.TRANSCRIPTION, "amazon-transcribe", ProviderMode.MANUAL, "selected capability"),
+        (Capability.GENERATION, "missing-model", ProviderMode.MANUAL, "selected capability"),
+        (Capability.STUDY, "ollama-text", ProviderMode.MANUAL, "selected capability"),
+        (
+            Capability.VISION,
+            "gemini-vision",
+            ProviderMode.LOCAL_ONLY,
+            "outside the selected mode",
+        ),
+    ],
+)
+def test_policy_rejects_unsupported_candidates(
+    capability: Capability, candidate: str, mode: ProviderMode, message: str
+) -> None:
+    policy = ProviderProfile(mode=mode, candidates={capability: (candidate,)})
+    error = profile_validation_error(policy, provider_registry.provider_catalog(Settings()))
+    assert error and message in error
+
+
+def test_saved_evaluation_policy_requires_every_revision_and_collection() -> None:
+    policy = builtin_profiles()["evaluation"]
+    catalog = provider_registry.provider_catalog(Settings())
+    assert profile_validation_error(policy, catalog) == (
+        "Evaluation requires model revisions and both embedding collection IDs."
+    )
+    pins = {chain[0]: "pinned" for chain in policy.candidates.values()}
+    collections = {Capability.TEXT_EMBEDDING: uuid4(), Capability.VISUAL_EMBEDDING: uuid4()}
+    exact = policy.model_copy(
+        update={"pinned_revisions": pins, "embedding_collections": collections}
+    )
+    assert profile_validation_error(exact, catalog) is None
+    hosted = exact.model_copy(
+        update={"candidates": {**exact.candidates, Capability.GENERATION: ("bedrock-nova-lite",)}}
+    )
+    assert profile_validation_error(hosted, catalog) == "Evaluation requires local providers."
 
 
 @pytest.mark.asyncio
