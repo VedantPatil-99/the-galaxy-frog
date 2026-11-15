@@ -45,6 +45,7 @@ class ProfileSession:
         return row
 
     async def get(self, _model: object, key: tuple[str, int]) -> ProviderProfileVersionRow | None:
+        self._check()
         return next((row for row in self.rows if (row.profile_id, row.version) == key), None)
 
     async def commit(self) -> None:
@@ -171,12 +172,47 @@ async def test_profile_edit_and_version_conflict() -> None:
         assert (await client.get("/v1/provider-profiles")).status_code == 503
         assert (await client.put("/v1/provider-profiles/custom", json=edit)).status_code == 503
 
+    session.broken = False
     repository = PostgresProviderProfiles(db)
     local = await repository.get(ProfileRef(profile_id="local", version=1))
     custom = await repository.get(ProfileRef(profile_id="custom", version=1))
     assert local is not None and local.policy.mode is ProviderMode.LOCAL_ONLY
     assert custom is not None and custom.created_at is not None
     assert await repository.get(ProfileRef(profile_id="custom", version=2)) is None
+
+
+@pytest.mark.asyncio
+async def test_provider_endpoints_surface_database_failure_without_leaking_details() -> None:
+    app = create_app(Settings())
+    session = ProfileSession()
+    session.broken = True
+    db = cast(AsyncSession, session)
+    app.dependency_overrides[get_video_repository] = lambda: SqlAlchemyVideoRepository(db)
+    run = uuid4()
+    scope = {
+        "profile": {"profile_id": "test-missing", "version": 1},
+        "operation": "question",
+        "source": str(uuid4()),
+        "scopes": [{"provider_id": "bedrock-nova-lite", "data": "paid_text"}],
+    }
+    options_query = {"profile_id": "test-missing", "version": "1", "operation": "question"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        responses = [
+            await client.get("/v1/providers/health"),
+            await client.get(f"/v1/provider-runs/question/{run}"),
+            await client.get(f"/v1/provider-runs/import/{run}/consent"),
+            await client.get("/v1/provider-consents/options", params=options_query),
+            await client.post("/v1/provider-consents", json=scope),
+            await client.delete(f"/v1/provider-consents/{run}"),
+        ]
+        assert all(response.status_code == 503 for response in responses)
+        assert all(
+            response.json()["error"]["code"] == "DATABASE_UNAVAILABLE" for response in responses
+        )
+        session.broken = False
+        options = await client.get("/v1/provider-consents/options", params=options_query)
+        assert options.status_code == 404
+        assert (await client.post("/v1/provider-consents", json=scope)).status_code == 422
 
 
 @pytest.mark.parametrize("chain", [(), ("ollama-text", "ollama-text"), ("a", "b", "c", "d", "e")])

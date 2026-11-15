@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -295,31 +296,21 @@ async def test_cloudflare_maps_quota_and_capacity(
     assert raised.value.retry_at is not None
 
 
+@pytest.mark.parametrize("fenced", [False, True])
 @pytest.mark.asyncio
-async def test_bedrock_returns_validated_shape_and_usage() -> None:
+async def test_bedrock_returns_validated_shape_and_usage(fenced: bool) -> None:
     def respond(request: httpx.Request) -> httpx.Response:
         assert request.url.host == "bedrock-runtime.us-east-1.amazonaws.com"
         assert request.headers["Authorization"] == "Bearer test"
         body = json.loads(request.content)
         assert body["inferenceConfig"]["maxTokens"] == 1024
+        answer = json.dumps({"answer": "An answer", "confidence": "low", "citations": []})
+        if fenced:
+            answer = "```json\n" + answer + "\n```"
         return httpx.Response(
             200,
             json={
-                "output": {
-                    "message": {
-                        "content": [
-                            {
-                                "text": json.dumps(
-                                    {
-                                        "answer": "An answer",
-                                        "confidence": "low",
-                                        "citations": [],
-                                    }
-                                )
-                            }
-                        ]
-                    }
-                },
+                "output": {"message": {"content": [{"text": answer}]}},
                 "stopReason": "end_turn",
                 "usage": {"inputTokens": 10, "outputTokens": 4},
             },
@@ -402,6 +393,36 @@ async def test_cloudflare_normalizes_hosted_failures(
             await CloudflareTranscription("fixture", "fixture", client).transcribe(
                 audio_request(tmp_path)
             )
+
+
+@pytest.mark.asyncio
+async def test_hosted_output_size_is_bounded(tmp_path: Path) -> None:
+    def response(request: httpx.Request) -> httpx.Response:
+        limit = 65_536 if request.url.host.startswith("bedrock-runtime.") else 1024 * 1024
+        return httpx.Response(200, content=b" " * (limit + 1))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
+        with pytest.raises(ProviderFailure, match=ProviderCode.INVALID_OUTPUT.value):
+            await BedrockGeneration("us-east-1", "test", client).generate("Fixture", ())
+        with pytest.raises(ProviderFailure, match=ProviderCode.INVALID_OUTPUT.value):
+            await CloudflareTranscription("fixture", "test", client).transcribe(
+                audio_request(tmp_path)
+            )
+
+
+@pytest.mark.asyncio
+async def test_cloudflare_rejects_out_of_bounds_and_unreadable_audio(tmp_path: Path) -> None:
+    request = audio_request(tmp_path)
+
+    def unexpected_request(_request: httpx.Request) -> httpx.Response:
+        pytest.fail("Cloudflare received audio that failed local checks.")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unexpected_request)) as client:
+        transcriber = CloudflareTranscription("fixture", "test", client)
+        with pytest.raises(ProviderFailure, match=ProviderCode.INPUT_LIMIT.value):
+            await transcriber.transcribe(replace(request, audio_end_ms=300_001))
+        with pytest.raises(ProviderFailure, match=ProviderCode.UNAVAILABLE.value):
+            await transcriber.transcribe(replace(request, audio_path=tmp_path / "missing.wav"))
 
 
 @pytest.mark.asyncio
