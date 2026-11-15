@@ -234,6 +234,17 @@ async def test_provider_concurrency_quota_and_revocation_are_shared(
         assert success["device"] == result.spec.device.value == "cloud"
         assert entry.pricing is not None
         assert success["estimated_cost"] == (None if entry.pricing.stale else "0.000026")
+        app = create_app(settings)
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
+        ):
+            receipt = await client.get(f"/v1/provider-runs/import/{run_id}/consent")
+            assert receipt.status_code == 200
+            assert receipt.json()["consent_id"] == str(grant.consent_id)
+            assert receipt.json()["dispatch_count"] == 1
+            unused = await client.get(f"/v1/provider-runs/import/{uuid4()}/consent")
+            assert unused.status_code == 200 and unused.json() is None
         async with runtime.admit(entry):
             await runtime.verify_consent(entry, dispatch=True)
             with pytest.raises(ProviderFailure, match="PROVIDER_BUSY"):
@@ -363,6 +374,15 @@ async def test_routed_search_and_answers_share_preserved_evidence(
             )
             assert lexical.status_code == 200 and generator.calls == 0
             trace_ids.append(lexical.json()["trace_id"])
+            empty = await client.post(
+                f"{base}/questions",
+                json={"question": "unmatchednonexistentterm", "mode": "lexical"},
+            )
+            assert empty.status_code == 200 and generator.calls == 0
+            trace = empty.json()["retrieval"]["trace_id"]
+            trace_ids.append(trace)
+            skipped = (await client.get(f"/v1/provider-runs/question/{trace}")).json()
+            assert skipped[-1]["reason"] == "PROVIDER_NOT_NEEDED"
             dense = await client.post(
                 f"{base}/search",
                 json={"query": "ferrite", "mode": "dense", "allow_fallback": False},

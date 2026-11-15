@@ -31,6 +31,15 @@ def mock_client(payload: object, *, status: int = 200) -> httpx.AsyncClient:
 
 
 @pytest.mark.asyncio
+async def test_local_adapters_refuse_off_machine_endpoints() -> None:
+    remote = "http://ollama.example"
+    with pytest.raises(EmbeddingProviderError, match="loopback"):
+        await OllamaBgeM3EmbeddingProvider(base_url=remote).embed(("Private evidence",))
+    with pytest.raises(GenerationProviderError, match="loopback"):
+        await OllamaGenerationProvider(base_url=remote, model="fixture").generate("Question", ())
+
+
+@pytest.mark.asyncio
 async def test_moment_generation_keeps_source_ids_and_labels() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         prompt = json.loads(request.content)["prompt"]
