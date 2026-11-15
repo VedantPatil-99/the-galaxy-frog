@@ -96,14 +96,13 @@ async def locked_consent(session: AsyncSession, consent_id: UUID) -> ProviderCon
 async def provider_attempt_rows(
     session: AsyncSession, operation: ProviderOperation, run_id: UUID
 ) -> tuple[ProviderAttemptRow, ...]:
-    return tuple(
-        await session.scalars(
-            select(ProviderAttemptRow)
-            .where(ProviderAttemptRow.operation == operation, ProviderAttemptRow.run_id == run_id)
-            .order_by(ProviderAttemptRow.created_at, ProviderAttemptRow.id)
-            .limit(500)
-        )
+    newest = await session.scalars(
+        select(ProviderAttemptRow)
+        .where(ProviderAttemptRow.operation == operation, ProviderAttemptRow.run_id == run_id)
+        .order_by(ProviderAttemptRow.created_at.desc(), ProviderAttemptRow.id.desc())
+        .limit(500)
     )
+    return tuple(reversed(newest.all()))
 
 
 class PostgresProviderRuntime:
