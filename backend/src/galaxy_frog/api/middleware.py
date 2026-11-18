@@ -30,6 +30,13 @@ async def correlation_id_middleware(
     correlation_id = resolve_correlation_id(request.headers.get(CORRELATION_ID_HEADER))
     request.state.correlation_id = correlation_id
 
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        # Handle here so the ASGI server cannot log the original exception,
+        # whose message or chained causes may contain credentials.
+        from galaxy_frog.api.errors import handle_unexpected_error
+
+        response = await handle_unexpected_error(request, exc)
     response.headers[CORRELATION_ID_HEADER] = correlation_id
     return response

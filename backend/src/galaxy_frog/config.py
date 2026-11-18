@@ -157,8 +157,13 @@ class Settings(BaseSettings):
         if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
             msg = "LLAMA_CLOUD_BASE_URL must be an absolute HTTP(S) URL"
             raise ValueError(msg)
-        if parsed.query or parsed.fragment:
-            msg = "LLAMA_CLOUD_BASE_URL must not include a query or fragment"
+        if (
+            parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            msg = "LLAMA_CLOUD_BASE_URL must not include credentials, a query, or a fragment"
             raise ValueError(msg)
         return value.rstrip("/")
 
@@ -193,8 +198,14 @@ class Settings(BaseSettings):
         if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
             msg = "OLLAMA_BASE_URL must be an absolute HTTP(S) URL"
             raise ValueError(msg)
-        if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-            msg = "OLLAMA_BASE_URL must not include a path, query, or fragment"
+        if (
+            parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            msg = "OLLAMA_BASE_URL must not include credentials, a path, query, or fragment"
             raise ValueError(msg)
         return value.rstrip("/")
 

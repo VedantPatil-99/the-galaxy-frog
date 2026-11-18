@@ -98,7 +98,7 @@ async def handle_validation_error(request: Request, exc: Exception) -> JSONRespo
     errors: list[JsonValue] = [
         {
             "location": ".".join(str(part) for part in error["loc"]),
-            "message": error["msg"],
+            "message": "Invalid value for this field.",
             "type": error["type"],
         }
         for error in validation_error.errors()
@@ -118,8 +118,13 @@ async def handle_http_error(request: Request, exc: Exception) -> JSONResponse:
     """Normalize framework HTTP errors without serializing unsafe objects."""
 
     http_error = cast(HTTPException, exc)
-    detail = cast(object, http_error.detail)
-    message = detail if isinstance(detail, str) else "The request could not be completed."
+    # Framework exceptions can contain provider errors or submitted credentials.
+    # Deliberate public messages belong in ApiError instead.
+    message = (
+        "Not Found"
+        if http_error.status_code == HTTPStatus.NOT_FOUND
+        else "The request could not be completed."
+    )
     code = "NOT_FOUND" if http_error.status_code == HTTPStatus.NOT_FOUND else "HTTP_ERROR"
     return error_response(
         request,
@@ -134,7 +139,10 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
     """Log unexpected failures while returning no internal exception details."""
 
     correlation_id = correlation_id_from_request(request)
-    logger.exception("Unhandled API error", extra={"correlation_id": correlation_id}, exc_info=exc)
+    logger.error(
+        "Unhandled API error",
+        extra={"correlation_id": correlation_id, "event_name": "api_unexpected_error"},
+    )
     request.state.correlation_id = correlation_id
     return error_response(
         request,
