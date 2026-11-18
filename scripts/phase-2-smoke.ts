@@ -23,10 +23,15 @@ async function jsonRequest(path: string, init?: RequestInit): Promise<JsonObject
       ...(init?.body === undefined ? {} : { "content-type": "application/json" }),
     },
     signal: AbortSignal.timeout(30_000),
+  }).catch(() => { throw new Error(`${path} request failed`) })
+  if (!response.ok) {
+    throw new Error(`${path} failed with HTTP ${response.status}`)
+  }
+  const body: unknown = await response.json().catch(() => {
+    throw new Error(`${path} returned invalid JSON`)
   })
-  const body: unknown = await response.json()
-  if (!response.ok || typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new Error(`${path} failed with ${response.status}: ${JSON.stringify(body)}`)
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new Error(`${path} returned an invalid response`)
   }
   return body as JsonObject
 }
@@ -115,7 +120,7 @@ async function waitForTerminalJob(initial: JsonObject): Promise<JsonObject> {
     }
     if (status === "failed") {
       throw new Error(
-        `ingestion failed at ${stage}: ${String(job.last_error_code)} - ${String(job.last_error_message)}`,
+        `ingestion failed at ${stage}; inspect the job's structured status in the app`,
       )
     }
     if (status === "cancelled") {
