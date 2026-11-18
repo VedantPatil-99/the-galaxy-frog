@@ -605,8 +605,9 @@ Cloud OCR requires `EXTERNAL_FRAME_PROCESSING_ENABLED=true` **and**
 `OCR_EXTERNAL_FRAMES_PERMITTED=true` in addition to its key. Gemini requires `VLM_PROVIDER=gemini`,
 explicit `GEMINI_VISUAL_MODEL`, exact response `GEMINI_VISUAL_REVISION`, a local secret
 `GEMINI_API_KEY`, the server external-processing flag, and `allow_external_frames=true` for the
-current question. The UI sends false and has no automatic consent or provider-selection controls.
-Neither cloud provider was live-tested during Phase 5; transport tests are not cloud acceptance.
+current question on the legacy direct path. Phase 8 adds operation-bound consent and profile
+controls; use the [current provider setup](#phase-8-provider-configuration) below. Neither cloud
+provider was live-tested during Phase 5; transport tests are not cloud acceptance.
 
 Frozen evaluation reads existing frames/vectors and never ingests, downloads or uploads:
 
@@ -663,3 +664,145 @@ worker is idle, so it does not claim runs created by the tests:
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest --no-cov -q \
   tests/integration/test_product_intelligence.py
 ```
+
+## Phase 8 provider configuration
+
+Use the checkout containing `feat/provider-resilience`. Preserve any existing `.env`; do not
+overwrite it with the example or print its contents. From that checkout in Git Bash:
+
+```bash
+uv sync --directory backend --locked
+bun install --frozen-lockfile
+# Start the existing PostgreSQL service if it is stopped, then:
+bun run db:migrate
+bun run dev
+```
+
+This adds project dependencies, not machine tools or model weights. The API and worker must use
+the same ignored server environment. `FASTAPI_BASE_URL` configures the Next.js proxy; provider
+keys must never use a `NEXT_PUBLIC_` prefix. Existing local models still need their configured
+local services. No OpenAI, additional database, or new cloud deployment is required for Phase 8.
+
+For component startup, the Python module forms are:
+
+```bash
+uv run --directory backend python -m fastapi dev
+uv run --directory backend python -m galaxy_frog.entrypoints.worker
+```
+
+Windows blocked generated virtual-environment launchers in the Codex verification session.
+Verification used the already installed Python 3.14.7 and project packages directly. Do not
+change Windows policy, drivers, CUDA, Python versions, or download weights to address that issue.
+The verification record distinguishes those commands from a normal `bun run check` invocation.
+
+### Gemini roles and server environment
+
+Obtain project-owned API keys from [Google AI Studio](https://aistudio.google.com/apikey).
+Use the actual Google Cloud project ID associated with each key. Keep interactive and background
+Study work in separate projects for operational isolation; do not rotate projects or teammate
+keys to retry exhausted quota. Keys in one project share its limits. Google Pro subscription
+benefits do not establish Gemini API quota; inspect the project's
+[rate limits](https://aistudio.google.com/docs/rate-limits) and
+[pricing](https://aistudio.google.com/docs/pricing).
+
+The following values are placeholders except for the explicit model and bounded settings:
+
+```dotenv
+GEMINI_API_KEY=REPLACE_INTERACTIVE_PROJECT_KEY
+GEMINI_PROJECT_ID=your-interactive-project-id
+GEMINI_GENERATION_ENABLED=true
+GEMINI_GENERATION_MODEL=gemini-3.5-flash-lite
+
+GEMINI_STUDY_API_KEY=REPLACE_STUDY_PROJECT_KEY
+GEMINI_STUDY_PROJECT_ID=your-background-project-id
+GEMINI_STUDY_ENABLED=true
+GEMINI_STUDY_MODEL=gemini-3.5-flash-lite
+
+# Leave this pair empty to inherit interactive credentials for optional vision.
+GEMINI_VISUAL_API_KEY=
+GEMINI_VISUAL_PROJECT_ID=
+
+GEMINI_GENERATION_MAX_OUTPUT_TOKENS=4096
+GEMINI_STUDY_MAX_OUTPUT_TOKENS=4096
+GEMINI_GENERATION_THINKING=low
+GEMINI_STUDY_THINKING=low
+GEMINI_STUDY_EVIDENCE_CHARACTERS=12000
+GEMINI_STUDY_EXCERPT_CHARACTERS=1200
+GEMINI_TIMEOUT_SECONDS=75
+GEMINI_REQUESTS_PER_MINUTE=5
+GEMINI_INPUT_TOKENS_PER_MINUTE=64000
+GEMINI_REQUESTS_PER_DAY=50
+```
+
+Supported text model codes are `gemini-3.5-flash-lite` and `gemini-3.8-flash`; there is no
+automatic model substitution. Optional text revision settings compare the returned model code,
+not an immutable weights digest. Gemini output ceilings accept 256–16,384 tokens per call.
+The prompt byte ceiling is 128 KiB; it is not a tokenizer measurement. The shared application
+input budget can reject a request below that byte ceiling because schema/overhead and other
+recent requests also consume its conservative reservation. Provider quota can be lower.
+
+Strict Gemini Study uses up to 12,000 evidence characters per chapter and 1,200 per excerpt.
+These settings allow 1,400–48,000 and 320–4,000 respectively. A chain containing local Study
+retains the 1,400/320 bounds. Local Study remains at 560 output tokens; Gemini defaults to
+4,096 per chapter call. Item ceilings per chapter are three summaries, five notes, two
+flashcards or two quiz questions. Increasing the token ceiling alone does not expand those
+item counts. These bounds limit cost and do not promise complete long-source coverage.
+
+Vision is independently opt-in: configure `VLM_PROVIDER=gemini`,
+`EXTERNAL_FRAME_PROCESSING_ENABLED=true`, a supported `GEMINI_VISUAL_MODEL`, and its exact
+returned `GEMINI_VISUAL_REVISION`. Leave vision disabled until that identity has been confirmed
+in an explicitly consented check. Its existing adapter requests up to 1,024 output tokens.
+The two visual override variables must be both present or both absent.
+
+### Use and recover
+
+Open `/settings/providers` to inspect readiness, capability, project budgets, reset times,
+pricing provenance and versioned profiles. Start with **Default local profile**. On a ready
+video, choose **gemini · v1** in the question or Study section to select the Gemini task roles.
+Approve only the displayed sharing scopes for that run. Study warns before queueing if its
+profile requires cloud processing and no scope was approved. With a local fallback chain,
+unchecked cloud scopes remain ineligible while local processing can proceed.
+
+Keep the Python worker running for chapters and Study artifacts. Generate chapters before
+Summary, Notes, Flashcards or Quiz. Inspect the saved provider trail, version, exact quotes and
+timestamps; export the selected saved version. Revoking consent blocks future dispatch, including
+later chapter calls, but cannot recall a request already sent. A lost worker lease also blocks
+new external dispatch and stale publication.
+
+For rate/daily quota errors, follow the displayed retry time; repeated retries do not create
+more quota. Application RPD resets at midnight Pacific. A provider-reported daily exhaustion
+without `Retry-After` uses that reset. An unknown completion outcome is not automatically
+retried or refunded. Choose an explicit local profile or wait for provider recovery. Incompatible
+embedding collections are rejected rather than silently rebuilt. Evaluation requires complete
+local pins and both indexed collections; Study evaluation remains unsupported and fails visibly.
+
+### Optional non-Gemini adapters
+
+- Cloudflare ASR needs `CLOUDFLARE_ACCOUNT_ID` (32 hexadecimal characters),
+  `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ASR_ENABLED=true`, plus audio consent for the import.
+- LlamaParse OCR needs `LLAMA_CLOUD_API_KEY`, `EXTERNAL_FRAME_PROCESSING_ENABLED=true`,
+  `OCR_EXTERNAL_FRAMES_PERMITTED=true` and frame consent for the import.
+- Bedrock needs `AWS_BEARER_TOKEN_BEDROCK`, an allowed `BEDROCK_REGION` (`us-east-1`,
+  `us-east-2` or `us-west-2`), and `BEDROCK_TEXT_ENABLED=true`, plus paid-text consent.
+  A generic AWS access key or session token is not interchangeable with this bearer-token adapter.
+- Amazon Transcribe is catalog-only; S3 staging and new AWS infrastructure are not implemented.
+
+Keys alone do not enable these adapters. Their hosted acceptance was not established by Phase 8's
+fake-transport tests. Setup instructions do not claim that an account is eligible, free or billed.
+
+### Explicit hosted smoke
+
+This opt-in check uses synthetic text only, independent of normal app admission/usage history.
+It does not read a video. The default checks credential presence without printing values:
+
+```bash
+uv run --directory backend python ../scripts/phase_8_provider_smoke.py --model gemini-3.5-flash-lite
+# Two real API calls; project billing terms apply:
+uv run --directory backend python ../scripts/phase_8_provider_smoke.py --model gemini-3.5-flash-lite --live
+# Show only the validated synthetic outputs when explicitly wanted:
+uv run --directory backend python ../scripts/phase_8_provider_smoke.py --model gemini-3.5-flash-lite --live --show-output
+```
+
+Use `--role generation` or `--role study` to make one targeted call. Smoke output uses a
+1,024-token ceiling and prints safe status, model and usage metadata. A successful smoke is
+hosted acceptance for that small prompt, not a full video-quality or latency benchmark.

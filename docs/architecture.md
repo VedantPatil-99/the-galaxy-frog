@@ -103,11 +103,11 @@ Provider availability is reported by the import/question operation that requires
 database readiness. A missing embedder or generator produces a stable, correlated API failure; it
 does not silently change the model or answer quality.
 
-## Planned Phase 8 provider policy boundary
+## Phase 8 provider policy boundary
 
 Phase 8 adds product-facing provider configuration without moving provider policy into Next.js.
-FastAPI will expose capability, health and versioned profile schemas through OpenAPI; the frontend
-will consume the generated types, select a profile and render the resulting decision. Provider SDK
+FastAPI exposes capability, health and versioned profile schemas through OpenAPI; the frontend
+consumes the generated types, selects a profile and renders the resulting decision. Provider SDK
 clients, credentials, availability probes, compatibility rules, quota state, fallback resolution
 and cost calculations remain Python responsibilities.
 
@@ -126,7 +126,7 @@ substituting a provider silently. Evaluation profiles pin the complete provider 
 disable automatic fallback.
 
 Every provider run produces a durable decision record containing the requested mode/profile/model,
-the resolved provider/model/revision/device, language and capability requirements, the selection
+the resolved provider/model/revision/device, capability, the selection
 reason, ordered fallback attempts and reasons, input duration, processing time, estimated or actual
 cost when reported, and pricing provenance (`source_url`, billing unit, currency and `verified_at`).
 Pricing metadata is explanatory and can be marked stale; the provider's bill remains authoritative.
@@ -138,10 +138,33 @@ Job details distinguish requested from actual execution and explain every fallba
 presentation paths may discard or rewrite the original half-open timestamp intervals, source IDs,
 cue links or evidence provenance.
 
-Phase 2 prepares only the execution evidence needed by this later policy: its progress UI may show
-the actual ASR provider, model, revision, device, timing and fallback reason as read-only data. The
-interactive selector, editable profiles, cloud-consent controls and pricing presentation remain
-Phase 8 work.
+The selectors, editable profiles, consent controls, budget display and provider trails are now
+implemented. Health describes application observations and local probes; configuration readiness,
+a documented capability, a successful hosted call and an account's actual quota are distinct facts.
+
+Gemini text generation uses the Python `google-genai` SDK with explicit model selection,
+`store=False`, single dispatch, bounded output, no automatic continuation and no hidden retries.
+Interactive answers and Study use separate configured key/project pairs; optional vision credentials
+must be supplied as a complete pair or inherit the interactive pair. The existing vision REST adapter
+retains its exact returned-model-version check. Interactions exposes a checked model code rather
+than an independently verified immutable weights revision; evaluation never treats it as one.
+
+PostgreSQL admission locks and atomic input reservations are grouped by a hash of project identity,
+not API key or model. Roles using one project share application RPM/TPM/RPD budgets and cooldowns.
+Daily resets use midnight Pacific via PostgreSQL's timezone database. Input reservations use UTF-8
+bytes plus schema/overhead conservatively; actual provider token usage is recorded separately.
+An unknown completion outcome retains its reservation and cannot trigger silent retry/fallback.
+No project or key rotation is implemented. Google account quota and billing remain authoritative.
+
+Study selections persist with the run and are checked against its request ID. Dispatch verifies
+the current lease token, source/profile-bound grant and project budget. The first successful
+provider is retained for subsequent chapters so one saved material cannot silently mix providers.
+Strict Gemini Study permits a larger evidence budget; a chain with local candidates retains the
+local evidence bounds. Exact quotes and original intervals are validated before publication.
+FastAPI's consent-options contract marks Study profiles that require cloud processing so the UI
+can warn before queueing; profiles with local fallback may run with no cloud grant.
+
+See [ADR 0009](adr/0009-provider-policy-and-gemini-roles.md) for the accepted decisions and limits.
 
 ## Phase 1 transcript path
 

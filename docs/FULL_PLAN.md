@@ -1039,6 +1039,10 @@ Duration: 7–10 days.
 
 ## Phase 8 — Provider resilience and configuration UI
 
+Local implementation and exit gate completed on 2026-11-19. See
+[the Phase 8 verification record](phase-8/p8-verification.md) for exact evidence and limitations;
+hosted CI and merge are separate, unverified states at this closeout.
+
 Duration: 5–7 days.
 
 Provider abstractions should exist from Phase 0, but this phase completes the product-facing configuration.
