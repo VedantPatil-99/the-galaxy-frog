@@ -98,6 +98,16 @@ class ExternalData(StrEnum):
 GEMINI_TEXT_MODELS = frozenset({"gemini-3.5-flash-lite", "gemini-3.8-flash"})
 
 
+class QuotaLimits(BaseModel):
+    """Application budgets; the provider account remains the quota authority."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    requests_per_minute: int = Field(ge=1, le=10_000)
+    input_tokens_per_minute: int = Field(ge=1, le=2_000_000)
+    requests_per_day: int = Field(ge=1, le=1_000_000)
+
+
 class ConsentScope(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
