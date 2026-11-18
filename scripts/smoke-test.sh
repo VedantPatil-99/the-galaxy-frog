@@ -17,18 +17,18 @@ assert_response() {
   shift 2
 
   local actual_status
-  actual_status="$(
-    curl --silent --show-error \
+  if ! actual_status="$(
+    curl --silent \
       --output "${response_file}" \
       --write-out "%{http_code}" \
       "${web_base_url}${path}"
-  )"
+  )"; then
+    printf 'Request to %s failed. Check that the app is running.\n' "${path}" >&2
+    return 1
+  fi
 
   if [[ "${actual_status}" != "${expected_status}" ]]; then
     printf 'Expected %s from %s, received %s.\n' "${expected_status}" "${path}" "${actual_status}" >&2
-    printf 'Response: ' >&2
-    cat "${response_file}" >&2
-    printf '\n' >&2
     return 1
   fi
 
@@ -36,9 +36,6 @@ assert_response() {
   for expected_fragment in "$@"; do
     if ! grep --fixed-strings --quiet "${expected_fragment}" "${response_file}"; then
       printf 'Response from %s is missing %s.\n' "${path}" "${expected_fragment}" >&2
-      printf 'Response: ' >&2
-      cat "${response_file}" >&2
-      printf '\n' >&2
       return 1
     fi
   done

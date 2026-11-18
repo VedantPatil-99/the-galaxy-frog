@@ -15,10 +15,15 @@ async function jsonRequest(path: string, init?: RequestInit): Promise<Record<str
       accept: "application/json",
       ...(init?.body === undefined ? {} : { "content-type": "application/json" }),
     },
+  }).catch(() => { throw new Error(`${path} request failed`) })
+  if (!response.ok) {
+    throw new Error(`${path} failed with HTTP ${response.status}`)
+  }
+  const body: unknown = await response.json().catch(() => {
+    throw new Error(`${path} returned invalid JSON`)
   })
-  const body: unknown = await response.json()
-  if (!response.ok || typeof body !== "object" || body === null) {
-    throw new Error(`${path} failed with ${response.status}: ${JSON.stringify(body)}`)
+  if (typeof body !== "object" || body === null) {
+    throw new Error(`${path} returned an invalid response`)
   }
   return body as Record<string, unknown>
 }
@@ -60,7 +65,7 @@ const answer = await jsonRequest(`/v1/videos/${encodeURIComponent(videoId)}/ques
   body: JSON.stringify({ question }),
 })
 if (!Array.isArray(answer.evidence) || answer.evidence.length === 0) {
-  throw new Error(`the grounded answer returned no evidence: ${JSON.stringify(answer)}`)
+  throw new Error("the grounded answer returned no evidence")
 }
 for (const rawEvidence of answer.evidence) {
   const evidence = object(rawEvidence, "answer evidence")
@@ -73,7 +78,7 @@ for (const rawEvidence of answer.evidence) {
     !Array.isArray(evidence.cue_ids) ||
     evidence.cue_ids.length === 0
   ) {
-    throw new Error(`invalid timestamp citation: ${JSON.stringify(evidence)}`)
+    throw new Error("invalid timestamp citation")
   }
 }
 
