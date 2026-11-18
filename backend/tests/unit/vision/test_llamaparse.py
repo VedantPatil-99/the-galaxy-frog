@@ -52,6 +52,64 @@ def ocr_request(sample_frame: FrameSample) -> OCRExtractionRequest:
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["upload", "poll", "result"])
+@pytest.mark.parametrize("failure", ["http", "network", "json"])
+async def test_provider_errors_never_include_raw_credentials(
+    ocr_request: OCRExtractionRequest, stage: str, failure: str
+) -> None:
+    import traceback
+
+    secret = "synthetic-private-provider-credential"
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        current = (
+            "upload"
+            if request.method == "POST"
+            else "result"
+            if "/result/" in request.url.path
+            else "poll"
+        )
+        if current != stage:
+            return httpx.Response(
+                200, json={"id": "job-123", "status": "PENDING" if stage == "poll" else "SUCCESS"}
+            )
+        if failure == "network":
+            raise httpx.ConnectError("Authorization: Bearer " + secret, request=request)
+        return httpx.Response(500 if failure == "http" else 200, text=secret)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key=secret, client=client, poll_interval_seconds=0.001
+        )
+        with pytest.raises(OCRExtractionError) as caught:
+            await adapter.extract(ocr_request)
+    assert secret not in "".join(traceback.format_exception(caught.value))
+
+
+@pytest.mark.asyncio
+async def test_provider_job_failure_does_not_echo_its_error_body(
+    ocr_request: OCRExtractionRequest,
+) -> None:
+    secret = "synthetic-private-provider-credential"
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"id": "job-123", "status": "PENDING"}
+            if request.method == "POST"
+            else {"status": "ERROR", "error_message": secret},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+        adapter = LlamaParseOCRAdapter(
+            external_permitted=True, api_key=secret, client=client, poll_interval_seconds=0.001
+        )
+        with pytest.raises(OCRExtractionError, match="LlamaParse parsing job failed") as caught:
+            await adapter.extract(ocr_request)
+    assert secret not in str(caught.value)
+
+
 class TestGuessMimeType:
     def test_known_image_extensions(self) -> None:
         assert _guess_mime_type(Path("frame.jpg")) == "image/jpeg"
@@ -352,7 +410,7 @@ class TestLlamaParseOCRAdapterExtract:
         )
 
         with pytest.raises(
-            OCRExtractionError, match="Network failure while polling LlamaParse job job-123"
+            OCRExtractionError, match="Network failure while polling LlamaParse job"
         ):
             await adapter.extract(ocr_request)
 
@@ -408,7 +466,7 @@ class TestLlamaParseOCRAdapterExtract:
         )
 
         with pytest.raises(
-            OCRExtractionError, match="LlamaParse returned invalid JSON while polling job job-123"
+            OCRExtractionError, match="LlamaParse returned invalid JSON while polling job"
         ):
             await adapter.extract(ocr_request)
 
@@ -470,7 +528,7 @@ class TestLlamaParseOCRAdapterExtract:
 
         with pytest.raises(
             OCRExtractionError,
-            match="LlamaParse parsing job job-123 failed: Document conversion failed",
+            match="LlamaParse parsing job failed",
         ):
             await adapter.extract(ocr_request)
 
@@ -488,9 +546,7 @@ class TestLlamaParseOCRAdapterExtract:
         adapter = LlamaParseOCRAdapter(
             external_permitted=True, api_key="test-key", client=mock_client
         )
-        with pytest.raises(
-            OCRExtractionError, match="Network failure fetching LlamaParse result for job job-123"
-        ):
+        with pytest.raises(OCRExtractionError, match="Network failure fetching LlamaParse result"):
             await adapter.extract(ocr_request)
 
     @pytest.mark.asyncio

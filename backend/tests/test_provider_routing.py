@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -294,6 +295,30 @@ async def test_cloudflare_maps_quota_and_capacity(
                 audio_request(tmp_path)
             )
     assert raised.value.retry_at is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider_id", ["bedrock", "cloudflare"])
+@pytest.mark.parametrize("failure", ["network", "json"])
+async def test_hosted_provider_errors_hide_secret_traceback_context(
+    tmp_path: Path, provider_id: str, failure: str
+) -> None:
+    secret = "synthetic-hosted-provider-credential"
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if failure == "network":
+            raise httpx.ReadTimeout(secret, request=request)
+        return httpx.Response(200, text=secret)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        with pytest.raises(ProviderFailure) as caught:
+            if provider_id == "bedrock":
+                await BedrockGeneration("us-east-1", secret, client).generate("Question", ())
+            else:
+                await CloudflareTranscription("test", secret, client).transcribe(
+                    audio_request(tmp_path)
+                )
+    assert secret not in "".join(traceback.format_exception(caught.value))
 
 
 @pytest.mark.parametrize("fenced", [False, True])

@@ -88,8 +88,8 @@ class CloudflareTranscription:
                     return stream.read(MAX_AUDIO_BYTES + 1)
 
             audio = await asyncio.to_thread(read_audio)
-        except OSError as exc:
-            raise ProviderFailure(ProviderCode.UNAVAILABLE) from exc
+        except OSError:
+            raise ProviderFailure(ProviderCode.UNAVAILABLE) from None
         if not audio or len(audio) > MAX_AUDIO_BYTES:
             raise ProviderFailure(ProviderCode.INPUT_LIMIT)
         if verify_consent:
@@ -109,10 +109,10 @@ class CloudflareTranscription:
                 return self._convert(
                     response.status_code, response.headers, bytes(payload), request, started
                 )
-        except httpx.TimeoutException as exc:
-            raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN) from exc
-        except httpx.RequestError as exc:
-            raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN) from exc
+        except httpx.TimeoutException:
+            raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN) from None
+        except httpx.RequestError:
+            raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN) from None
 
     def _convert(
         self,
@@ -130,10 +130,10 @@ class CloudflareTranscription:
             raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN)
         try:
             body = _Envelope.model_validate_json(payload)
-        except ValidationError as exc:
+        except ValidationError:
             if status == 429:
-                raise ProviderFailure(ProviderCode.RATE_LIMITED) from exc
-            raise ProviderFailure(ProviderCode.INVALID_OUTPUT) from exc
+                raise ProviderFailure(ProviderCode.RATE_LIMITED) from None
+            raise ProviderFailure(ProviderCode.INVALID_OUTPUT) from None
         if status == 429:
             now = datetime.now(UTC)
             if any(error.code == 3036 for error in body.errors):
@@ -179,5 +179,5 @@ class CloudflareTranscription:
                 processing_seconds=perf_counter() - started,
                 transcribed_at=datetime.now(UTC),
             )
-        except (ValueError, OverflowError) as exc:
-            raise ProviderFailure(ProviderCode.INVALID_OUTPUT) from exc
+        except ValueError, OverflowError:
+            raise ProviderFailure(ProviderCode.INVALID_OUTPUT) from None

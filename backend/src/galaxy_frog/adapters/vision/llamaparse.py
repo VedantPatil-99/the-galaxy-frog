@@ -205,7 +205,7 @@ class LlamaParseOCRAdapter:
             raise OCRExtractionError("external_processing_not_permitted")
 
         if not request.frame.path.is_file():
-            msg = f"Frame image not found at {request.frame.path}"
+            msg = "Frame image not found"
             raise FileNotFoundError(msg)
 
         headers = {
@@ -228,25 +228,21 @@ class LlamaParseOCRAdapter:
             upload_url = f"{self._base_url}/api/parsing/upload"
             try:
                 upload_resp = await client.post(upload_url, headers=headers, files=files)
-            except httpx.RequestError as exc:
-                msg = f"Network failure during LlamaParse frame upload: {exc}"
-                raise OCRExtractionError(msg) from exc
+            except httpx.RequestError:
+                raise OCRExtractionError("Network failure during LlamaParse frame upload") from None
 
             if upload_resp.status_code in {401, 403}:
                 msg = f"LlamaParse authentication failed (HTTP {upload_resp.status_code})"
                 raise OCRExtractionError(msg)
             if upload_resp.is_error:
-                msg = (
-                    f"LlamaParse frame upload failed with HTTP {upload_resp.status_code}: "
-                    f"{upload_resp.text}"
-                )
+                msg = f"LlamaParse frame upload failed with HTTP {upload_resp.status_code}"
                 raise OCRExtractionError(msg)
 
             try:
                 upload_raw: object = upload_resp.json()
-            except ValueError as exc:
+            except ValueError:
                 msg = "LlamaParse returned invalid JSON from upload endpoint"
-                raise OCRExtractionError(msg) from exc
+                raise OCRExtractionError(msg) from None
 
             if not isinstance(upload_raw, Mapping):
                 msg = "LlamaParse upload response is not a JSON object"
@@ -267,10 +263,7 @@ class LlamaParseOCRAdapter:
 
             while status in {"PENDING", "RUNNING"}:
                 if elapsed >= self._max_poll_seconds:
-                    msg = (
-                        f"LlamaParse extraction timed out after {self._max_poll_seconds}s "
-                        f"(job_id={job_id})"
-                    )
+                    msg = f"LlamaParse extraction timed out after {self._max_poll_seconds}s"
                     raise TimeoutError(msg)
 
                 await asyncio.sleep(self._poll_interval_seconds)
@@ -278,61 +271,50 @@ class LlamaParseOCRAdapter:
 
                 try:
                     status_resp = await client.get(status_url, headers=headers)
-                except httpx.RequestError as exc:
-                    msg = f"Network failure while polling LlamaParse job {job_id}: {exc}"
-                    raise OCRExtractionError(msg) from exc
+                except httpx.RequestError:
+                    raise OCRExtractionError(
+                        "Network failure while polling LlamaParse job"
+                    ) from None
 
                 if status_resp.is_error:
-                    msg = (
-                        f"LlamaParse job polling failed with HTTP {status_resp.status_code}: "
-                        f"{status_resp.text}"
-                    )
+                    msg = f"LlamaParse job polling failed with HTTP {status_resp.status_code}"
                     raise OCRExtractionError(msg)
 
                 try:
                     status_raw: object = status_resp.json()
-                except ValueError as exc:
-                    msg = f"LlamaParse returned invalid JSON while polling job {job_id}"
-                    raise OCRExtractionError(msg) from exc
+                except ValueError:
+                    msg = "LlamaParse returned invalid JSON while polling job"
+                    raise OCRExtractionError(msg) from None
 
                 if not isinstance(status_raw, Mapping):
-                    msg = f"LlamaParse status response is not a JSON object for job {job_id}"
+                    msg = "LlamaParse status response is not a JSON object"
                     raise OCRExtractionError(msg)
 
                 status_data = cast(Mapping[str, object], status_raw)
                 status = str(status_data.get("status", "")).upper()
                 if status == "ERROR":
-                    error_msg = str(
-                        status_data.get("error_message")
-                        or status_data.get("error")
-                        or "Unspecified LlamaParse job error"
-                    )
-                    msg = f"LlamaParse parsing job {job_id} failed: {error_msg}"
+                    msg = "LlamaParse parsing job failed"
                     raise OCRExtractionError(msg)
 
             # Retrieve result payload
             result_url = f"{self._base_url}/api/parsing/job/{job_id}/result/raw/json"
             try:
                 result_resp = await client.get(result_url, headers=headers)
-            except httpx.RequestError as exc:
-                msg = f"Network failure fetching LlamaParse result for job {job_id}: {exc}"
-                raise OCRExtractionError(msg) from exc
+            except httpx.RequestError:
+                raise OCRExtractionError("Network failure fetching LlamaParse result") from None
 
             if result_resp.is_error:
-                msg = (
-                    f"LlamaParse result fetch failed with HTTP {result_resp.status_code}: "
-                    f"{result_resp.text}"
-                )
+                msg = f"LlamaParse result fetch failed with HTTP {result_resp.status_code}"
                 raise OCRExtractionError(msg)
 
             try:
                 result_raw: object = result_resp.json()
-            except ValueError as exc:
-                msg = f"LlamaParse returned invalid JSON from result endpoint for job {job_id}"
-                raise OCRExtractionError(msg) from exc
+            except ValueError:
+                msg = "LlamaParse returned invalid JSON from result endpoint"
+                raise OCRExtractionError(msg) from None
 
             if not isinstance(result_raw, Mapping):
-                msg = f"LlamaParse result is not a JSON object for job {job_id}"
+                msg = "LlamaParse result is not a JSON object"
                 raise OCRExtractionError(msg)
 
             result_data = cast(Mapping[str, object], result_raw)

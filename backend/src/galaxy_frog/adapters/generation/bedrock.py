@@ -91,8 +91,8 @@ class BedrockGeneration:
                     data.extend(part)
                     if len(data) > 65_536:
                         raise ProviderFailure(ProviderCode.INVALID_OUTPUT)
-        except httpx.RequestError as exc:
-            raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN) from exc
+        except httpx.RequestError:
+            raise ProviderFailure(ProviderCode.OUTCOME_UNKNOWN) from None
         try:
             payload = _Converse.model_validate_json(data)
             if payload.usage is not None:
@@ -108,5 +108,5 @@ class BedrockGeneration:
             if output.startswith("```json\n") and output.endswith("```"):
                 output = output[8:-3].strip()
             return grounded_draft(json.loads(output))
-        except (ValueError, KeyError, TypeError, ValidationError) as exc:
-            raise ProviderFailure(ProviderCode.INVALID_OUTPUT) from exc
+        except ValueError, KeyError, TypeError, ValidationError:
+            raise ProviderFailure(ProviderCode.INVALID_OUTPUT) from None

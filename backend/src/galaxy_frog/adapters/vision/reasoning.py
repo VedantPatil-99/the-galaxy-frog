@@ -74,8 +74,8 @@ class LocalReasoningFrameVerifier:
     async def verify(self, frames: tuple[VisualFrame, ...]) -> None:
         try:
             await asyncio.to_thread(_image_bytes, frames)
-        except (OSError, ValueError) as exc:
-            raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from exc
+        except OSError, ValueError:
+            raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from None
 
 
 def _validated(
@@ -196,12 +196,12 @@ class OllamaQwenVisualReasoner:
                         self.identity,
                         (perf_counter() - started) * 1000,
                     )
-            except (httpx.TimeoutException, TimeoutError) as exc:
-                raise VisualProviderError(VisualFailureCode.TIMEOUT) from exc
-            except httpx.HTTPError as exc:
-                raise VisualProviderError(VisualFailureCode.UNAVAILABLE) from exc
-            except (KeyError, TypeError, ValueError, OSError) as exc:
-                raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from exc
+            except httpx.TimeoutException, TimeoutError:
+                raise VisualProviderError(VisualFailureCode.TIMEOUT) from None
+            except httpx.HTTPError:
+                raise VisualProviderError(VisualFailureCode.UNAVAILABLE) from None
+            except KeyError, TypeError, ValueError, OSError:
+                raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from None
             finally:
                 try:
                     if attempted:
@@ -211,8 +211,8 @@ class OllamaQwenVisualReasoner:
                             timeout=5,
                         )
                         released.raise_for_status()
-                except httpx.HTTPError as exc:
-                    raise VisualProviderError(VisualFailureCode.UNAVAILABLE) from exc
+                except httpx.HTTPError:
+                    raise VisualProviderError(VisualFailureCode.UNAVAILABLE) from None
                 finally:
                     if self._client is None:
                         await client.aclose()
@@ -313,8 +313,8 @@ class GeminiVisualReasoner:
                         self.identity,
                         (perf_counter() - started) * 1000,
                     )
-            except (httpx.TimeoutException, TimeoutError) as exc:
-                raise VisualProviderError(VisualFailureCode.TIMEOUT) from exc
+            except httpx.TimeoutException, TimeoutError:
+                raise VisualProviderError(VisualFailureCode.TIMEOUT) from None
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
                 code = (
@@ -326,11 +326,11 @@ class GeminiVisualReasoner:
                     if status >= 500
                     else VisualFailureCode.UNAVAILABLE
                 )
-                raise VisualProviderError(code) from exc
-            except httpx.RequestError as exc:
-                raise VisualProviderError(VisualFailureCode.OUTCOME_UNKNOWN) from exc
-            except (KeyError, TypeError, ValueError, IndexError, OSError) as exc:
-                raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from exc
+                raise VisualProviderError(code) from None
+            except httpx.RequestError:
+                raise VisualProviderError(VisualFailureCode.OUTCOME_UNKNOWN) from None
+            except KeyError, TypeError, ValueError, IndexError, OSError:
+                raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from None
             finally:
                 if self._client is None:
                     await client.aclose()
