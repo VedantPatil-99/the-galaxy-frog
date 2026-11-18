@@ -11,7 +11,12 @@ import pytest_asyncio
 from google import genai
 from google.genai import types
 
-from galaxy_frog.adapters.generation.gemini import ANSWER_SCHEMA, GeminiGeneration, GeminiJSON
+from galaxy_frog.adapters.generation.gemini import (
+    ANSWER_SCHEMA,
+    GeminiGeneration,
+    GeminiJSON,
+    daily_quota,
+)
 from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
 
 MODEL = "gemini-3.5-flash-lite"
@@ -207,3 +212,89 @@ async def test_owned_sdk_client_pins_privacy_options(
         "trust_env": False,
         "follow_redirects": False,
     }
+
+
+def test_daily_quota_uses_structured_ids_and_bounds_untrusted_nesting() -> None:
+    assert daily_quota(
+        {"error": {"details": [{"violations": [{"quotaId": "GenerateRequestsPerDayPerProject"}]}]}}
+    )
+    assert daily_quota({"quota_id": "requests_per_day"})
+    assert not daily_quota({"message": "perday", "quotaId": 123})
+    assert not daily_quota({"quotaId": "perday"}, depth=7)
+    assert not daily_quota([])
+
+
+@pytest.mark.asyncio
+async def test_daily_provider_quota_is_distinct_from_temporary_rate_limit(
+    sdk: tuple[genai.Client, list[httpx2.Request], list[httpx2.Response | Exception]],
+) -> None:
+    client, requests, responses = sdk
+    responses[0] = httpx2.Response(
+        429, json={"error": {"details": [{"violations": [{"quotaId": "GenerateRequestsPerDay"}]}]}}
+    )
+    with pytest.raises(ProviderFailure) as caught:
+        await GeminiJSON("key", MODEL, client=client).generate("prompt", ANSWER_SCHEMA)
+    assert caught.value.code is ProviderCode.QUOTA_EXHAUSTED and len(requests) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"answer": " ", "confidence": "low", "citations": []},
+        {"answer": "x" * 65_537, "confidence": "low", "citations": []},
+        {"answer": "Answer", "confidence": "unknown", "citations": []},
+        {
+            "answer": "Answer",
+            "confidence": "low",
+            "citations": [{"retrieval_unit_id": "id", "quote": "x" * 361}],
+        },
+        {"unexpected": "shape"},
+    ],
+)
+async def test_answer_schema_is_enforced_locally(
+    sdk: tuple[genai.Client, list[httpx2.Request], list[httpx2.Response | Exception]],
+    document: dict[str, object],
+) -> None:
+    client, _requests, responses = sdk
+    responses[0] = httpx2.Response(200, json=result(output_text=json.dumps(document)))
+    with pytest.raises(ProviderFailure, match="PROVIDER_INVALID_OUTPUT"):
+        await GeminiGeneration(GeminiJSON("key", MODEL, client=client)).generate("Question", ())
+
+
+@pytest.mark.asyncio
+async def test_valid_citation_and_absent_usage_are_preserved(
+    sdk: tuple[genai.Client, list[httpx2.Request], list[httpx2.Response | Exception]],
+) -> None:
+    client, _requests, responses = sdk
+    responses[0] = httpx2.Response(
+        200,
+        json=result(
+            usage={},
+            output_text=json.dumps(
+                {
+                    "answer": "Answer",
+                    "confidence": "high",
+                    "citations": [{"retrieval_unit_id": "id", "quote": "exact quote"}],
+                }
+            ),
+        ),
+    )
+    provider = GeminiJSON("key", MODEL, client=client)
+    answer = await GeminiGeneration(provider).generate("Question", ())
+    assert answer.citations[0].quote == "exact quote" and provider.usage is None
+    with pytest.raises(ProviderFailure, match="PROVIDER_INPUT_LIMIT"):
+        await provider.generate("x" * 131_073, ANSWER_SCHEMA)
+    assert provider.usage is None and provider.observed_model is None
+
+
+@pytest.mark.asyncio
+async def test_unexpected_sdk_return_shape_fails_closed(
+    sdk: tuple[genai.Client, list[httpx2.Request], list[httpx2.Response | Exception]],
+) -> None:
+    client, _requests, _responses = sdk
+    with (
+        patch.object(client.aio.interactions, "create", AsyncMock(return_value=object())),
+        pytest.raises(ProviderFailure, match="PROVIDER_INVALID_OUTPUT"),
+    ):
+        await GeminiJSON("key", MODEL, client=client).generate("prompt", ANSWER_SCHEMA)

@@ -4,13 +4,16 @@ import json
 from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Literal, cast
 
-from galaxy_frog.adapters.generation.ollama import (
-    grounded_draft,
-    moment_prompt,
-    question_prompt,
-)
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from galaxy_frog.adapters.generation.ollama import moment_prompt, question_prompt
 from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure, retry_after_at
-from galaxy_frog.domain.generation.models import GenerationDraft, GroundingText
+from galaxy_frog.domain.generation.models import (
+    AnswerConfidence,
+    GenerationCitation,
+    GenerationDraft,
+    GroundingText,
+)
 from galaxy_frog.domain.providers import GEMINI_TEXT_MODELS
 from galaxy_frog.domain.retrieval.models import RetrievedEvidence
 
@@ -20,28 +23,23 @@ if TYPE_CHECKING:
 type ThinkingLevel = Literal["low", "medium", "high"]
 type BeforeDispatch = Callable[[int], Awaitable[None]]
 
-ANSWER_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "properties": {
-        "answer": {"type": "string", "minLength": 1, "maxLength": 65_536},
-        "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
-        "citations": {
-            "type": "array",
-            "maxItems": 24,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "retrieval_unit_id": {"type": "string", "minLength": 1, "maxLength": 72},
-                    "quote": {"type": "string", "minLength": 1, "maxLength": 360},
-                },
-                "required": ["retrieval_unit_id", "quote"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    "required": ["answer", "confidence", "citations"],
-    "additionalProperties": False,
-}
+
+class _Citation(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    retrieval_unit_id: str = Field(min_length=1, max_length=72)
+    quote: str = Field(min_length=1, max_length=360)
+
+
+class _Answer(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    answer: str = Field(min_length=1, max_length=65_536)
+    confidence: AnswerConfidence
+    citations: tuple[_Citation, ...] = Field(max_length=24)
+
+
+ANSWER_SCHEMA: dict[str, object] = _Answer.model_json_schema()
 
 
 def sdk_failure(error: Exception) -> ProviderFailure:
@@ -58,7 +56,9 @@ def sdk_failure(error: Exception) -> ProviderFailure:
             else None
         )
         return ProviderFailure(
-            ProviderCode.RATE_LIMITED,
+            ProviderCode.QUOTA_EXHAUSTED
+            if daily_quota(getattr(error, "body", None))
+            else ProviderCode.RATE_LIMITED,
             retry_at=retry_after_at(retry if isinstance(retry, str) else None),
         )
     if status in {400, 413, 422}:
@@ -66,6 +66,22 @@ def sdk_failure(error: Exception) -> ProviderFailure:
     if status == 404:
         return ProviderFailure(ProviderCode.SETUP_REQUIRED)
     return ProviderFailure(ProviderCode.OUTCOME_UNKNOWN)
+
+
+def daily_quota(value: object, depth: int = 0) -> bool:
+    """Use structured quota IDs only; never infer billing state from raw messages."""
+    if depth > 6:
+        return False
+    if isinstance(value, Mapping):
+        values = cast(Mapping[str, object], value)
+        return any(
+            isinstance(item, str) and "perday" in item.replace("_", "").lower()
+            for key, item in values.items()
+            if key in {"quotaId", "quota_id"}
+        ) or any(daily_quota(item, depth + 1) for item in values.values())
+    if isinstance(value, list):
+        return any(daily_quota(item, depth + 1) for item in cast(list[object], value))
+    return False
 
 
 class GeminiJSON:
@@ -94,9 +110,10 @@ class GeminiJSON:
         self.observed_model: str | None = None
 
     async def generate(self, prompt: str, schema: dict[str, object]) -> object:
+        self.usage = None
+        self.observed_model = None
         if len(prompt.encode("utf-8")) > 131_072:
             raise ProviderFailure(ProviderCode.INPUT_LIMIT)
-        self.usage = None
         # UTF-8 bytes are a conservative input-token reservation, not a usage
         # measurement. Reserve before SDK/client construction and every dispatch.
         if self._before_dispatch:
@@ -194,6 +211,13 @@ class GeminiGeneration:
 
     async def _draft(self, prompt: str) -> GenerationDraft:
         try:
-            return grounded_draft(await self.provider.generate(prompt, ANSWER_SCHEMA))
-        except ValueError, KeyError, TypeError:
+            draft = _Answer.model_validate(await self.provider.generate(prompt, ANSWER_SCHEMA))
+        except ValidationError:
             raise ProviderFailure(ProviderCode.INVALID_OUTPUT) from None
+        return GenerationDraft(
+            draft.answer,
+            draft.confidence,
+            tuple(
+                GenerationCitation(item.retrieval_unit_id, item.quote) for item in draft.citations
+            ),
+        )
