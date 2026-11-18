@@ -733,7 +733,11 @@ async def test_get_frame_image_success(
 ) -> None:
     application, repository = api
     video_id = await seed_api(repository)
-    image_file = tmp_path / "frame_0.jpg"
+    application.state.settings = application.state.settings.model_copy(
+        update={"vision_workspace_root": tmp_path}
+    )
+    image_file = tmp_path / str(video_id) / "frame_0.jpg"
+    image_file.parent.mkdir()
     image_data = (
         b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00"
     )
@@ -777,6 +781,50 @@ async def test_get_frame_image_video_not_found(
         response = await client.get(f"/v1/videos/{missing_video_id}/frames/0/image")
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "VIDEO_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("location", ["outside-env", "inside-env", "outside-jpeg", "other-video"])
+async def test_frame_endpoint_never_serves_environment_or_unrelated_files(
+    api: tuple[FastAPI, MemoryRepository], tmp_path: Path, location: str
+) -> None:
+    application, repository = api
+    video_id = await seed_api(repository)
+    workspace = tmp_path / "frames"
+    application.state.settings = application.state.settings.model_copy(
+        update={"vision_workspace_root": workspace}
+    )
+    if location == "outside-env":
+        file_path = tmp_path / ".env"
+    elif location == "inside-env":
+        file_path = workspace / str(video_id) / ".env"
+    elif location == "outside-jpeg":
+        file_path = tmp_path / "private.jpg"
+    else:
+        file_path = workspace / str(uuid4()) / "frame.jpg"
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text("SYNTHETIC_KEY=private-regression-value", encoding="utf-8")
+    vision_repo: MemoryVisionRepository = application.state.vision_repository
+    vision_repo.frames[(video_id, 0)] = VideoFrameRow(
+        id=uuid4(),
+        video_id=video_id,
+        scene_id=None,
+        sequence=0,
+        start_ms=0,
+        end_ms=2000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path=str(file_path),
+        created_at=datetime.now(UTC),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/v1/videos/{video_id}/frames/0/image")
+    assert response.status_code == 404
+    assert "private-regression-value" not in response.text
+    assert str(file_path) not in response.text
 
 
 @pytest.mark.asyncio
