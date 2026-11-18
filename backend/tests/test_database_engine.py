@@ -29,6 +29,7 @@ async def test_database_engine_uses_asyncpg_without_exposing_password() -> None:
     engine = create_database_engine(settings)
 
     assert engine.driver == "asyncpg"
+    assert engine.sync_engine.hide_parameters is True
     assert engine.url.render_as_string(hide_password=True) == (
         "postgresql+asyncpg://galaxy_frog:***@localhost:5432/galaxy_frog"
     )
