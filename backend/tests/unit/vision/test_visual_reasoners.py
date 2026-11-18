@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import traceback
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -163,6 +164,9 @@ async def test_safe_reasoner_failures(tmp_path: Path, cloud: bool, mode: str) ->
         with pytest.raises(VisualProviderError) as error:
             await provider.reason(replace(value, external_permitted=True))
         assert "private" not in str(error.value)
+        assert "private provider diagnostics" not in "".join(
+            traceback.format_exception(error.value)
+        )
 
 
 @pytest.mark.asyncio

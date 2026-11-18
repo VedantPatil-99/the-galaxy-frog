@@ -47,8 +47,8 @@ class QStashJobDispatcher:
                 deduplication_id=f"gf-{message.job_id}-{message.requested_action.value}",
             )
             message_id = response.message_id
-        except Exception as exc:
-            raise JobDispatchError("QStash could not accept the dispatch message.") from exc
+        except Exception:
+            raise JobDispatchError("QStash could not accept the dispatch message.") from None
         if not isinstance(message_id, str) or not message_id:
             raise JobDispatchError("QStash returned an invalid dispatch acknowledgement.")
         return DispatchReceipt(dispatcher="qstash", external_message_id=message_id)
@@ -77,5 +77,5 @@ class QStashSignatureVerifier:
                 body=body,
                 url=self._callback_url,
             )
-        except SignatureError as exc:
-            raise DispatchSignatureError("The QStash signature is invalid.") from exc
+        except SignatureError:
+            raise DispatchSignatureError("The QStash signature is invalid.") from None
