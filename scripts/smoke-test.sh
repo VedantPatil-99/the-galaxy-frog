@@ -17,12 +17,15 @@ assert_response() {
   shift 2
 
   local actual_status
-  actual_status="$(
+  if ! actual_status="$(
     curl --silent \
       --output "${response_file}" \
       --write-out "%{http_code}" \
       "${web_base_url}${path}"
-  )"
+  )"; then
+    printf 'Request to %s failed. Check that the app is running.\n' "${path}" >&2
+    return 1
+  fi
 
   if [[ "${actual_status}" != "${expected_status}" ]]; then
     printf 'Expected %s from %s, received %s.\n' "${expected_status}" "${path}" "${actual_status}" >&2

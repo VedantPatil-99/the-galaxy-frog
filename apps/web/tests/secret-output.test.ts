@@ -6,12 +6,12 @@ import { join, resolve } from "node:path"
 const repository = resolve(import.meta.dir, "../../..")
 const secret = "synthetic-credential-must-never-reach-output"
 
-for (const status of [200, 503]) {
+for (const status of [0, 200, 503]) {
   test(`shell smoke hides raw bodies for HTTP ${status}`, async () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
-      fetch: () => new Response(secret, { status }),
+      fetch: () => new Response(secret, { status: status || 200 }),
     })
     try {
       const child = Bun.spawn({
@@ -21,7 +21,7 @@ for (const status of [200, 503]) {
         ],
         env: {
           PATH: process.env.PATH ?? "",
-          WEB_BASE_URL: `http://127.0.0.1:${server.port}`,
+          WEB_BASE_URL: `http://127.0.0.1:${status === 0 ? 0 : server.port}`,
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -33,7 +33,7 @@ for (const status of [200, 503]) {
       ])
       expect(exitCode).not.toBe(0)
       expect(stdout + stderr).not.toContain(secret)
-      expect(stderr).toContain(status === 503 ? "received 503" : "is missing")
+      expect(stderr).toContain(status === 0 ? "Check that the app is running" : status === 503 ? "received 503" : "is missing")
     } finally {
       server.stop(true)
     }
