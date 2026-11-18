@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
-from contextlib import AbstractAsyncContextManager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from enum import StrEnum
@@ -123,11 +123,12 @@ class ProviderRouting:
             try:
                 if reason is not None:
                     raise ProviderFailure(reason)
-                async with self._admit(entry):
-                    if asyncio.get_running_loop().time() >= deadline:
-                        raise ProviderFailure(ProviderCode.TIMEOUT)
-                    status = "failed"
+                async with AsyncExitStack() as stack:
                     async with asyncio.timeout_at(deadline):
+                        await stack.enter_async_context(self._admit(entry))
+                        if asyncio.get_running_loop().time() >= deadline:
+                            raise ProviderFailure(ProviderCode.TIMEOUT)
+                        status = "failed"
                         result = await actions[provider_id]()
             except TimeoutError:
                 failure = ProviderFailure(
@@ -157,6 +158,9 @@ class ProviderRouting:
         actions: Mapping[str, object],
         compatible: frozenset[str] | None,
     ) -> ProviderCode | None:
+        requested_pin = (self.profile.pinned_revisions or {}).get(entry.provider_id)
+        if requested_pin is not None and requested_pin != entry.revision:
+            return ProviderCode.INCOMPATIBLE
         if (
             entry.capability is not capability
             or (compatible is not None and entry.provider_id not in compatible)

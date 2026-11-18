@@ -9,6 +9,8 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from time import sleep
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
@@ -488,3 +490,74 @@ async def test_oversized_cloud_inputs_are_rejected_before_consent_or_dispatch(
             await CloudflareTranscription("fixture", "test", client).transcribe(
                 request, verify_consent=unexpected_consent_check
             )
+
+
+@pytest.mark.parametrize("deadline", [0, -1, float("inf"), float("nan")])
+@pytest.mark.asyncio
+async def test_invalid_deadline_prevents_admission(deadline: float) -> None:
+    admit, record = AsyncMock(), AsyncMock()
+    router = ProviderRouting(
+        ProviderProfile(mode=ProviderMode.MANUAL, candidates={}), (), admit, record
+    )
+    with pytest.raises(ValueError, match="finite and positive"):
+        await router.execute(Capability.GENERATION, {}, timeout_seconds=deadline)
+    admit.assert_not_called()
+    record.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "candidate,code", [(None, ProviderCode.NOT_SELECTED), ("missing", ProviderCode.INCOMPATIBLE)]
+)
+@pytest.mark.asyncio
+async def test_empty_and_unknown_routes_fail_closed(
+    candidate: str | None, code: ProviderCode
+) -> None:
+    admit, record = AsyncMock(), AsyncMock()
+    policy = ProviderProfile(
+        mode=ProviderMode.MANUAL,
+        candidates={Capability.GENERATION: (candidate,)} if candidate else {},
+    )
+    with pytest.raises(ProviderFailure, match=code.value):
+        await ProviderRouting(policy, (), admit, record).execute(
+            Capability.GENERATION, {}, timeout_seconds=1
+        )
+    admit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_manual_revision_pin_mismatch_blocks_dispatch() -> None:
+    admit, record, action = AsyncMock(), AsyncMock(), AsyncMock()
+    policy = ProviderProfile(
+        mode=ProviderMode.MANUAL,
+        candidates={Capability.GENERATION: ("ollama-text",)},
+        pinned_revisions={"ollama-text": "other-revision"},
+    )
+    with pytest.raises(ProviderFailure, match=ProviderCode.INCOMPATIBLE.value):
+        await ProviderRouting(policy, provider_catalog(Settings()), admit, record).execute(
+            Capability.GENERATION, {"ollama-text": action}, timeout_seconds=1
+        )
+    admit.assert_not_called()
+    action.assert_not_awaited()
+    assert record.await_args is not None
+    assert record.await_args.args[0].reason is ProviderCode.INCOMPATIBLE
+
+
+@pytest.mark.asyncio
+async def test_synchronous_admission_overrun_is_checked_before_dispatch() -> None:
+    @asynccontextmanager
+    async def admit(_entry: ProviderEntry) -> AsyncGenerator[None]:
+        # A synchronous admission hook can overrun without yielding to the timer.
+        sleep(0.01)  # noqa: ASYNC251 - deliberately exercise a synchronous overrun.
+        yield
+
+    record, dispatch = AsyncMock(), AsyncMock()
+    profile = ProviderProfile(
+        mode=ProviderMode.MANUAL, candidates={Capability.GENERATION: ("ollama-text",)}
+    )
+    with pytest.raises(ProviderFailure, match=ProviderCode.TIMEOUT.value):
+        await ProviderRouting(profile, provider_catalog(Settings()), admit, record).execute(
+            Capability.GENERATION, {"ollama-text": dispatch}, timeout_seconds=0.001
+        )
+    dispatch.assert_not_awaited()
+    assert record.await_args is not None
+    assert record.await_args.args[0].status == "skipped"
