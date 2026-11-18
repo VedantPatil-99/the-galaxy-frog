@@ -387,3 +387,22 @@ async def test_caption_and_persisted_video_failures_remain_stage_specific() -> N
         with pytest.raises(IngestionStageError, match="persisted video") as missing:
             await stages[stage].execute(missing_job, missing_context)
         assert missing.value.retryable is True
+
+
+@pytest.mark.asyncio
+async def test_provider_index_failure_is_retryable_and_stage_specific() -> None:
+    from unittest.mock import AsyncMock
+
+    from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
+
+    videos = MemoryVideoRepository()
+    videos.video = VideoRecord(uuid4(), SafeVideoMetadata(REFERENCE, "Existing", 3000))
+    search = AsyncMock()
+    search.ensure_indexed.side_effect = EmbeddingProviderError("private provider diagnostics")
+    stages = handlers(FixtureSource(), videos, search)
+    job = running_job(IngestionStage.EMBEDDING)
+    stage_context, _repository = context(job)
+    with pytest.raises(IngestionStageError) as caught:
+        await stages[job.stage].execute(job, stage_context)
+    assert caught.value.code == "EMBEDDING_UNAVAILABLE" and caught.value.retryable
+    assert "private" not in str(caught.value)

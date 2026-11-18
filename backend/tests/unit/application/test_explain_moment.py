@@ -132,6 +132,9 @@ async def test_explain_moment_routes_validates_and_saves_trace(kind: str) -> Non
     )
 
     result = await service.execute(video.video_id, 22_600)
+    if kind == "text_down":
+        with pytest.raises(GenerationProviderError):
+            await service.execute(video.video_id, 22_600, allow_fallback=False)
 
     assert result.evidence.window.start_ms == 7600 and result.evidence.window.end_ms == 37_600
     trace = traces.save.call_args.args[0]

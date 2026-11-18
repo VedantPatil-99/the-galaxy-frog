@@ -41,6 +41,9 @@ async def test_shared_project_limits_are_atomic_and_recoverable() -> None:
         results = await asyncio.gather(reserve(group, 6), reserve(group, 6))
         assert results.count(None) == 1 and ProviderCode.RATE_LIMITED in results
         assert await reserve(other, 6) is None
+        assert await reserve(other, 3) is None
+        # An eight-token request needs both earlier reservations to expire.
+        assert await reserve(other, 8) is ProviderCode.RATE_LIMITED
         async with sessions() as session:
             # Previous calls still consume today's count after their minute expires.
             await session.execute(

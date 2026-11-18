@@ -669,8 +669,10 @@ class TestLlamaParseOCRAdapterExtract:
             poll_interval_seconds=0.01,
             max_poll_seconds=5.0,
         )
+        verify = AsyncMock()
 
-        result = await adapter.extract(ocr_request)
+        result = await adapter.extract(ocr_request, verify_consent=verify)
+        verify.assert_awaited_once()
 
         assert isinstance(result, OCRExtractionResult)
         assert result.request == ocr_request

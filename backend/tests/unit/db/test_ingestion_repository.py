@@ -119,6 +119,82 @@ def failed_row(*, retryable: bool = True) -> IngestionJobRow:
     return row
 
 
+@pytest.mark.parametrize("fresh", [False, True])
+@pytest.mark.asyncio
+async def test_retry_discards_previous_consent_and_accepts_explicit_profile(
+    monkeypatch: pytest.MonkeyPatch, fresh: bool
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from galaxy_frog.application.provider_registry import builtin_profiles
+    from galaxy_frog.db.provider_profiles import PostgresProviderProfiles
+    from galaxy_frog.domain.providers import ProfileRef, ProviderProfileVersion, ProviderSelection
+
+    profile = ProfileRef(profile_id="local", version=1)
+    row = failed_row()
+    row.provider_selection = ProviderSelection(profile=profile, consent_id=uuid4()).model_dump(
+        mode="json"
+    )
+    monkeypatch.setattr(
+        PostgresProviderProfiles,
+        "get",
+        AsyncMock(
+            return_value=ProviderProfileVersion(
+                **profile.model_dump(), policy=builtin_profiles()["local"]
+            )
+        ),
+    )
+    selection = ProviderSelection(profile=profile)
+    result = await repository(FakeSession(row, 1)).retry(
+        row.id, now=NOW, provider_selection=selection if fresh else None
+    )
+    assert row.provider_selection == selection.model_dump(mode="json")
+    assert result.status is IngestionJobStatus.QUEUED
+
+
+@pytest.mark.parametrize(
+    "case,message",
+    [
+        ("missing", "does not exist"),
+        ("evaluation", "existing indexed evidence"),
+        ("grant", "cannot be used"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_invalid_profile_or_grant_prevents_job_creation(
+    monkeypatch: pytest.MonkeyPatch, case: str, message: str
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from galaxy_frog.application.provider_registry import builtin_profiles
+    from galaxy_frog.db import ingestion_repository as module
+    from galaxy_frog.db.provider_profiles import PostgresProviderProfiles
+    from galaxy_frog.domain.providers import ProfileRef, ProviderProfileVersion, ProviderSelection
+
+    profile = ProfileRef(profile_id="local", version=1)
+    policy = builtin_profiles()["evaluation" if case == "evaluation" else "local"]
+    monkeypatch.setattr(
+        PostgresProviderProfiles,
+        "get",
+        AsyncMock(
+            return_value=None
+            if case == "missing"
+            else ProviderProfileVersion(**profile.model_dump(), policy=policy)
+        ),
+    )
+    monkeypatch.setattr(module, "locked_consent", AsyncMock(return_value=None))
+    row = queued_row()
+    session = FakeSession(row.id, row)
+    with pytest.raises(IngestionRepositoryError, match=message):
+        await repository(session).create_or_get(
+            SOURCE,
+            FINGERPRINT,
+            now=NOW,
+            provider_selection=ProviderSelection(profile=profile, consent_id=uuid4()),
+        )
+    assert session.commits == 0
+
+
 @pytest.mark.asyncio
 async def test_create_or_get_inserts_created_event_or_reuses_existing() -> None:
     created_row = queued_row()

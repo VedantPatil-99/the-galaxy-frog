@@ -285,3 +285,113 @@ def test_app_composes_only_explicit_reasoning_provider() -> None:
             gemini_visual_revision="pinned-v1",
         )
     )
+
+
+@pytest.mark.parametrize(
+    "external,failure,expected",
+    [
+        (False, VisualFailureCode.TIMEOUT, ProviderCode.TIMEOUT),
+        (True, VisualFailureCode.TIMEOUT, ProviderCode.OUTCOME_UNKNOWN),
+        (True, VisualFailureCode.SAFETY_BLOCKED, ProviderCode.SAFETY_BLOCKED),
+        (True, VisualFailureCode.RATE_LIMITED, ProviderCode.RATE_LIMITED),
+        (True, VisualFailureCode.AUTH_FAILED, ProviderCode.AUTH_FAILED),
+        (True, VisualFailureCode.INVALID_OUTPUT, ProviderCode.INVALID_OUTPUT),
+        (False, VisualFailureCode.UNAVAILABLE, ProviderCode.UNAVAILABLE),
+    ],
+)
+@pytest.mark.asyncio
+async def test_routed_visual_errors_keep_safety_and_unknown_outcomes(
+    external: bool, failure: VisualFailureCode, expected: ProviderCode
+) -> None:
+    visual = visual_result()
+    provider, cache, verifier, consent, record = (AsyncMock() for _ in range(5))
+    provider.identity = (
+        replace(identity(), location=ExecutionLocation.EXTERNAL) if external else identity()
+    )
+    provider.reason.side_effect = VisualProviderError(failure)
+    cache.get.return_value = None
+    provider_id = "gemini-vision" if external else "ollama-vision"
+
+    @asynccontextmanager
+    async def admit(_entry: ProviderEntry) -> AsyncGenerator[None]:
+        yield
+
+    catalog = tuple(
+        entry.model_copy(update={"readiness": "configured"})
+        for entry in provider_catalog(Settings())
+    )
+    route = ProviderRouting(
+        ProviderProfile(mode=ProviderMode.MANUAL, candidates={Capability.VISION: (provider_id,)}),
+        catalog,
+        admit,
+        record,
+    )
+    service = AdaptiveVisualReasoning(
+        provider=None,
+        cache=cache,
+        verifier=verifier,
+        external_enabled=True,
+        routing=route,
+        candidates={provider_id: provider},
+        check_consent=consent,
+    )
+    with pytest.raises(ProviderFailure) as caught:
+        await service.execute(visual.hits[0].frame.video_id, "What color?", temporal(), visual)
+    assert caught.value.code is expected
+    assert consent.await_count == (2 if external else 0)
+    cache.put.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_composed_cloud_callback_checks_consent_at_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fastapi import Request
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from tests.test_api_provider_execution import provider_run
+
+    from galaxy_frog.adapters.vision.reasoning import (
+        GeminiVisualReasoner,
+        LocalReasoningFrameVerifier,
+    )
+    from galaxy_frog.api.dependencies import build_visual_reasoning
+    from galaxy_frog.db.reasoning_cache import PostgresVisualReasoningCache
+
+    visual = visual_result()
+    config = Settings(
+        gemini_api_key=SecretStr("synthetic-key"),
+        gemini_project_id="test-project",
+        gemini_visual_model="gemini-test",
+        gemini_visual_revision="pinned-v1",
+        external_frame_processing_enabled=True,
+        vlm_provider="gemini",
+    )
+    app = create_app(config)
+    run, _record = provider_run(settings=config)
+    run.policy = ProviderProfile(
+        mode=ProviderMode.MANUAL, candidates={Capability.VISION: ("gemini-vision",)}
+    )
+    provider = app.state.visual_reasoning_candidates["gemini-vision"]
+
+    async def reason(
+        _self: GeminiVisualReasoner, _request: VisualReasoningRequest, *, verify_consent: object
+    ) -> VisualReasoningResult:
+        from collections.abc import Awaitable, Callable
+
+        await cast(Callable[[], Awaitable[None]], verify_consent)()
+        return VisualReasoningResult("Blue", (visual.hits[0].frame.frame_id,), provider.identity, 1)
+
+    monkeypatch.setattr(GeminiVisualReasoner, "reason", reason)
+    monkeypatch.setattr(LocalReasoningFrameVerifier, "verify", AsyncMock())
+    monkeypatch.setattr(PostgresVisualReasoningCache, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(PostgresVisualReasoningCache, "put", AsyncMock())
+    service = build_visual_reasoning(
+        Request({"type": "http", "app": app}), cast(AsyncSession, object()), run
+    )
+    result = await service.execute(visual.hits[0].frame.video_id, "What color?", temporal(), visual)
+    assert result.result is not None
+    runtime = cast(AsyncMock, run.runtime)
+    assert [call.kwargs["dispatch"] for call in runtime.verify_consent.await_args_list] == [
+        False,
+        True,
+    ]

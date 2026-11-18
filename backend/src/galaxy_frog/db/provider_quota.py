@@ -104,7 +104,9 @@ async def reserve_quota(
         len(active) >= limits.requests_per_minute
         or tokens + input_tokens > limits.input_tokens_per_minute
     ):
-        for index, row in enumerate(active):
+        # The bounded input fits once all prior reservations expire, so this
+        # loop always raises before its natural exit.
+        for index, row in enumerate(active):  # pragma: no branch
             tokens -= row.input_tokens
             if (
                 len(active) - index - 1 < limits.requests_per_minute

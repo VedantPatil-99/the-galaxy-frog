@@ -179,6 +179,37 @@ async def test_job_detail_and_ordered_events_preserve_provenance(
 
 
 @pytest.mark.asyncio
+async def test_invalid_import_selection_is_structured_and_never_dispatched(
+    job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    application, repository, dispatcher = job_api
+    create = AsyncMock(side_effect=IngestionRepositoryError("private grant diagnostics"))
+    monkeypatch.setattr(repository, "create_or_get", create)
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/v1/videos/import",
+            json={
+                "source_url": "https://youtu.be/dQw4w9WgXcQ",
+                "provider_selection": {"profile": {"profile_id": "missing", "version": 1}},
+            },
+        )
+    assert (
+        response.status_code == 422
+        and response.json()["error"]["code"] == "INGESTION_PROVIDER_SELECTION_INVALID"
+    )
+    assert "private" not in response.text and not dispatcher.messages
+    assert (
+        create.await_args is not None
+        and create.await_args.kwargs["provider_selection"].profile.profile_id == "missing"
+    )
+
+
+@pytest.mark.asyncio
 async def test_import_returns_promptly_and_reuses_the_durable_job(
     job_api: tuple[FastAPI, MemoryIngestionRepository, RecordingDispatcher],
     caplog: pytest.LogCaptureFixture,

@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -532,6 +532,7 @@ async def test_search_never_generates_and_trace_reads_are_video_scoped(
 @pytest.mark.asyncio
 async def test_question_anchor_selection_blocks_generation_until_resolved(
     api: tuple[FastAPI, MemoryRepository],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     application, repository = api
     video_id = await seed_api(repository)
@@ -563,6 +564,28 @@ async def test_question_anchor_selection_blocks_generation_until_resolved(
         repository.transcript = replace(repository.transcript, units=(), cues=())
         missing = await client.post(f"/v1/videos/{video_id}/questions", json=question)
         assert missing.json()["retrieval_status"] == "anchor_unresolved" and generated == 1
+        missing_search = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": question["question"], "mode": "lexical"}
+        )
+        assert missing_search.status_code == 200
+        assert missing_search.json()["status"] == "anchor_unresolved" and generated == 1
+        from tests.test_api_provider_execution import provider_run
+
+        from galaxy_frog.application.provider_policy import ProviderCode
+
+        run, recorded = provider_run()
+        monkeypatch.setattr(video_routes, "api_provider_run", AsyncMock(return_value=run))
+        monkeypatch.setattr(
+            video_routes,
+            "build_retrieval_service",
+            Mock(return_value=application.dependency_overrides[get_search_service]()),
+        )
+        selected_missing = await client.post(f"/v1/videos/{video_id}/questions", json=question)
+        assert selected_missing.json()["retrieval_status"] == "anchor_unresolved" and generated == 1
+        assert (
+            recorded.await_args is not None
+            and recorded.await_args.args[1].reason is ProviderCode.NOT_NEEDED
+        )
 
 
 @pytest.mark.asyncio
@@ -1032,3 +1055,7 @@ async def test_search_visual_frames_fallback_query_match_and_window(
         assert window_response.status_code == 200
         window_data = window_response.json()
         assert any(f["sequence"] == 5 for f in window_data["visual_frames"])
+        excluded = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": "before 00:15", "mode": "lexical"}
+        )
+        assert excluded.status_code == 200 and excluded.json()["visual_frames"] == []

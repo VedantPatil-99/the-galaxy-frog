@@ -101,6 +101,44 @@ async def test_empty_scoped_ocr_skips_model_load() -> None:
     assert not embedder.embedded
 
 
+@pytest.mark.parametrize("state", ["missing", "incomplete", "indexed"])
+@pytest.mark.asyncio
+async def test_selected_ocr_collection_never_reindexes(
+    monkeypatch: pytest.MonkeyPatch, state: str
+) -> None:
+    from typing import cast
+    from unittest.mock import AsyncMock, Mock
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
+
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = uuid4()
+    session.execute.return_value = Mock(all=Mock(return_value=[]))
+    provider = FakeEmbedder(_SPEC, ((1.0,) + (0.0,) * 1023,))
+    searcher = PgVectorOCRSearch(
+        session=cast(AsyncSession, session), provider=provider, require_existing=True
+    )
+    collection = EmbeddingCollectionRow(id=uuid4())
+    monkeypatch.setattr(
+        searcher,
+        "_find_collection",
+        AsyncMock(return_value=None if state == "missing" else collection),
+    )
+    monkeypatch.setattr(searcher, "is_indexed", AsyncMock(return_value=state == "indexed"))
+    index = AsyncMock()
+    monkeypatch.setattr(searcher, "ensure_indexed", index)
+    if state == "indexed":
+        assert await searcher.search(uuid4(), "query") == ()
+        assert provider.embedded == [("query",)]
+    else:
+        with pytest.raises(EmbeddingProviderError, match="no matching OCR collection"):
+            await searcher.search(uuid4(), "query")
+        assert not provider.embedded
+    index.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Lexical Search Tests
 # ---------------------------------------------------------------------------
