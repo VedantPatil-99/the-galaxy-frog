@@ -190,6 +190,16 @@
       "ChapterRequest": {
         "additionalProperties": false,
         "properties": {
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_id": {
             "format": "uuid",
             "title": "Request Id",
@@ -586,6 +596,7 @@
       },
       "ExternalData": {
         "enum": [
+          "text",
           "audio",
           "frames",
           "frames_and_text",
@@ -1527,6 +1538,11 @@
       },
       "ProviderConsentOptions": {
         "properties": {
+          "cloud_required": {
+            "default": false,
+            "title": "Cloud Required",
+            "type": "boolean"
+          },
           "scopes": {
             "items": {
               "$ref": "#/components/schemas/ConsentScope"
@@ -1723,6 +1739,16 @@
             "title": "Provider Id",
             "type": "string"
           },
+          "quota_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuotaLimits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "readiness": {
             "enum": [
               "configured",
@@ -1743,6 +1769,17 @@
               }
             ],
             "title": "Revision"
+          },
+          "revision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Note"
           },
           "summary": {
             "title": "Summary",
@@ -1802,6 +1839,16 @@
           "provider_id": {
             "title": "Provider Id",
             "type": "string"
+          },
+          "quota_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuotaUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "state": {
             "title": "State",
@@ -2325,6 +2372,69 @@
         "title": "QuizItem",
         "type": "object"
       },
+      "QuotaLimits": {
+        "additionalProperties": false,
+        "description": "Application budgets; the provider account remains the quota authority.",
+        "properties": {
+          "input_tokens_per_minute": {
+            "maximum": 2000000.0,
+            "minimum": 1.0,
+            "title": "Input Tokens Per Minute",
+            "type": "integer"
+          },
+          "requests_per_day": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Requests Per Day",
+            "type": "integer"
+          },
+          "requests_per_minute": {
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Requests Per Minute",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requests_per_minute",
+          "input_tokens_per_minute",
+          "requests_per_day"
+        ],
+        "title": "QuotaLimits",
+        "type": "object"
+      },
+      "QuotaUsage": {
+        "properties": {
+          "daily_reset_at": {
+            "format": "date-time",
+            "title": "Daily Reset At",
+            "type": "string"
+          },
+          "requests_last_minute": {
+            "minimum": 0.0,
+            "title": "Requests Last Minute",
+            "type": "integer"
+          },
+          "requests_today": {
+            "minimum": 0.0,
+            "title": "Requests Today",
+            "type": "integer"
+          },
+          "reserved_input_tokens_last_minute": {
+            "minimum": 0.0,
+            "title": "Reserved Input Tokens Last Minute",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requests_last_minute",
+          "reserved_input_tokens_last_minute",
+          "requests_today",
+          "daily_reset_at"
+        ],
+        "title": "QuotaUsage",
+        "type": "object"
+      },
       "RankedEvidence": {
         "properties": {
           "fusion_rank": {
@@ -2418,6 +2528,16 @@
               }
             ],
             "title": "Chapter Version Id"
+          },
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "request_id": {
             "format": "uuid",
@@ -2856,6 +2976,16 @@
             "title": "Kind",
             "type": "string"
           },
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_id": {
             "format": "uuid",
             "title": "Request Id",
@@ -3240,6 +3370,16 @@
           },
           "kind": {
             "$ref": "#/components/schemas/StudyKind"
+          },
+          "provider_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "result_id": {
             "anyOf": [

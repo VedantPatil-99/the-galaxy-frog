@@ -1,5 +1,6 @@
 import { requestApi } from "@/lib/api/client"
 import type { components } from "@/lib/api/generated/schema"
+import type { ProviderSelection } from "@/lib/api/providers"
 
 type Schemas = components["schemas"]
 export type StudyKind = Schemas["StudyKind"]
@@ -48,6 +49,7 @@ export function readStudyRun(videoId: string, runId: string, signal: AbortSignal
 export function startStudy(
   videoId: string, kind: StudyKind, requestId: string, chapterVersion: string | null,
   parentId?: string,
+  providerSelection?: ProviderSelection,
 ) {
   let path: string
   let body: Schemas["ChapterRequest"] | Schemas["StudyArtifactRequest"] | Schemas["RegenerateRequest"]
@@ -62,6 +64,7 @@ export function startStudy(
     path = videoPath(videoId) + "/artifacts"
     body = { request_id: requestId, kind, chapter_version_id: chapterVersion }
   }
+  if (providerSelection) body = { ...body, provider_selection: providerSelection }
   return requestApi(path, isStudyRun, fetch, { method: "POST", body: JSON.stringify(body) })
 }
 

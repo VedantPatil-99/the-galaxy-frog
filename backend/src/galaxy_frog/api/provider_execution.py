@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from galaxy_frog.adapters.generation.bedrock import BedrockGeneration
+from galaxy_frog.adapters.generation.gemini import GeminiGeneration, GeminiJSON
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.application.provider_policy import (
     ProviderAttempt,
@@ -86,7 +87,9 @@ class ApiProviderRun:
                 capability,
                 attempt,
                 pricing=entry.pricing,
-                usage=self.usage if entry.provider_id == "bedrock-nova-lite" else None,
+                usage=self.usage
+                if entry.provider_id in {"bedrock-nova-lite", "gemini-text"}
+                else None,
             )
 
         policy = self.policy
@@ -251,7 +254,7 @@ class RoutedTextGeneration:
     async def _generate(
         self,
         local: Callable[[], Awaitable[GenerationDraft]],
-        cloud: Callable[[BedrockGeneration], Awaitable[GenerationDraft]],
+        cloud: Callable[[BedrockGeneration | GeminiGeneration], Awaitable[GenerationDraft]],
     ) -> GenerationDraft:
         async def local_action() -> GenerationDraft:
             models = await probe_ollama_models(self._run.settings.ollama_base_url)
@@ -286,9 +289,36 @@ class RoutedTextGeneration:
                 finally:
                     self._run.usage = provider.usage
 
+        async def gemini_action() -> GenerationDraft:
+            settings = self._run.settings
+            key, _project = settings.gemini_credentials("generation")
+            assert key is not None and settings.gemini_generation_model is not None
+            entry = next(item for item in self._run.catalog if item.provider_id == "gemini-text")
+
+            async def verify(tokens: int) -> None:
+                await self._run.runtime.verify_consent(entry, dispatch=True, input_tokens=tokens)
+
+            provider = GeminiJSON(
+                key.get_secret_value(),
+                settings.gemini_generation_model,
+                revision=settings.gemini_generation_revision,
+                thinking=settings.gemini_generation_thinking,
+                max_output_tokens=settings.gemini_generation_max_output_tokens,
+                timeout_seconds=settings.gemini_timeout_seconds,
+                before_dispatch=verify,
+            )
+            try:
+                return await cloud(GeminiGeneration(provider))
+            finally:
+                self._run.usage = provider.usage
+
         return await self._run.router(Capability.GENERATION).execute(
             Capability.GENERATION,
-            {"ollama-text": local_action, "bedrock-nova-lite": cloud_action},
+            {
+                "ollama-text": local_action,
+                "bedrock-nova-lite": cloud_action,
+                "gemini-text": gemini_action,
+            },
             timeout_seconds=90,
         )
 

@@ -3,15 +3,23 @@
 import json
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Literal
+from hashlib import sha256
+from typing import Literal, TypedDict
 from urllib.parse import urlsplit
 
 import httpx
-from pydantic import BaseModel, ConfigDict, SecretStr, computed_field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, computed_field
 
 from galaxy_frog.adapters.vision.siglip import SIGLIP_MODEL, SIGLIP_REVISION
 from galaxy_frog.config import Settings
-from galaxy_frog.domain.providers import Capability, Location, ProviderMode, ProviderProfile
+from galaxy_frog.domain.providers import (
+    GEMINI_TEXT_MODELS,
+    Capability,
+    Location,
+    ProviderMode,
+    ProviderProfile,
+    QuotaLimits,
+)
 from galaxy_frog.domain.retrieval.reranking import BGE_RERANKER_MODEL, BGE_RERANKER_REVISION
 
 CLOUDFLARE_MODEL = "@cf/openai/whisper-large-v3-turbo"
@@ -86,6 +94,59 @@ class ProviderEntry(BaseModel):
     measured_speed: str | None = None
     pricing: PricingSource | None = None
     capability_url: str | None = None
+    revision_note: str | None = None
+    quota_limits: QuotaLimits | None = None
+    quota_group: str | None = Field(default=None, exclude=True)
+    input_token_reservation: int | None = Field(default=None, exclude=True)
+
+
+class GeminiQuotaFields(TypedDict):
+    quota_group: str | None
+    quota_limits: QuotaLimits
+
+
+def gemini_quota(settings: Settings, project_id: str | None) -> GeminiQuotaFields:
+    return {
+        "quota_group": sha256(f"gemini:{project_id}".encode()).hexdigest() if project_id else None,
+        "quota_limits": QuotaLimits(
+            requests_per_minute=settings.gemini_requests_per_minute,
+            input_tokens_per_minute=settings.gemini_input_tokens_per_minute,
+            requests_per_day=settings.gemini_requests_per_day,
+        ),
+    }
+
+
+def gemini_entry(settings: Settings, role: Literal["generation", "study"]) -> ProviderEntry:
+    key, project = settings.gemini_credentials(role)
+    generation = role == "generation"
+    model = settings.gemini_generation_model if generation else settings.gemini_study_model
+    revision = settings.gemini_generation_revision if generation else settings.gemini_study_revision
+    enabled = settings.gemini_generation_enabled if generation else settings.gemini_study_enabled
+    return ProviderEntry(
+        provider_id="gemini-text" if generation else "gemini-study",
+        capability=Capability.GENERATION if generation else Capability.STUDY,
+        location=Location.FREE_CLOUD,
+        provider="google-gemini",
+        model=model or "Operator-selected Gemini model",
+        revision=revision or model,
+        revision_note="The returned model code is checked. Interactions does not expose an immutable weights revision.",
+        device="cloud",
+        readiness="configured"
+        if enabled and secret_present(key) and project and model in GEMINI_TEXT_MODELS
+        else "setup_required",
+        privacy="Sends selected evidence text to Google after per-run consent. Project billing and data terms apply.",
+        summary="Grounded JSON answers."
+        if generation
+        else "Evidence-validated, versioned Study materials using the separate Study project.",
+        pricing=PricingSource(
+            source_url="https://aistudio.google.com/docs/pricing",
+            billing_unit="Input, cached input, output and thinking tokens",
+            tier_note="API project tier determines free eligibility and charges. Subscription benefits do not establish API quota.",
+            verified_at=date(2026, 11, 18),
+        ),
+        capability_url="https://aistudio.google.com/docs/structured-output",
+        **gemini_quota(settings, project),
+    )
 
 
 def local_ollama_origin(value: str) -> bool:
@@ -213,6 +274,8 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
                 ),
             )
         ),
+        gemini_entry(settings, "generation"),
+        gemini_entry(settings, "study"),
         ProviderEntry(
             provider_id="gemini-vision",
             capability=Capability.VISION,
@@ -226,6 +289,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
                 if settings.vlm_provider != "disabled"
                 and settings.external_frame_processing_enabled
                 and secret_present(settings.gemini_credentials("vision")[0])
+                and settings.gemini_credentials("vision")[1]
                 and settings.gemini_visual_model
                 and settings.gemini_visual_revision
                 else "setup_required"
@@ -238,6 +302,8 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
                 tier_note="Eligibility, rates and data terms depend on model and project tier.",
             ),
             capability_url="https://aistudio.google.com/docs/image-understanding",
+            input_token_reservation=settings.gemini_visual_input_token_reservation,
+            **gemini_quota(settings, settings.gemini_credentials("vision")[1]),
         ),
         ProviderEntry(
             provider_id="llamaparse-ocr",
@@ -356,6 +422,15 @@ def builtin_profiles() -> dict[str, ProviderProfile]:
     }
     return {
         "local": ProviderProfile(mode=ProviderMode.LOCAL_ONLY, candidates=local),
+        "gemini": ProviderProfile(
+            mode=ProviderMode.MANUAL,
+            candidates={
+                **local,
+                Capability.VISION: ("gemini-vision",),
+                Capability.GENERATION: ("gemini-text",),
+                Capability.STUDY: ("gemini-study",),
+            },
+        ),
         "free_cloud": ProviderProfile(mode=ProviderMode.CLOUD_PERMITTED, candidates=free_cloud),
         "economy": ProviderProfile(mode=ProviderMode.CLOUD_PERMITTED, candidates=free_cloud),
         "aws": ProviderProfile(

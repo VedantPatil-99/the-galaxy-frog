@@ -8,6 +8,7 @@ import {
   getProviderProfiles,
   grantProviderConsent,
   revokeProviderConsent,
+  selectedConsentScopes,
   type ConsentScope,
   type ProviderOperation,
   type ProviderProfile,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/api/providers"
 
 const scopeLabels: Record<ConsentScope["data"], string> = {
+  text: "Send selected evidence text to Gemini. Google API project billing and data terms apply.",
   audio: "Send normalized audio to Cloudflare Workers AI.",
   frames: "Send selected frames to LlamaParse.",
   frames_and_text: "Send a selected frame and accompanying text to Gemini.",
@@ -25,6 +27,8 @@ export function useProviderSelection(operation: ProviderOperation) {
   const [profiles, setProfiles] = useState<ProviderProfile[]>([])
   const [selected, setSelected] = useState("")
   const [scopes, setScopes] = useState<ConsentScope[]>([])
+  const [cloudRequired, setCloudRequired] = useState(false)
+  const [optionsReady, setOptionsReady] = useState(false)
   const [approved, setApproved] = useState<string[]>([])
   const [grantId, setGrantId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -46,13 +50,22 @@ export function useProviderSelection(operation: ProviderOperation) {
     setSelected(id)
     setApproved([])
     setScopes([])
+    setCloudRequired(false)
+    setOptionsReady(false)
     setMessage(null)
     const profile = profiles.find(item => item.profile_id === id)
-    if (!profile) return
+    if (!profile) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const options = await getConsentOptions(profile, operation)
-      if (sequence === optionsSequence.current) setScopes(options)
+      if (sequence === optionsSequence.current) {
+        setScopes(options.scopes)
+        setCloudRequired(options.cloud_required ?? false)
+        setOptionsReady(true)
+      }
     } catch {
       if (sequence === optionsSequence.current) setMessage("Could not load the sharing options for this profile.")
     } finally {
@@ -68,7 +81,8 @@ export function useProviderSelection(operation: ProviderOperation) {
   async function selection(source: string): Promise<ProviderSelection | undefined> {
     const chosen = profile()
     if (!chosen) return undefined
-    const permitted = scopes.filter(scope => approved.includes(scope.provider_id))
+    if (!optionsReady) throw new Error("Load the sharing options for this profile before starting. Select the profile again to retry.")
+    const permitted = selectedConsentScopes({ scopes, cloud_required: cloudRequired }, approved)
     setApproved([])
     if (permitted.length === 0) return { profile: chosen }
     const grant = await grantProviderConsent(chosen, operation, source, permitted)

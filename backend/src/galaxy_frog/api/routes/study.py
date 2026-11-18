@@ -14,6 +14,7 @@ from galaxy_frog.api.schemas import ErrorResponse
 from galaxy_frog.application.study_export import to_markdown
 from galaxy_frog.db.study_repository import StudyRepository
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.providers import ProviderSelection
 from galaxy_frog.domain.study import (
     StudyError,
     StudyKind,
@@ -32,6 +33,7 @@ class ChapterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     request_id: UUID
+    provider_selection: ProviderSelection | None = None
 
 
 class StudyArtifactRequest(ChapterRequest):
@@ -83,6 +85,15 @@ async def _safe[T](operation: Awaitable[T]) -> T:
 
 @router.post("/videos/{video_id}/chapters", status_code=202, responses=_ERRORS)
 async def start_chapters(video_id: UUID, body: ChapterRequest, repository: Repository) -> StudyRun:
+    if body.provider_selection is not None:
+        return await _safe(
+            repository.enqueue(
+                video_id,
+                StudyKind.CHAPTERS,
+                body.request_id,
+                provider_selection=body.provider_selection,
+            )
+        )
     return await _safe(repository.enqueue(video_id, StudyKind.CHAPTERS, body.request_id))
 
 
@@ -90,6 +101,16 @@ async def start_chapters(video_id: UUID, body: ChapterRequest, repository: Repos
 async def start_artifact(
     video_id: UUID, body: StudyArtifactRequest, repository: Repository
 ) -> StudyRun:
+    if body.provider_selection is not None:
+        return await _safe(
+            repository.enqueue(
+                video_id,
+                StudyKind(body.kind),
+                body.request_id,
+                body.chapter_version_id,
+                provider_selection=body.provider_selection,
+            )
+        )
     return await _safe(
         repository.enqueue(video_id, StudyKind(body.kind), body.request_id, body.chapter_version_id)
     )
@@ -123,6 +144,15 @@ async def read_artifact(video_id: UUID, artifact_id: UUID, repository: Repositor
 async def regenerate_artifact(
     artifact_id: UUID, body: RegenerateRequest, repository: Repository
 ) -> StudyRun:
+    if body.provider_selection is not None:
+        return await _safe(
+            repository.regenerate(
+                artifact_id,
+                body.request_id,
+                body.chapter_version_id,
+                provider_selection=body.provider_selection,
+            )
+        )
     return await _safe(repository.regenerate(artifact_id, body.request_id, body.chapter_version_id))
 
 

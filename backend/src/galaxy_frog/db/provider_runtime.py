@@ -18,6 +18,7 @@ from galaxy_frog.db.models import (
     ProviderConsentRow,
     ProviderRuntimeRow,
 )
+from galaxy_frog.db.provider_quota import pacific_day, reserve_quota
 from galaxy_frog.domain.providers import (
     Capability,
     ConsentScope,
@@ -30,6 +31,8 @@ from galaxy_frog.domain.providers import (
 )
 
 CONSENT_DATA = {
+    "gemini-text": ExternalData.TEXT,
+    "gemini-study": ExternalData.TEXT,
     "cloudflare-whisper": ExternalData.AUDIO,
     "llamaparse-ocr": ExternalData.FRAMES,
     "gemini-vision": ExternalData.FRAMES_AND_TEXT,
@@ -117,6 +120,7 @@ class PostgresProviderRuntime:
         source: str,
         consent_id: UUID | None = None,
         worker_id: str | None = None,
+        study_lease_token: UUID | None = None,
     ) -> None:
         self.sessions = sessions
         self.engine = engine
@@ -126,6 +130,7 @@ class PostgresProviderRuntime:
         self.source = source
         self.consent_id = consent_id
         self.worker_id = worker_id
+        self.study_lease_token = study_lease_token
 
     @asynccontextmanager
     async def admit(self, entry: ProviderEntry) -> AsyncGenerator[None]:
@@ -134,7 +139,7 @@ class PostgresProviderRuntime:
         async with self.engine.connect() as connection:
             acquired = await connection.scalar(
                 text("SELECT pg_try_advisory_lock(hashtextextended(:key, 817))"),
-                {"key": entry.provider_id},
+                {"key": entry.quota_group or entry.provider_id},
             )
             if not acquired:
                 raise ProviderFailure(ProviderCode.BUSY)
@@ -163,13 +168,17 @@ class PostgresProviderRuntime:
             finally:
                 await connection.execute(
                     text("SELECT pg_advisory_unlock(hashtextextended(:key, 817))"),
-                    {"key": entry.provider_id},
+                    {"key": entry.quota_group or entry.provider_id},
                 )
 
     async def _start(self, session: AsyncSession, entry: ProviderEntry, now: datetime) -> None:
         row = await session.get(ProviderRuntimeRow, entry.provider_id)
         if row and row.blocked_until is not None and row.blocked_until > now:
             raise ProviderFailure(ProviderCode(row.state), retry_at=row.blocked_until)
+        if entry.quota_group:
+            shared = await session.get(ProviderRuntimeRow, entry.quota_group)
+            if shared and shared.blocked_until is not None and shared.blocked_until > now:
+                raise ProviderFailure(ProviderCode(shared.state), retry_at=shared.blocked_until)
         if entry.location is not Location.LOCAL:
             await self._verify_lease(session)
             await self._authorize(session, entry)
@@ -178,6 +187,22 @@ class PostgresProviderRuntime:
         await session.commit()
 
     async def _verify_lease(self, session: AsyncSession) -> None:
+        if self.operation is ProviderOperation.STUDY:
+            from galaxy_frog.db.study_repository import StudyLeaseLost, StudyRunRow
+
+            row = await session.scalar(
+                select(StudyRunRow).where(StudyRunRow.id == self.run_id).with_for_update()
+            )
+            if (
+                row is None
+                or row.state != "running"
+                or self.study_lease_token is None
+                or row.lease_token != self.study_lease_token
+                or row.lease_expires_at is None
+                or row.lease_expires_at <= datetime.now(UTC)
+            ):
+                raise StudyLeaseLost
+            return
         if self.worker_id is None:
             return
         job = await session.scalar(
@@ -245,11 +270,20 @@ class PostgresProviderRuntime:
         grant.run_id = self.run_id
         return grant
 
-    async def verify_consent(self, entry: ProviderEntry, *, dispatch: bool = False) -> None:
+    async def verify_consent(
+        self, entry: ProviderEntry, *, dispatch: bool = False, input_tokens: int | None = None
+    ) -> None:
         async with self.sessions() as session:
             await self._verify_lease(session)
             grant = await self._authorize(session, entry)
             if dispatch:
+                if entry.quota_group and entry.quota_limits:
+                    await reserve_quota(
+                        session,
+                        entry.quota_group,
+                        entry.quota_limits,
+                        input_tokens or entry.input_token_reservation or 0,
+                    )
                 grant.dispatch_count += 1
                 session.add(self._dispatch_record(entry, "dispatch_started"))
             await session.commit()
@@ -265,6 +299,12 @@ class PostgresProviderRuntime:
         if failure is None:
             count = 0
         elif failure.code in {ProviderCode.QUOTA_EXHAUSTED, ProviderCode.RATE_LIMITED}:
+            if (
+                failure.code is ProviderCode.QUOTA_EXHAUSTED
+                and entry.quota_group
+                and failure.retry_at is None
+            ):
+                _start, failure.retry_at = await pacific_day(session, now)
             blocked_until = failure.retry_at or now + timedelta(seconds=60)
         elif failure.code in {
             ProviderCode.UNAVAILABLE,
@@ -284,6 +324,16 @@ class PostgresProviderRuntime:
             .values(provider_id=entry.provider_id, **values)
             .on_conflict_do_update(index_elements=[ProviderRuntimeRow.provider_id], set_=values)
         )
+        if (
+            entry.quota_group
+            and failure
+            and failure.code in {ProviderCode.RATE_LIMITED, ProviderCode.QUOTA_EXHAUSTED}
+        ):
+            await session.execute(
+                insert(ProviderRuntimeRow)
+                .values(provider_id=entry.quota_group, **values)
+                .on_conflict_do_update(index_elements=[ProviderRuntimeRow.provider_id], set_=values)
+            )
         if (
             entry.location is not Location.LOCAL
             and (failure is None or failure.code != ProviderCode.OUTCOME_UNKNOWN)

@@ -50,10 +50,18 @@ export async function getConsentOptions(profile: ProviderSelection["profile"], o
   })
   const response = await requestApi(
     `/v1/provider-consents/options?${query}`,
-    (value): value is Schemas["ProviderConsentOptions"] => record(value) && Array.isArray(value.scopes),
+    (value): value is Schemas["ProviderConsentOptions"] => record(value) && Array.isArray(value.scopes) && typeof value.cloud_required === "boolean",
     fetch,
   )
-  return response.scopes
+  return response
+}
+
+export function selectedConsentScopes(options: Schemas["ProviderConsentOptions"], approved: string[]) {
+  const permitted = options.scopes.filter(scope => approved.includes(scope.provider_id))
+  if (options.cloud_required && permitted.length === 0) {
+    throw new Error("This profile requires cloud sharing. Approve the selected evidence text or choose a local profile.")
+  }
+  return permitted
 }
 
 export function grantProviderConsent(

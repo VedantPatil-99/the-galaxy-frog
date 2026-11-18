@@ -604,6 +604,7 @@ export interface components {
         };
         /** ChapterRequest */
         ChapterRequest: {
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /**
              * Request Id
              * Format: uuid
@@ -776,7 +777,7 @@ export interface components {
          * ExternalData
          * @enum {string}
          */
-        ExternalData: "audio" | "frames" | "frames_and_text" | "paid_text";
+        ExternalData: "text" | "audio" | "frames" | "frames_and_text" | "paid_text";
         /** FlashcardItem */
         FlashcardItem: {
             /** Answer */
@@ -1137,6 +1138,11 @@ export interface components {
         };
         /** ProviderConsentOptions */
         ProviderConsentOptions: {
+            /**
+             * Cloud Required
+             * @default false
+             */
+            cloud_required: boolean;
             /** Scopes */
             scopes: components["schemas"]["ConsentScope"][];
         };
@@ -1182,6 +1188,7 @@ export interface components {
             provider: string;
             /** Provider Id */
             provider_id: string;
+            quota_limits?: components["schemas"]["QuotaLimits"] | null;
             /**
              * Readiness
              * @enum {string}
@@ -1189,6 +1196,8 @@ export interface components {
             readiness: "configured" | "disabled" | "setup_required" | "catalog_only";
             /** Revision */
             revision?: string | null;
+            /** Revision Note */
+            revision_note?: string | null;
             /** Summary */
             summary: string;
             /** Timestamp Granularity */
@@ -1202,6 +1211,7 @@ export interface components {
             observed_at?: string | null;
             /** Provider Id */
             provider_id: string;
+            quota_usage?: components["schemas"]["QuotaUsage"] | null;
             /** State */
             state: string;
         };
@@ -1376,6 +1386,32 @@ export interface components {
             /** Question */
             question: string;
         };
+        /**
+         * QuotaLimits
+         * @description Application budgets; the provider account remains the quota authority.
+         */
+        QuotaLimits: {
+            /** Input Tokens Per Minute */
+            input_tokens_per_minute: number;
+            /** Requests Per Day */
+            requests_per_day: number;
+            /** Requests Per Minute */
+            requests_per_minute: number;
+        };
+        /** QuotaUsage */
+        QuotaUsage: {
+            /**
+             * Daily Reset At
+             * Format: date-time
+             */
+            daily_reset_at: string;
+            /** Requests Last Minute */
+            requests_last_minute: number;
+            /** Requests Today */
+            requests_today: number;
+            /** Reserved Input Tokens Last Minute */
+            reserved_input_tokens_last_minute: number;
+        };
         /** RankedEvidence */
         RankedEvidence: {
             /** Fusion Rank */
@@ -1415,6 +1451,7 @@ export interface components {
         RegenerateRequest: {
             /** Chapter Version Id */
             chapter_version_id?: string | null;
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /**
              * Request Id
              * Format: uuid
@@ -1597,6 +1634,7 @@ export interface components {
              * @enum {string}
              */
             kind: "summary" | "notes" | "flashcards" | "quiz";
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /**
              * Request Id
              * Format: uuid
@@ -1716,6 +1754,7 @@ export interface components {
             created_at: string;
             failure: components["schemas"]["StudyFailure"] | null;
             kind: components["schemas"]["StudyKind"];
+            provider_selection?: components["schemas"]["ProviderSelection"] | null;
             /** Result Id */
             result_id: string | null;
             /**

@@ -23,6 +23,7 @@ from galaxy_frog.application.provider_registry import (
 from galaxy_frog.config import Settings
 from galaxy_frog.db.models import IngestionJobRow, ProviderConsentRow, ProviderRuntimeRow
 from galaxy_frog.db.provider_profiles import PostgresProviderProfiles, ProfileVersionConflict
+from galaxy_frog.db.provider_quota import QuotaUsage, pacific_day, quota_rows, quota_usage
 from galaxy_frog.db.provider_runtime import (
     CONSENT_DATA,
     consent_response,
@@ -69,6 +70,7 @@ class ProviderHealth(BaseModel):
     state: str
     observed_at: datetime | None = None
     blocked_until: datetime | None = None
+    quota_usage: QuotaUsage | None = None
 
 
 class ProviderRunAttempt(ProviderAttempt):
@@ -120,9 +122,23 @@ async def import_provider_consent(run_id: UUID, repository: Profiles) -> Provide
 
 @router.get("/providers/health", responses={503: {"model": ErrorResponse}})
 async def provider_health(request: Request, repository: Profiles) -> tuple[ProviderHealth, ...]:
+    entries = await capabilities(request)
+    budgets: dict[str, QuotaUsage] = {}
     try:
         rows = await repository.session.scalars(select(ProviderRuntimeRow))
         observed = {row.provider_id: row for row in rows}
+        now = datetime.now(UTC)
+        for entry in entries:
+            if entry.readiness == "configured" and entry.quota_group:
+                if entry.quota_group not in budgets:
+                    day_start, reset_at = await pacific_day(repository.session, now)
+                    reservations = await quota_rows(
+                        repository.session, entry.quota_group, now, day_start
+                    )
+                    budgets[entry.quota_group] = quota_usage(reservations, now, day_start, reset_at)
+                shared = observed.get(entry.quota_group)
+                if shared and shared.blocked_until and shared.blocked_until > now:
+                    observed[entry.provider_id] = shared
     except SQLAlchemyError as exc:
         raise _database_failure() from exc
     settings: Settings = request.app.state.settings
@@ -137,6 +153,7 @@ async def provider_health(request: Request, repository: Profiles) -> tuple[Provi
             ),
             observed_at=row.observed_at,
             blocked_until=row.blocked_until,
+            quota_usage=budgets.get(entry.quota_group or ""),
         )
         if (row := observed.get(entry.provider_id))
         else ProviderHealth(
@@ -147,20 +164,23 @@ async def provider_health(request: Request, repository: Profiles) -> tuple[Provi
                 and (entry.model in local_models or f"{entry.model}:latest" in local_models)
                 else "unknown"
             ),
+            quota_usage=budgets.get(entry.quota_group or ""),
         )
-        for entry in await capabilities(request)
+        for entry in entries
     )
 
 
 _CONSENT_PROVIDERS = {
     ProviderOperation.IMPORT: {"cloudflare-whisper", "llamaparse-ocr"},
-    ProviderOperation.QUESTION: {"gemini-vision", "bedrock-nova-lite"},
-    ProviderOperation.MOMENT: {"gemini-vision", "bedrock-nova-lite"},
+    ProviderOperation.QUESTION: {"gemini-vision", "gemini-text", "bedrock-nova-lite"},
+    ProviderOperation.MOMENT: {"gemini-vision", "gemini-text", "bedrock-nova-lite"},
+    ProviderOperation.STUDY: {"gemini-study"},
 }
 
 
 class ProviderConsentOptions(BaseModel):
     scopes: tuple[ConsentScope, ...]
+    cloud_required: bool = False
 
 
 @router.get(
@@ -186,13 +206,23 @@ async def provider_consent_options(
             message="The provider profile version was not found.",
             retryable=False,
         )
+    study_chain = (
+        profile.policy.candidates.get(Capability.STUDY, ())
+        if operation is ProviderOperation.STUDY
+        else ()
+    )
     return ProviderConsentOptions(
+        cloud_required=bool(study_chain)
+        and all(
+            provider_id in _CONSENT_PROVIDERS[ProviderOperation.STUDY]
+            for provider_id in study_chain
+        ),
         scopes=tuple(
             ConsentScope(provider_id=provider_id, data=CONSENT_DATA[provider_id])
             for chain in profile.policy.candidates.values()
             for provider_id in chain
             if provider_id in _CONSENT_PROVIDERS.get(operation, set())
-        )
+        ),
     )
 
 

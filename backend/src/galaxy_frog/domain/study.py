@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from galaxy_frog.domain.providers import ProviderSelection
 from galaxy_frog.domain.transcripts.models import TranscriptOrigin
 from galaxy_frog.domain.videos.models import CaptionKind, VideoSourceKind
 
@@ -177,3 +178,4 @@ class StudyRun(BaseModel):
     failure: StudyFailure | None
     created_at: datetime
     updated_at: datetime
+    provider_selection: ProviderSelection | None = None

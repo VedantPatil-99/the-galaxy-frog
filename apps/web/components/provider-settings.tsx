@@ -104,6 +104,22 @@ export function ProviderSettings() {
                     <p className="text-xs text-muted-foreground">{entry.capability.replaceAll("_", " ")} · {entry.readiness.replaceAll("_", " ")} · health {observed?.state.toLowerCase().replaceAll("_", " ") ?? "unknown"}</p>
                     {observed?.blocked_until && observed.state !== "probe_available" ? <p className="text-xs text-muted-foreground">Retry after {new Date(observed.blocked_until).toLocaleString()}</p> : null}
                     <p>{entry.summary}</p>
+                    {entry.revision_note ? <p className="text-xs text-muted-foreground">{entry.revision_note}</p> : null}
+                    {entry.quota_limits ? (
+                      <p className="text-xs text-muted-foreground">
+                        App project budget: {entry.quota_limits.requests_per_minute} requests/min,
+                        {" "}{entry.quota_limits.input_tokens_per_minute.toLocaleString()} reserved input tokens/min,
+                        {" "}{entry.quota_limits.requests_per_day} requests/day. Google account limits can be lower.
+                      </p>
+                    ) : null}
+                    {observed?.quota_usage ? (
+                      <p className="text-xs text-muted-foreground">
+                        App usage: {observed.quota_usage.requests_last_minute} requests in the last minute,
+                        {" "}{observed.quota_usage.reserved_input_tokens_last_minute.toLocaleString()} reserved input tokens,
+                        {" "}{observed.quota_usage.requests_today} requests today.
+                        {" "}Daily reset: {new Date(observed.quota_usage.daily_reset_at).toLocaleString()}.
+                      </p>
+                    ) : null}
                     <p className="text-xs text-muted-foreground">{entry.privacy}</p>
                     <dl className="grid gap-1 text-xs">
                       {[

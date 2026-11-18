@@ -32,6 +32,9 @@ async def execute_study_run(
     sessions: async_sessionmaker[AsyncSession],
     spec: EmbeddingCollectionSpec,
     provider: StudyGenerator,
+    *,
+    evidence_characters: int = 1400,
+    excerpt_characters: int = 320,
 ) -> None:
     async def progress(done: int, total: int, warnings: tuple[str, ...]) -> None:
         async with sessions() as session:
@@ -51,14 +54,27 @@ async def execute_study_run(
             timeline = await StudyEvidenceReader(session, spec).read(
                 claim.run.video_id, chaptering=claim.run.kind == StudyKind.CHAPTERS
             )
-        result = await generate_study(claim.run.kind, timeline, pinned, provider, progress)
+        result = await generate_study(
+            claim.run.kind,
+            timeline,
+            pinned,
+            provider,
+            progress,
+            evidence_characters=evidence_characters,
+            excerpt_characters=excerpt_characters,
+        )
         if len(json.dumps(result.document.model_dump(mode="json")).encode()) > 524_288:
             raise StudyError(
                 "STUDY_DOCUMENT_TOO_LARGE", "The generated document exceeds the saved size limit."
             )
         async with sessions() as session:
             await StudyRepository(session).publish(
-                claim, result.document, result.fingerprint, result.provider, result.model
+                claim,
+                result.document,
+                result.fingerprint,
+                result.provider,
+                result.model,
+                prompt_version=result.prompt_version,
             )
 
 
@@ -134,6 +150,27 @@ async def run_study_worker(
         provider = OllamaStudyGenerator(settings.ollama_base_url, settings.generation_model, client)
 
         async def execute(claim: ClaimedStudyRun) -> None:
+            if claim.run.provider_selection is not None:
+                if engine is None:
+                    raise StudyError(
+                        "DATABASE_UNAVAILABLE",
+                        "Provider-selected Study generation requires PostgreSQL.",
+                        status=503,
+                    )
+                from galaxy_frog.entrypoints.study_providers import selected_study_generator
+
+                selected = await selected_study_generator(
+                    settings, sessions, engine, claim, provider
+                )
+                await execute_study_run(
+                    claim,
+                    sessions,
+                    spec,
+                    selected,
+                    evidence_characters=selected.evidence_characters,
+                    excerpt_characters=selected.excerpt_characters,
+                )
+                return
             if engine is None:
                 await execute_study_run(claim, sessions, spec, provider)
                 return

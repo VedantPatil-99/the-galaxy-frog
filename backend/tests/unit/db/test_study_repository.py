@@ -92,6 +92,27 @@ def artifact(
 
 
 @pytest.mark.asyncio
+async def test_selected_study_rejects_missing_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import AsyncMock
+
+    from galaxy_frog.db.provider_profiles import PostgresProviderProfiles
+    from galaxy_frog.domain.providers import ProfileRef, ProviderSelection
+
+    owner = video()
+    monkeypatch.setattr(PostgresProviderProfiles, "get", AsyncMock(return_value=None))
+    with pytest.raises(StudyError) as caught:
+        await Session(owner, None).repository.enqueue(
+            owner.id,
+            StudyKind.CHAPTERS,
+            uuid4(),
+            provider_selection=ProviderSelection(
+                profile=ProfileRef(profile_id="missing", version=1)
+            ),
+        )
+    assert caught.value.failure.code == "PROVIDER_PROFILE_NOT_FOUND"
+
+
+@pytest.mark.asyncio
 async def test_enqueue_replays_and_rejects_different_or_active_requests() -> None:
     owner = video()
     session = Session(owner, None, None, None)

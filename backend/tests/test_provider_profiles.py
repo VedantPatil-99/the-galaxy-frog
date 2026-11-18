@@ -113,6 +113,7 @@ async def test_catalog_distinguishes_configured_and_documented_without_leaking_c
         ocr_external_frames_permitted=True,
         llama_cloud_api_key=SecretStr("ocr-secret"),
         gemini_api_key=SecretStr("gemini-secret"),
+        gemini_project_id="test-gemini-project",
         gemini_visual_model="gemini-test",
         gemini_visual_revision="pinned",
         vlm_provider="gemini",
@@ -280,3 +281,28 @@ async def test_builtin_profile_overrides_are_versioned() -> None:
     saved = await repo.append("local", 1, local)
     assert saved.version == 2
     assert saved.created_at is not None and saved.created_at < datetime.now(UTC)
+
+
+@pytest.mark.parametrize(
+    "profile,operation,required",
+    [
+        ("gemini", "study", True),
+        ("local", "study", False),
+        ("free_cloud", "study", False),
+        ("gemini", "question", False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_consent_options_identify_cloud_required_study(
+    profile: str, operation: str, required: bool
+) -> None:
+    app = create_app(Settings())
+    app.dependency_overrides[get_video_repository] = lambda: SqlAlchemyVideoRepository(
+        cast(AsyncSession, ProfileSession())
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/v1/provider-consents/options",
+            params={"profile_id": profile, "version": "1", "operation": operation},
+        )
+    assert response.status_code == 200 and response.json()["cloud_required"] is required

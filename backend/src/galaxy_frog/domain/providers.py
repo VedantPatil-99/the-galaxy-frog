@@ -89,6 +89,7 @@ class ProviderOperation(StrEnum):
 
 
 class ExternalData(StrEnum):
+    TEXT = "text"
     AUDIO = "audio"
     FRAMES = "frames"
     FRAMES_AND_TEXT = "frames_and_text"
