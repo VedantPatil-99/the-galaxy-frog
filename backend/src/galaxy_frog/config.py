@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         frozen=True,
+        hide_input_in_errors=True,
     )
 
     app_env: Literal["development", "test", "production"] = "development"
@@ -75,6 +76,17 @@ class Settings(BaseSettings):
     vlm_timeout_seconds: float = Field(default=120, gt=0, le=300)
     qwen_visual_revision: str = "afc393e3572c07db0bc84aa460d928a16c75f3fbb9ca9e0dccc4fbd2dafb573e"
     gemini_api_key: SecretStr | None = None
+    gemini_project_id: str | None = None
+    gemini_study_api_key: SecretStr | None = None
+    gemini_study_project_id: str | None = None
+    gemini_visual_api_key: SecretStr | None = None
+    gemini_visual_project_id: str | None = None
+    gemini_generation_enabled: bool = False
+    gemini_study_enabled: bool = False
+    gemini_generation_model: str | None = None
+    gemini_generation_revision: str | None = None
+    gemini_study_model: str | None = None
+    gemini_study_revision: str | None = None
     gemini_visual_model: str | None = None
     gemini_visual_revision: str | None = None
     cloudflare_asr_enabled: bool = False
@@ -83,6 +95,40 @@ class Settings(BaseSettings):
     bedrock_text_enabled: bool = False
     bedrock_region: Literal["us-east-1", "us-east-2", "us-west-2"] = "us-east-1"
     aws_bearer_token_bedrock: SecretStr | None = None
+
+    def gemini_credentials(
+        self, role: Literal["generation", "study", "vision"]
+    ) -> tuple[SecretStr | None, str | None]:
+        if role == "study":
+            return self.gemini_study_api_key, self.gemini_study_project_id
+        if role == "vision" and self.gemini_visual_api_key is not None:
+            return self.gemini_visual_api_key, self.gemini_visual_project_id
+        return self.gemini_api_key, self.gemini_project_id
+
+    @field_validator("gemini_api_key", "gemini_study_api_key", "gemini_visual_api_key")
+    @classmethod
+    def normalize_gemini_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None or not value.get_secret_value().strip():
+            return None
+        return SecretStr(value.get_secret_value().strip())
+
+    @field_validator("gemini_project_id", "gemini_study_project_id", "gemini_visual_project_id")
+    @classmethod
+    def validate_gemini_project(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        if re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", value) is None:
+            raise ValueError("Gemini project IDs must be valid Google Cloud project IDs")
+        return value
+
+    @model_validator(mode="after")
+    def validate_gemini_visual_override(self) -> Self:
+        if (self.gemini_visual_api_key is None) != (self.gemini_visual_project_id is None):
+            raise ValueError(
+                "GEMINI_VISUAL_API_KEY and GEMINI_VISUAL_PROJECT_ID require each other"
+            )
+        return self
 
     @field_validator("cloudflare_account_id")
     @classmethod

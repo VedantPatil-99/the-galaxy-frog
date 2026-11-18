@@ -225,7 +225,7 @@ def provider_catalog(settings: Settings) -> tuple[ProviderEntry, ...]:
                 "configured"
                 if settings.vlm_provider != "disabled"
                 and settings.external_frame_processing_enabled
-                and secret_present(settings.gemini_api_key)
+                and secret_present(settings.gemini_credentials("vision")[0])
                 and settings.gemini_visual_model
                 and settings.gemini_visual_revision
                 else "setup_required"

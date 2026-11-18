@@ -78,16 +78,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             revision=resolved_settings.qwen_visual_revision,
             timeout_seconds=resolved_settings.vlm_timeout_seconds,
         )
+    visual_key, _visual_project = resolved_settings.gemini_credentials("vision")
     if (
         resolved_settings.vlm_provider != "disabled"
-        and resolved_settings.gemini_api_key
+        and visual_key
         and resolved_settings.gemini_visual_model
         and resolved_settings.gemini_visual_revision
     ):
         visual_reasoners["gemini-vision"] = GeminiVisualReasoner(
             model=resolved_settings.gemini_visual_model,
             revision=resolved_settings.gemini_visual_revision,
-            api_key=resolved_settings.gemini_api_key.get_secret_value(),
+            api_key=visual_key.get_secret_value(),
             external_enabled=resolved_settings.external_frame_processing_enabled,
             timeout_seconds=resolved_settings.vlm_timeout_seconds,
         )
