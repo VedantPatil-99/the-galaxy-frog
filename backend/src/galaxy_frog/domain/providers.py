@@ -95,6 +95,9 @@ class ExternalData(StrEnum):
     PAID_TEXT = "paid_text"
 
 
+GEMINI_TEXT_MODELS = frozenset({"gemini-3.5-flash-lite", "gemini-3.8-flash"})
+
+
 class ConsentScope(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 

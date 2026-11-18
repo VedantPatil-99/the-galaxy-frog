@@ -87,6 +87,17 @@ class Settings(BaseSettings):
     gemini_generation_revision: str | None = None
     gemini_study_model: str | None = None
     gemini_study_revision: str | None = None
+    gemini_generation_thinking: Literal["low", "medium", "high"] = "low"
+    gemini_study_thinking: Literal["low", "medium", "high"] = "low"
+    gemini_generation_max_output_tokens: int = Field(default=4096, ge=256, le=16_384)
+    gemini_study_max_output_tokens: int = Field(default=4096, ge=256, le=16_384)
+    gemini_study_evidence_characters: int = Field(default=12_000, ge=1400, le=48_000)
+    gemini_study_excerpt_characters: int = Field(default=1200, ge=320, le=4000)
+    gemini_timeout_seconds: float = Field(default=75, gt=0, le=120)
+    gemini_requests_per_minute: int = Field(default=5, ge=1, le=10_000)
+    gemini_input_tokens_per_minute: int = Field(default=64_000, ge=1, le=2_000_000)
+    gemini_requests_per_day: int = Field(default=50, ge=1, le=1_000_000)
+    gemini_visual_input_token_reservation: int = Field(default=16_384, ge=1, le=131_072)
     gemini_visual_model: str | None = None
     gemini_visual_revision: str | None = None
     cloudflare_asr_enabled: bool = False
