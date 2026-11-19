@@ -4,13 +4,16 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
 from fastapi import Request
 from pydantic import SecretStr
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from galaxy_frog.adapters.vision.siglip import SiglipEmbeddingProvider
+from galaxy_frog.api import dependencies
 from galaxy_frog.api import provider_execution as execution
 from galaxy_frog.api.app import create_app
 from galaxy_frog.api.errors import ApiError
@@ -18,6 +21,8 @@ from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailur
 from galaxy_frog.application.provider_registry import ProviderEntry
 from galaxy_frog.config import Settings
 from galaxy_frog.db.provider_runtime import PostgresProviderRuntime
+from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.db.visual_search import PgVectorVisualSearch
 from galaxy_frog.domain.generation.models import GenerationProviderError
 from galaxy_frog.domain.providers import (
     Capability,
@@ -29,6 +34,7 @@ from galaxy_frog.domain.providers import (
 )
 from galaxy_frog.domain.retrieval.reranking import RerankerError, RerankerErrorCode
 from galaxy_frog.domain.vision.visual import VisualFailureCode, VisualProviderError
+from galaxy_frog.domain.vision.visual_ports import VisualEmbeddingProvider
 
 
 def provider_run(
@@ -112,6 +118,54 @@ async def test_visual_embedding_keeps_typed_provider_failures(
         VisualFailureCode.UNAVAILABLE if admission_error else VisualFailureCode.INVALID_OUTPUT
     )
     record.assert_awaited_once()
+
+
+@pytest.mark.parametrize("admission_error", [None, ProviderCode.BUSY])
+@pytest.mark.asyncio
+async def test_retrieval_visual_search_honors_run_admission_and_audit(
+    monkeypatch: pytest.MonkeyPatch, admission_error: ProviderCode | None
+) -> None:
+    settings = Settings(visual_embedding_enabled=True)
+    run, record = provider_run(settings=settings, admission_error=admission_error)
+    app = create_app(settings)
+    identity = SiglipEmbeddingProvider(device="cpu")
+    provider = AsyncMock()
+    provider.collection, provider.identity = identity.collection, identity.identity
+    provider.embed_query.return_value = (1.0,) + (0.0,) * 767
+    app.state.visual_embedding_provider = provider
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.side_effect = [uuid4(), uuid4()]
+    session.execute.return_value = Mock(all=Mock(return_value=()))
+    searches: list[PgVectorVisualSearch] = []
+
+    def visual_search(
+        session: AsyncSession, provider: VisualEmbeddingProvider, *, require_existing: bool = False
+    ) -> PgVectorVisualSearch:
+        search = PgVectorVisualSearch(session, provider, require_existing=require_existing)
+        searches.append(search)
+        return search
+
+    monkeypatch.setattr(dependencies, "PgVectorVisualSearch", visual_search)
+    dependencies.build_retrieval_service(
+        Request({"type": "http", "app": app}), SqlAlchemyVideoRepository(session), run
+    )
+    assert len(searches) == 1
+    if admission_error is not None:
+        with pytest.raises(VisualProviderError) as caught:
+            await searches[0].search(uuid4(), "diagram of an atom")
+        assert caught.value.code is VisualFailureCode.UNAVAILABLE
+        provider.embed_query.assert_not_awaited()
+    else:
+        assert await searches[0].search(uuid4(), "diagram of an atom") == ()
+        provider.embed_query.assert_awaited_once_with("diagram of an atom")
+    record.assert_awaited_once()
+    call = record.await_args
+    assert call is not None
+    capability, attempt = call.args
+    assert capability is Capability.VISUAL_EMBEDDING
+    assert attempt.provider_id == "siglip"
+    assert attempt.status == ("skipped" if admission_error else "succeeded")
+    assert attempt.reason is admission_error
 
 
 @pytest.mark.asyncio
