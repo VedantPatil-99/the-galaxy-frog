@@ -50,8 +50,8 @@ def _notebook(row: WorkspaceNotebookRow) -> Notebook:
 class WorkspaceRepository:
     """Accept owner IDs only from a verified server identity, never from request bodies.
 
-    No HTTP routes expose this repository until authentication and the legacy-resource
-    authorization fence are implemented. Registering an account never claims videos,
+    Workspace HTTP routes require verified creator identity and the legacy-resource
+    authorization fence. Registering an account never claims videos,
     provider records, Study artifacts, or any other pre-existing application data.
     """
 

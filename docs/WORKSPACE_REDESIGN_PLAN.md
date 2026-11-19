@@ -1,6 +1,6 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: Implementation started, 2026-11-19, on `feat/workspace`; W0 design baseline and W1.1 local ownership foundations are the first packets.
+Status: Implementation started, 2026-11-19, on `feat/workspace`; W0 and W1.1 are locally complete, and W1.2 adds the private authentication/API boundary.
 Saved: 2026-11-18 (Asia/Calcutta).
 Updated: 2026-11-19 (Asia/Calcutta) — local skill requirements, UI design process, and typography direction.
 This document records the agreed future workspace program. It is separate from Phase 8.
@@ -9,7 +9,7 @@ This document records the agreed future workspace program. It is separate from P
 
 Phase 8 merge was confirmed by the user on 2026-11-19. Workspace work starts from merged `origin/main` at `4299de6`; do not repeat the Phase 8 status audit. Keep the completed provider/consent behavior intact.
 
-Follow [the design direction](WORKSPACE_DESIGN.md) and [the staged setup instructions](WORKSPACE_SETUP.md). The user has no Supabase project yet; prepare local foundations while hosted authentication and storage acceptance remain pending configuration.
+Follow [the design direction](WORKSPACE_DESIGN.md) and [the staged setup instructions](WORKSPACE_SETUP.md). A separate `galaxy-frog` Supabase project has been created with explicit approval at a quoted $0/month. Hosted authentication and storage configuration/acceptance remain pending.
 
 The redesigned product will provide:
 
@@ -317,4 +317,8 @@ Use the user's confirmed Git identity for both author and committer in this buil
 
 Keep commits focused and preserve the installed skills/MCP configuration. Do not access Notion. Phase 8 documentation timing remains unchanged.
 
-**Active work:** W0 establishes the design direction and installation stages; W1.1 adds owner-scoped account/notebook persistence and an additive migration. W1.2 will add verified authentication and authorization fences before exposing workspace resources. Private storage and explicit legacy-data migration follow before the workspace shell. Track local checks separately from live Supabase acceptance, hosted CI, and merge status in `PLANS.md`.
+**Active work:** W1.2 adds verified Supabase bearer authentication, explicit creator access, private notebook APIs, generated contracts, and a fail-closed boundary around legacy resources. Follow [ADR 0010](adr/0010-private-workspace-auth.md). Private storage and explicit legacy-data migration follow in W1.3 before the workspace shell and browser sign-in/session UI. Track local checks separately from live Supabase acceptance, hosted CI, and merge status in `PLANS.md`.
+
+Supabase plugin use requires the user's approval. Read-only organization/project discovery was approved on 2026-11-19; project creation, SQL, migrations, and authentication configuration require approval for the specific proposed action. Installation of a plugin alone does not authorize those changes.
+
+On 2026-11-19, the user separately approved creating `galaxy-frog` in their organization, in Mumbai, only at $0. Supabase quoted $0/month and the project was created successfully. This did not authorize hosted SQL, migrations, authentication-setting changes, or paid upgrades.

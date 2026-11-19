@@ -72,7 +72,7 @@ def error_response(
     return JSONResponse(
         status_code=status_code,
         content=body.model_dump(mode="json", exclude_none=True),
-        headers={CORRELATION_ID_HEADER: correlation_id},
+        headers={CORRELATION_ID_HEADER: correlation_id, "Cache-Control": "no-store"},
     )
 
 
@@ -80,7 +80,7 @@ async def handle_api_error(request: Request, exc: Exception) -> JSONResponse:
     """Serialize an intentional application error."""
 
     api_error = cast(ApiError, exc)
-    return error_response(
+    response = error_response(
         request,
         status_code=api_error.status_code,
         code=api_error.code,
@@ -89,6 +89,9 @@ async def handle_api_error(request: Request, exc: Exception) -> JSONResponse:
         suggested_action=api_error.suggested_action,
         details=api_error.details,
     )
+    if api_error.code == "WORKSPACE_AUTH_REQUIRED":
+        response.headers["WWW-Authenticate"] = "Bearer"
+    return response
 
 
 async def handle_validation_error(request: Request, exc: Exception) -> JSONResponse:

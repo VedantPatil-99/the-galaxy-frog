@@ -31,6 +31,7 @@ from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.db.visual_search import PgVectorVisualSearch
+from galaxy_frog.db.workspace import WorkspaceRepository
 from galaxy_frog.domain.providers import Capability
 from galaxy_frog.domain.retrieval.pipeline import RetrievalConfig
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
@@ -221,3 +222,24 @@ async def get_vision_repository(
     )
     async with factory() as session:
         yield SqlAlchemyVisionRepository(session)
+
+
+async def get_workspace_repository(request: Request) -> AsyncGenerator[WorkspaceRepository]:
+    """Keep workspace transactions request-scoped and normalize database outages."""
+
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from galaxy_frog.api.errors import ApiError
+
+    factory = async_sessionmaker(_database_engine(request), expire_on_commit=False)
+    try:
+        async with factory() as session:
+            yield WorkspaceRepository(session)
+    except SQLAlchemyError:
+        raise ApiError(
+            status_code=503,
+            code="WORKSPACE_DATABASE_UNAVAILABLE",
+            message="The workspace database is temporarily unavailable.",
+            retryable=True,
+            suggested_action="Check PostgreSQL and apply the current workspace migrations.",
+        ) from None

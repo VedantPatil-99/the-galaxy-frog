@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -25,6 +25,11 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "production"] = "development"
     database_url: SecretStr | None = None
+    workspace_auth_enabled: bool = False
+    supabase_url: str | None = None
+    supabase_publishable_key: SecretStr | None = None
+    workspace_creator_emails: tuple[EmailStr, ...] = ()
+    workspace_auth_timeout_seconds: float = Field(default=5, gt=0, le=15)
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "bge-m3"
     embedding_model_revision: str = "ollama"
@@ -115,6 +120,44 @@ class Settings(BaseSettings):
         if role == "vision" and self.gemini_visual_api_key is not None:
             return self.gemini_visual_api_key, self.gemini_visual_project_id
         return self.gemini_api_key, self.gemini_project_id
+
+    @property
+    def workspace_auth_required(self) -> bool:
+        """Production cannot opt back into the unauthenticated local-development API."""
+
+        return self.workspace_auth_enabled or self.app_env == "production"
+
+    @field_validator("supabase_url")
+    @classmethod
+    def validate_supabase_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        port = parsed.port
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or any(character.isspace() for character in normalized)
+            or port == 0
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("SUPABASE_URL must be an HTTPS origin without credentials or a path.")
+        return normalized
+
+    @field_validator("supabase_publishable_key")
+    @classmethod
+    def validate_supabase_publishable_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        key = value.get_secret_value().strip()
+        if not key.startswith("sb_publishable_") or not 15 < len(key) <= 4096:
+            raise ValueError("Use a Supabase publishable key, not a secret or service-role key.")
+        return SecretStr(key)
 
     @field_validator("gemini_api_key", "gemini_study_api_key", "gemini_visual_api_key")
     @classmethod

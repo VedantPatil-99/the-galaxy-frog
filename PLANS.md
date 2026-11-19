@@ -822,11 +822,14 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   validation, and transaction tests. No HTTP exposure or automatic legacy ownership.
 - [ ] W1.2 — Verified Supabase authentication, invite-only creators, generated HTTP contracts,
   and authorization fences covering existing resource paths before workspace exposure.
+  Implementation and local API checks are verified; default Turbopack build confirmation and
+  live Supabase acceptance remain open. The supported Webpack production build passes.
 - [ ] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
 - [ ] W2 — Implement both workspace layouts and the selected typography system after W1.
 
-Later packets remain ordered by the workspace plan. No Supabase project is configured yet;
-live authentication/storage acceptance is pending. Do not access Notion for this program.
+Later packets remain ordered by the workspace plan. A separate Supabase project has been
+created with approval, but application authentication/storage configuration and live acceptance
+are pending. Do not access Notion for this program.
 
 ### W1.1 local verification — 2026-11-19
 
@@ -839,3 +842,27 @@ locked Google GenAI dependencies were installed with `uv sync --locked --inexact
 optional packages were preserved. No new workspace package dependencies or frontend changes
 were introduced. Browser acceptance belongs to the later shell packet. Hosted CI/merge and live
 Supabase authentication/storage acceptance are pending.
+
+### W1.2 implementation and verification — 2026-11-19
+
+- Added a request-scoped Supabase Auth verifier using the existing HTTPX dependency, confirmed
+  email creator allowlists, HTTPS origin/publishable-key validation, safe errors, and private
+  notebook/session APIs with generated OpenAPI/TypeScript contracts. No new runtime packages.
+- In private mode, all 28 legacy API operations are locked pending W1.3 ownership migration.
+  Production cannot disable this boundary. Existing local development mode is preserved.
+  The internal signed callback remains separate. See [ADR 0010](docs/adr/0010-private-workspace-auth.md).
+- Full PostgreSQL/backend gate: **1,517 passed, four optional skips, 100% statement/branch
+  coverage**. Includes real-database HTTP owner-isolation with synthetic Auth responses.
+  Ruff lint/format, strict Pyright, deterministic contracts, frontend lint/type checks,
+  all **52 frontend tests**, and the supported Webpack production build passed.
+- The normal `bun run build` failed twice while Turbopack started a Node loader worker for the
+  existing transcript component; the worker exited before connection. The alternate build
+  `bun run --cwd apps/web build --webpack` passed without changing project configuration.
+  Default-build confirmation is still required; exact Git Bash steps are in the setup guide.
+- With explicit approval, Supabase read-only organization/project discovery completed. A separate
+  `galaxy-frog` project was then created in Mumbai after the operator approved creation only at
+  $0 and Supabase quoted $0/month. It reports `ACTIVE_HEALTHY`. No hosted SQL, migrations, or
+  authentication-setting changes were made. Application credentials/configuration and live
+  acceptance remain pending; the unrelated pre-existing project was not modified.
+- Browser sign-in/session UI belongs to W2. Hosted CI, merge, and live provider acceptance are
+  unverified. W1.2 remains open for its recorded gates; do not report it as fully complete.

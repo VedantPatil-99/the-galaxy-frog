@@ -13,6 +13,7 @@ const RESPONSE_HEADERS = [
   "content-disposition",
   "content-type",
   "retry-after",
+  "www-authenticate",
   "x-correlation-id",
 ] as const
 const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD"])

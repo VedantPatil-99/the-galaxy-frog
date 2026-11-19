@@ -42,3 +42,12 @@ class Notebook(BaseModel):
 
 class NotebookNotFound(Exception):
     """Missing and inaccessible notebooks deliberately have the same outcome."""
+
+
+class VerifiedWorkspaceIdentity(BaseModel):
+    """Identity returned by the configured Auth server, never decoded from an unverified JWT."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: UUID
+    email: str

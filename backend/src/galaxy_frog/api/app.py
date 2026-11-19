@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from galaxy_frog.adapters.dispatch.local import LocalJobDispatcher
@@ -24,6 +24,8 @@ from galaxy_frog.api.routes.providers import router as providers_router
 from galaxy_frog.api.routes.retrieval import router as retrieval_router
 from galaxy_frog.api.routes.study import router as study_router
 from galaxy_frog.api.routes.videos import router as videos_router
+from galaxy_frog.api.routes.workspace import router as workspace_router
+from galaxy_frog.api.workspace_auth import require_legacy_resource_access
 from galaxy_frog.application.provider_registry import local_ollama_origin
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -137,11 +139,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_error_handlers(application)
     application.include_router(health_router)
     application.include_router(internal_dispatch_router)
-    application.include_router(jobs_router)
-    application.include_router(providers_router)
-    application.include_router(videos_router)
-    application.include_router(retrieval_router)
-    application.include_router(study_router)
+    legacy = APIRouter(dependencies=[Depends(require_legacy_resource_access)])
+    legacy.include_router(jobs_router)
+    legacy.include_router(providers_router)
+    legacy.include_router(videos_router)
+    legacy.include_router(retrieval_router)
+    legacy.include_router(study_router)
+    application.include_router(legacy)
+    application.include_router(workspace_router)
     return application
 
 
