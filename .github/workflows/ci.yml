@@ -56,6 +56,24 @@ jobs:
     name: Backend quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg17
+        env:
+          POSTGRES_DB: galaxy_frog_ci
+          POSTGRES_USER: galaxy_frog_ci
+          POSTGRES_PASSWORD: ci_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U galaxy_frog_ci -d galaxy_frog_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Disposable service credentials, used only by this isolated CI database.
+      DATABASE_URL: postgresql+asyncpg://galaxy_frog_ci:ci_test_password@127.0.0.1:5432/galaxy_frog_ci
+      RUN_DATABASE_INTEGRATION: "1"
 
     steps:
       - name: Check out repository
@@ -84,6 +102,9 @@ jobs:
 
       - name: Type-check
         run: uv run --directory backend python -m pyright
+
+      - name: Apply database migrations
+        run: uv run --directory backend python -m alembic upgrade head
 
       - name: Test
         run: uv run --directory backend python -m pytest
