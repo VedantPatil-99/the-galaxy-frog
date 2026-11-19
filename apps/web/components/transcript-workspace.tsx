@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 
 import { IngestionProgress } from "@/components/ingestion-progress"
+import { ProviderRun } from "@/components/provider-run"
+import { ProviderSelectionFields, useProviderSelection } from "@/components/provider-selection"
 import { MomentPlayer } from "@/components/moment-player"
 import { StudyWorkspace } from "@/components/study-workspace"
 import { TranscriptionEvidence } from "@/components/transcription-evidence"
@@ -12,6 +14,7 @@ import {
   askVideoQuestion,
   cancelIngestionJob,
   getIngestionEvents,
+  getIngestionJob,
   getTranscript,
   importVideo,
   retryIngestionJob,
@@ -26,6 +29,7 @@ import type {
   SearchResponse,
   RetrievalMode,
 } from "@/lib/api/contracts"
+import { getImportConsent } from "@/lib/api/providers"
 import { seekCommands, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 import { timestamp } from "@/lib/timestamp"
 
@@ -46,6 +50,18 @@ function rememberVideo(videoId: string | null) {
   window.history.replaceState(window.history.state, "", url)
 }
 
+function youtubeSourceId(value: string): string {
+  const url = new URL(value)
+  return url.searchParams.get("v") ?? url.pathname.split("/").filter(Boolean).at(-1) ?? ""
+}
+
+function rememberJob(jobId: string | null) {
+  const url = new URL(window.location.href)
+  if (jobId) url.searchParams.set("job", jobId)
+  else url.searchParams.delete("job")
+  window.history.replaceState(window.history.state, "", url)
+}
+
 export function TranscriptWorkspace() {
   const player = useRef<HTMLIFrameElement>(null)
   const [sourceUrl, setSourceUrl] = useState("")
@@ -53,6 +69,7 @@ export function TranscriptWorkspace() {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
   const [answer, setAnswer] = useState<AnswerResponse | null>(null)
   const [retrieval, setRetrieval] = useState<SearchResponse | null>(null)
+  const [failedQuery, setFailedQuery] = useState<{ operation: "search" | "question"; traceId: string } | null>(null)
   const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("reranked")
   const [evidenceOnly, setEvidenceOnly] = useState(false)
   const [job, setJob] = useState<IngestionJobResponse | null>(null)
@@ -62,25 +79,42 @@ export function TranscriptWorkspace() {
   const [importing, setImporting] = useState(false)
   const [jobActionPending, setJobActionPending] = useState(false)
   const [asking, setAsking] = useState(false)
+  const importPolicy = useProviderSelection("import")
+  const questionPolicy = useProviderSelection("question")
+  const [storedJobId, setStoredJobId] = useState<string | null>(null)
+  const setImportGrant = importPolicy.setGrantId
 
   const restoreRequest = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    const id = new URL(window.location.href).searchParams.get("video")
-    if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return
+    const params = new URL(window.location.href).searchParams
+    const id = params.get("video")
+    const jobId = params.get("job")
     const abort = new AbortController()
     restoreRequest.current = abort
+    if (jobId && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(jobId)) {
+      void Promise.all([getIngestionJob(jobId), getIngestionEvents(jobId), getImportConsent(jobId)])
+        .then(([restored, history, consent]) => {
+          if (abort.signal.aborted) return
+          setJob(restored)
+          setEvents(history.events)
+          setSourceUrl(restored.canonical_url)
+          if (consent && !consent.revoked_at) setImportGrant(consent.consent_id)
+        }).catch(() => {})
+    }
+    if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return () => abort.abort()
     void getTranscript(id, (input, init) => fetch(input, { ...init, signal: abort.signal }))
       .then((loaded) => {
         if (abort.signal.aborted) return
         setTranscript(loaded)
         setSourceUrl(loaded.video.canonical_url)
+        setStoredJobId(params.get("job"))
       })
       .catch((caught: unknown) => {
         if (!abort.signal.aborted) setError(errorMessage(caught))
       })
     return () => abort.abort()
-  }, [])
+  }, [setImportGrant])
 
   function seekTo(milliseconds: number) {
     for (const command of seekCommands(milliseconds)) {
@@ -122,13 +156,13 @@ export function TranscriptWorkspace() {
     setTranscript(loaded)
     if (loaded.transcription !== null) {
       setNotice(
-        "Local ASR transcript ready — exact cue intervals and execution provenance were retained.",
+        "ASR transcript ready. See Provider decisions for the model and device used.",
       )
     } else {
       setNotice(
         reused
           ? "Existing durable job reused — no transcript rows were duplicated."
-          : "Caption transcript imported and indexed without invoking local ASR.",
+          : "Caption transcript imported and indexed.",
       )
     }
   }
@@ -137,6 +171,8 @@ export function TranscriptWorkspace() {
     event.preventDefault()
     restoreRequest.current?.abort()
     rememberVideo(null)
+    rememberJob(null)
+    setStoredJobId(null)
     setImporting(true)
     setError(null)
     setNotice(null)
@@ -146,7 +182,13 @@ export function TranscriptWorkspace() {
     setJob(null)
     setEvents([])
     try {
-      const imported = await importVideo(sourceUrl)
+      const selected = await importPolicy.selection(youtubeSourceId(sourceUrl))
+      const imported = await importVideo(sourceUrl, fetch, selected)
+      rememberJob(imported.job.job_id)
+      if (imported.reused && selected?.consent_id) {
+        const canonical = await getImportConsent(imported.job.job_id).catch(() => null)
+        importPolicy.setGrantId(canonical && !canonical.revoked_at ? canonical.consent_id : null)
+      }
       setNotice(
         imported.reused
           ? "Following the existing durable job and its persisted event trail."
@@ -186,7 +228,10 @@ export function TranscriptWorkspace() {
     setError(null)
     setNotice(null)
     try {
-      const retried = await retryIngestionJob(job.job_id)
+      const selected = await importPolicy.selection(job.external_id) ?? {
+        profile: { profile_id: "local", version: 1 },
+      }
+      const retried = await retryIngestionJob(job.job_id, fetch, selected)
       setJobActionPending(false)
       setNotice(`Retry queued from the ${retried.stage.replaceAll("_", " ")} checkpoint.`)
       await monitorIngestion(retried, true)
@@ -206,6 +251,7 @@ export function TranscriptWorkspace() {
   function clearResults() {
     setAnswer(null)
     setRetrieval(null)
+    setFailedQuery(null)
     setError(null)
   }
 
@@ -215,16 +261,28 @@ export function TranscriptWorkspace() {
     setError(null)
     setAnswer(null)
     setRetrieval(null)
+    setFailedQuery(null)
     try {
       const options = { mode: retrievalMode, selected_anchor: selectedAnchor, limit: 8, allow_fallback: true, allow_external_frames: false }
       if (evidenceOnly) {
-        setRetrieval(await searchVideo(transcript.video.video_id, { ...options, query: question }))
+        const profile = questionPolicy.profile()
+        setRetrieval(await searchVideo(transcript.video.video_id, {
+          ...options, query: question,
+          provider_selection: profile ? { profile } : undefined,
+        }))
       } else {
-        const response = await askVideoQuestion(transcript.video.video_id, question, fetch, options)
+        const selected = await questionPolicy.selection(transcript.video.video_id)
+        const response = await askVideoQuestion(transcript.video.video_id, question, fetch, {
+          ...options, provider_selection: selected,
+        })
         setRetrieval(response.retrieval ?? null)
         setAnswer(response.retrieval_status === "anchor_selection_required" || response.retrieval_status === "anchor_unresolved" ? null : response)
       }
     } catch (caught) {
+      const traceId = caught instanceof ApiClientError ? caught.response?.error.details?.trace_id : null
+      if (typeof traceId === "string") {
+        setFailedQuery({ operation: evidenceOnly ? "search" : "question", traceId })
+      }
       setError(errorMessage(caught))
     } finally {
       setAsking(false)
@@ -236,7 +294,7 @@ export function TranscriptWorkspace() {
       <div className="mb-7 max-w-3xl">
         <p className="mb-3 font-mono text-xs tracking-[0.22em] text-primary uppercase">Phase 3 · Temporal evidence</p>
         <h1 id="workspace-title" className="font-heading text-4xl leading-tight font-semibold tracking-[-0.04em] sm:text-5xl">Ask the video. Keep the receipts.</h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public YouTube video. Galaxy Frog uses viable captions first, falls back to bounded local multilingual ASR only when needed, and keeps every answer linked to exact evidence.</p>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public YouTube video. Galaxy Frog uses viable captions first and transcribes locally by default. Answers link to the original evidence.</p>
       </div>
 
       <form onSubmit={handleImport} className="rounded-2xl border bg-card p-3 shadow-sm sm:flex sm:items-center sm:gap-3">
@@ -244,6 +302,9 @@ export function TranscriptWorkspace() {
         <input id="source-url" type="url" required value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=…" className="h-11 w-full rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
         <button type="submit" disabled={importing || asking} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Following durable job…" : "Queue video"}</button>
       </form>
+      <div className="mt-3">
+        <ProviderSelectionFields control={importPolicy} busy={importing} />
+      </div>
 
       <div aria-live="polite" className="min-h-12 py-3 text-sm">
         {notice ? <p className="text-chart-4 dark:text-chart-2">{notice}</p> : null}
@@ -258,6 +319,9 @@ export function TranscriptWorkspace() {
           onCancel={handleCancel}
           onRetry={handleRetry}
         />
+      ) : null}
+      {job || storedJobId ? (
+        <ProviderRun operation="import" runId={job?.job_id ?? storedJobId ?? ""} refresh={events.length} />
       ) : null}
 
       {transcript === null ? (
@@ -297,6 +361,9 @@ export function TranscriptWorkspace() {
                 <input id="question" required disabled={asking} maxLength={2000} value={question} onChange={(event) => { setQuestion(event.target.value); clearResults() }} placeholder="What does the speaker say about…?" className="h-11 min-w-0 flex-1 rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
                 <button type="submit" disabled={asking} className="h-11 rounded-xl bg-foreground px-5 text-sm font-semibold text-background disabled:opacity-60">{asking ? "Checking evidence…" : evidenceOnly ? "Find evidence" : "Ask"}</button>
               </form>
+              <div className="mt-3">
+                <ProviderSelectionFields control={questionPolicy} busy={asking} evidenceOnly={evidenceOnly} />
+              </div>
               <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={evidenceOnly} disabled={asking} onChange={event => { setEvidenceOnly(event.target.checked); clearResults() }} />Evidence only · no answer generation</label>
                 <label className="flex items-center gap-2">Retrieval method
@@ -340,6 +407,8 @@ export function TranscriptWorkspace() {
                 </div>
               ) : null}
               {retrieval ? <RetrievalEvidence key={retrieval.trace_id} result={retrieval} pending={asking} onSelectAnchor={submitQuery} onSeek={seekTo} /> : null}
+              {retrieval ? <ProviderRun operation={evidenceOnly ? "search" : "question"} runId={retrieval.trace_id} /> : null}
+              {failedQuery ? <ProviderRun operation={failedQuery.operation} runId={failedQuery.traceId} /> : null}
             </article>
           </div>
 

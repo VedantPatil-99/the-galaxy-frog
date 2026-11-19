@@ -4,11 +4,28 @@ Galaxy Frog is a YouTube-first temporal multimodal retrieval system. Its flagshi
 
 ## Current checkpoint
 
-Phases 0–3 are complete and merged. Phase 3 PR #18 is included in `main` at `55591a0`; all hosted CI jobs passed on that merge. Phase 3 added PostgreSQL FTS and a shared lexical/dense retrieval service with deterministic fusion, explicit embedding fallback, temporal constraint parsing, and video-scoped traces. The local CUDA reranker was proven but its broad timing profile is deferred to later benchmarking; retrieval now defaults to reranked mode with strict fallback. Search and questions share the exact trace, with question generation pausing for explicit user selection on ambiguous/implied anchors. The full suite, manual HTTP/database/browser checks, browser automation, and PR #18 CI all passed.
+Phase 8 — provider resilience and configuration — is locally complete on
+`feat/provider-resilience` (2026-11-19). FastAPI owns versioned profiles, capability metadata,
+consent, admission, shared project budgets, fallback, and saved provider decisions. The default
+remains local only. Configure optional providers and inspect their capabilities at
+`/settings/providers`; selecting a cloud profile does not grant permission to upload evidence.
 
-Phase 4 is locally implemented. Phase 5 — visual retrieval and query-adaptive VLM reasoning — is locally complete on `feat/visual-retrieval-vlm`, based on the verified Phase 4 tip `6a5a903`. New imports connect the bounded scene/frame pipeline to the durable worker. Optional offline SigLIP retrieves versioned frame evidence; selective local Qwen3-VL reasoning preserves validated frame citations, exact capture times, original scene intervals, cache identity, and durable escalation traces. Transcript-only queries skip visual work. Gemini and cloud OCR require explicit privacy configuration; cloud processing was not enabled for this acceptance run.
+Gemini can generate grounded answers and versioned Study materials with separate interactive and
+Study project credentials. Existing vision, Cloudflare ASR, LlamaParse OCR, and Bedrock adapters
+remain optional. Original evidence IDs, half-open millisecond intervals, and validated citations
+remain attached to every result. Study still reads existing video evidence; document uploads,
+chat memory, the workspace redesign, and Phase 9 evaluation are separate work.
 
-Local acceptance: 1,121 backend tests with 100% statement/branch coverage, 35 frontend tests, 11 PostgreSQL integrations, generated contracts, lint, strict types, production build, and pre-commit. Real SigLIP/Qwen and browser evidence/seek/degraded checks passed. The frozen eight-frame closed pool passed all seven positive retrieval cases and its empty-window case; this is not a general accuracy estimate. Experimental VLM reranking remains off after no measured gain and two strict-output failures. Hosted Phase 5 CI and merge are unverified; no PR was created. See [Phase 5 verification](docs/phase-5/p5-verification.md) and [local visual setup](docs/runbook.md#phase-5-local-visual-runtime).
+Local acceptance: 1,440 backend tests with 100% statement/branch coverage, four skips, 50 frontend
+tests, both frozen benchmark checks, generated contracts, lint, strict types, and the production
+build passed. Browser checks verified provider cards, profile chains, and Study consent preflight.
+Two synthetic Gemini roles passed hosted acceptance; this does not establish long-video accuracy
+or general latency. Hosted CI and merge have not been verified for this closeout; no PR was created.
+See [Phase 8 verification](docs/phase-8/p8-verification.md),
+[provider setup and limits](docs/runbook.md#phase-8-provider-configuration), and
+[the provider-policy decision](docs/adr/0009-provider-policy-and-gemini-roles.md).
+
+## Historical foundation work
 
 Steps 2A–2D are complete: the Next.js presentation shell, Base UI design foundation, packaged
 Python workspace, FastAPI application boundary, quality tooling, and root Bun orchestration are
@@ -66,8 +83,8 @@ timestamp citations.
 - `backend`: all server-side application, data, and AI logic in Python.
 - FastAPI owns the API contract and exports OpenAPI.
 - The web application consumes generated TypeScript types and reaches FastAPI through a thin proxy.
-- PostgreSQL is the system of record; Phase 1 stores versioned BGE-M3 vectors in pgvector and runs
-  video-scoped cosine retrieval without later-phase hybrid search or reranking.
+- PostgreSQL is the system of record for ingestion, Study runs, provider policy, and versioned
+  text/visual collections. Python combines scoped lexical, dense, and optional reranked retrieval.
 - Phase 2 stores the durable ingestion projection and append-only event history in PostgreSQL;
   workers claim bounded leases and resume only from persisted stage checkpoints.
 - Local dispatch is the default; optional QStash delivery carries no media, transcript, prompt, or

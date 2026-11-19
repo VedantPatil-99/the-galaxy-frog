@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from math import fsum, isfinite, sqrt
 from typing import cast
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -36,8 +37,16 @@ class OllamaBgeM3EmbeddingProvider:
             return ()
         if any(not text.strip() for text in texts):
             raise EmbeddingProviderError("Embedding input must not be empty.")
+        if self._client is None and urlsplit(self._base_url).hostname not in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        }:
+            raise EmbeddingProviderError("Ollama embeddings require a loopback service.")
         owns_client = self._client is None
-        client = self._client or httpx.AsyncClient(timeout=60)
+        client = self._client or httpx.AsyncClient(
+            timeout=60, trust_env=False, follow_redirects=False
+        )
         try:
             response = await client.post(
                 f"{self._base_url}/api/embed",

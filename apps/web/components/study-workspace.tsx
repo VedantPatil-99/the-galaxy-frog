@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useState } from "react"
 
+import { ProviderRun } from "@/components/provider-run"
+import { ProviderSelectionFields, useProviderSelection } from "@/components/provider-selection"
 import {
   listStudy,
   readStudyRun,
@@ -124,6 +126,7 @@ function StudyMaterial({ item, practice, update, onSeek }: {
 }
 
 export function StudyWorkspace({ videoId, onSeek }: { videoId: string; onSeek: (ms: number) => void }) {
+  const providers = useProviderSelection("study")
   const [kind, setKind] = useState<StudyKind>("chapters")
   const [index, setIndex] = useState<StudyIndex | null>(null)
   const [history, setHistory] = useState<{ kind: StudyKind; versions: StudyVersionSummary[]; next: number | null } | null>(null)
@@ -193,7 +196,8 @@ export function StudyWorkspace({ videoId, onSeek }: { videoId: string; onSeek: (
     setError(null)
     try {
       const chapter = kind === "chapters" ? null : latestChapters?.artifact_id ?? null
-      const result = await startStudy(videoId, kind, crypto.randomUUID(), chapter, version?.artifact_id ?? latest?.artifact_id)
+      const selection = await providers.selection(videoId)
+      const result = await startStudy(videoId, kind, crypto.randomUUID(), chapter, version?.artifact_id ?? latest?.artifact_id, selection)
       setIndex((value) => value === null ? value : withRuns(value, [result]))
     } catch (cause) {
       setError(errorText(cause))
@@ -226,6 +230,7 @@ export function StudyWorkspace({ videoId, onSeek }: { videoId: string; onSeek: (
         <h3 id="study-title" className="font-heading text-xl font-semibold">Study</h3>
         <p className="mt-1 text-sm text-muted-foreground">Build study materials from this video. Select a timestamp to check the source.</p>
       </div>
+      <ProviderSelectionFields control={providers} busy={busy || running} />
       <div role="group" aria-label="Study material" className="flex flex-wrap gap-2">
         {kinds.map((item) => (
           <button type="button" key={item} className={control + " aria-pressed:border-primary aria-pressed:bg-primary/10"}
@@ -242,7 +247,7 @@ export function StudyWorkspace({ videoId, onSeek }: { videoId: string; onSeek: (
       )}
       <div className="flex flex-wrap items-center gap-2">
         {index !== null && (
-          <button type="button" className={control} disabled={busy || running || (kind !== "chapters" && !latestChapters)}
+          <button type="button" className={control} disabled={busy || running || providers.loading || (kind !== "chapters" && !latestChapters)}
             onClick={() => void generate()}>
             {latest ? "Regenerate " : "Generate "}{LABELS[kind].toLowerCase()}
           </button>
@@ -282,6 +287,7 @@ export function StudyWorkspace({ videoId, onSeek }: { videoId: string; onSeek: (
           ? run.failure.message + " " + run.failure.suggested_action
           : "Generation failed.")}
       </p>}
+      {run && <ProviderRun operation="study" runId={run.run_id} refresh={run.state === "succeeded" || run.state === "failed" ? 1 : 0} />}
       {running && run.warnings.length > 0 && <details className="text-sm text-muted-foreground">
         <summary>Run warnings</summary><ul className="list-inside list-disc">{run.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
       </details>}

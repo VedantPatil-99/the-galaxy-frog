@@ -387,6 +387,7 @@ def test_default_factory_forwards_explicit_runtime_configuration(
         "compute_type": "int8_float16",
         "revision": "revision",
         "num_workers": 1,
+        "local_files_only": True,
     }
 
 

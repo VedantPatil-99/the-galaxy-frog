@@ -5,17 +5,22 @@ import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from time import perf_counter
 
 import httpx
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from galaxy_frog.adapters.generation.study_ollama import OllamaStudyGenerator
+from galaxy_frog.application.provider_policy import ProviderAttempt, ProviderCode
+from galaxy_frog.application.provider_registry import probe_ollama_models, provider_catalog
 from galaxy_frog.application.study_generation import StudyGenerator, generate_study
 from galaxy_frog.config import Settings
+from galaxy_frog.db.provider_runtime import PostgresProviderRuntime
 from galaxy_frog.db.study_evidence import StudyEvidenceReader
 from galaxy_frog.db.study_repository import ClaimedStudyRun, StudyLeaseLost, StudyRepository
+from galaxy_frog.domain.providers import Capability, ProfileRef, ProviderMode, ProviderOperation
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.study import StudyError, StudyFailure, StudyKind
 
@@ -27,6 +32,9 @@ async def execute_study_run(
     sessions: async_sessionmaker[AsyncSession],
     spec: EmbeddingCollectionSpec,
     provider: StudyGenerator,
+    *,
+    evidence_characters: int = 1400,
+    excerpt_characters: int = 320,
 ) -> None:
     async def progress(done: int, total: int, warnings: tuple[str, ...]) -> None:
         async with sessions() as session:
@@ -46,14 +54,27 @@ async def execute_study_run(
             timeline = await StudyEvidenceReader(session, spec).read(
                 claim.run.video_id, chaptering=claim.run.kind == StudyKind.CHAPTERS
             )
-        result = await generate_study(claim.run.kind, timeline, pinned, provider, progress)
+        result = await generate_study(
+            claim.run.kind,
+            timeline,
+            pinned,
+            provider,
+            progress,
+            evidence_characters=evidence_characters,
+            excerpt_characters=excerpt_characters,
+        )
         if len(json.dumps(result.document.model_dump(mode="json")).encode()) > 524_288:
             raise StudyError(
                 "STUDY_DOCUMENT_TOO_LARGE", "The generated document exceeds the saved size limit."
             )
         async with sessions() as session:
             await StudyRepository(session).publish(
-                claim, result.document, result.fingerprint, result.provider, result.model
+                claim,
+                result.document,
+                result.fingerprint,
+                result.provider,
+                result.model,
+                prompt_version=result.prompt_version,
             )
 
 
@@ -112,7 +133,11 @@ async def _record_failure(
 
 
 async def run_study_worker(
-    settings: Settings, sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event
+    settings: Settings,
+    sessions: async_sessionmaker[AsyncSession],
+    stop: asyncio.Event,
+    *,
+    engine: AsyncEngine | None = None,
 ) -> None:
     spec = EmbeddingCollectionSpec(
         provider="ollama",
@@ -125,7 +150,79 @@ async def run_study_worker(
         provider = OllamaStudyGenerator(settings.ollama_base_url, settings.generation_model, client)
 
         async def execute(claim: ClaimedStudyRun) -> None:
-            await execute_study_run(claim, sessions, spec, provider)
+            if claim.run.provider_selection is not None:
+                if engine is None:
+                    raise StudyError(
+                        "DATABASE_UNAVAILABLE",
+                        "Provider-selected Study generation requires PostgreSQL.",
+                        status=503,
+                    )
+                from galaxy_frog.entrypoints.study_providers import selected_study_generator
+
+                selected = await selected_study_generator(
+                    settings, sessions, engine, claim, provider
+                )
+                await execute_study_run(
+                    claim,
+                    sessions,
+                    spec,
+                    selected,
+                    evidence_characters=selected.evidence_characters,
+                    excerpt_characters=selected.excerpt_characters,
+                )
+                return
+            if engine is None:
+                await execute_study_run(claim, sessions, spec, provider)
+                return
+            entry = next(
+                item for item in provider_catalog(settings) if item.capability is Capability.STUDY
+            )
+            runtime = PostgresProviderRuntime(
+                sessions,
+                engine=engine,
+                profile=ProfileRef(profile_id="local", version=1),
+                operation=ProviderOperation.STUDY,
+                run_id=claim.run.run_id,
+                source=str(claim.run.video_id),
+            )
+            started = perf_counter()
+            status = "failed"
+            reason: ProviderCode | None = ProviderCode.UNAVAILABLE
+            revision = entry.revision
+            try:
+                models = await probe_ollama_models(settings.ollama_base_url)
+                observed = models.get(entry.model) or models.get(f"{entry.model}:latest")
+                if not observed or (revision and revision != observed):
+                    status = "skipped"
+                    reason = ProviderCode.SETUP_REQUIRED
+                    raise StudyError(
+                        "STUDY_PROVIDER_UNAVAILABLE",
+                        "The configured Ollama model is unavailable locally.",
+                        retryable=True,
+                        action="Check the installed model and configured revision, then retry.",
+                    )
+                revision = observed
+                await execute_study_run(claim, sessions, spec, provider)
+                status = "succeeded"
+                reason = None
+            finally:
+                await runtime.record(
+                    Capability.STUDY,
+                    ProviderAttempt(
+                        provider_id=entry.provider_id,
+                        provider=entry.provider,
+                        model=entry.model,
+                        revision=revision,
+                        device=entry.device,
+                        status=status,
+                        reason=reason,
+                        processing_ms=round((perf_counter() - started) * 1000)
+                        if status != "skipped"
+                        else None,
+                        requested_mode=ProviderMode.LOCAL_ONLY,
+                        requested_candidates=(entry.provider_id,),
+                    ),
+                )
 
         while not stop.is_set():
             try:

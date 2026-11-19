@@ -8,7 +8,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from galaxy_frog.api.dependencies import build_retrieval_service, get_video_repository
 from galaxy_frog.api.errors import ApiError
+from galaxy_frog.api.provider_execution import provider_api_error
 from galaxy_frog.api.retrieval_schemas import RetrievalOptions
+from galaxy_frog.application.provider_policy import ProviderFailure
 from galaxy_frog.application.retrieval.search import (
     SearchExecution,
     SearchTranscript,
@@ -43,6 +45,9 @@ async def run_search(
     service: SearchTranscript,
     *,
     reason: bool = False,
+    trace_id: UUID | None = None,
+    policy_strict: bool = False,
+    external_permission: bool = False,
 ) -> SearchExecution:
     try:
         if await repository.get_video(video_id) is None:
@@ -53,9 +58,10 @@ async def run_search(
             mode=options.mode,
             limit=options.limit,
             selected_anchor=options.selected_anchor,
-            allow_fallback=options.allow_fallback,
+            allow_fallback=options.allow_fallback and not policy_strict,
             reason=reason,
-            external_permission=options.allow_external_frames,
+            external_permission=external_permission,
+            **({"trace_id": trace_id} if trace_id is not None else {}),
         )
     except RetrievalVideoNotFound as exc:
         raise ApiError(
@@ -65,6 +71,8 @@ async def run_search(
             retryable=False,
         ) from exc
     except TracedRetrievalFailure as exc:
+        if isinstance(exc.cause, ProviderFailure):
+            raise provider_api_error(exc.cause, exc.trace.trace_id) from exc
         invalid_input = isinstance(exc.cause, (InvalidAnchor, TemporalResolutionRequired))
         integrity = exc.code == "RETRIEVAL_INTEGRITY_FAILED"
         raise ApiError(

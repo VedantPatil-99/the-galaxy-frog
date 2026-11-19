@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -532,6 +532,7 @@ async def test_search_never_generates_and_trace_reads_are_video_scoped(
 @pytest.mark.asyncio
 async def test_question_anchor_selection_blocks_generation_until_resolved(
     api: tuple[FastAPI, MemoryRepository],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     application, repository = api
     video_id = await seed_api(repository)
@@ -563,6 +564,28 @@ async def test_question_anchor_selection_blocks_generation_until_resolved(
         repository.transcript = replace(repository.transcript, units=(), cues=())
         missing = await client.post(f"/v1/videos/{video_id}/questions", json=question)
         assert missing.json()["retrieval_status"] == "anchor_unresolved" and generated == 1
+        missing_search = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": question["question"], "mode": "lexical"}
+        )
+        assert missing_search.status_code == 200
+        assert missing_search.json()["status"] == "anchor_unresolved" and generated == 1
+        from tests.test_api_provider_execution import provider_run
+
+        from galaxy_frog.application.provider_policy import ProviderCode
+
+        run, recorded = provider_run()
+        monkeypatch.setattr(video_routes, "api_provider_run", AsyncMock(return_value=run))
+        monkeypatch.setattr(
+            video_routes,
+            "build_retrieval_service",
+            Mock(return_value=application.dependency_overrides[get_search_service]()),
+        )
+        selected_missing = await client.post(f"/v1/videos/{video_id}/questions", json=question)
+        assert selected_missing.json()["retrieval_status"] == "anchor_unresolved" and generated == 1
+        assert (
+            recorded.await_args is not None
+            and recorded.await_args.args[1].reason is ProviderCode.NOT_NEEDED
+        )
 
 
 @pytest.mark.asyncio
@@ -784,6 +807,50 @@ async def test_get_frame_image_video_not_found(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("location", ["outside-env", "inside-env", "outside-jpeg", "other-video"])
+async def test_frame_endpoint_never_serves_environment_or_unrelated_files(
+    api: tuple[FastAPI, MemoryRepository], tmp_path: Path, location: str
+) -> None:
+    application, repository = api
+    video_id = await seed_api(repository)
+    workspace = tmp_path / "frames"
+    application.state.settings = application.state.settings.model_copy(
+        update={"vision_workspace_root": workspace}
+    )
+    if location == "outside-env":
+        file_path = tmp_path / ".env"
+    elif location == "inside-env":
+        file_path = workspace / str(video_id) / ".env"
+    elif location == "outside-jpeg":
+        file_path = tmp_path / "private.jpg"
+    else:
+        file_path = workspace / str(uuid4()) / "frame.jpg"
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text("SYNTHETIC_KEY=private-regression-value", encoding="utf-8")
+    vision_repo: MemoryVisionRepository = application.state.vision_repository
+    vision_repo.frames[(video_id, 0)] = VideoFrameRow(
+        id=uuid4(),
+        video_id=video_id,
+        scene_id=None,
+        sequence=0,
+        start_ms=0,
+        end_ms=2000,
+        source="periodic",
+        dhash=None,
+        is_duplicate=False,
+        image_path=str(file_path),
+        created_at=datetime.now(UTC),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/v1/videos/{video_id}/frames/0/image")
+    assert response.status_code == 404
+    assert "private-regression-value" not in response.text
+    assert str(file_path) not in response.text
+
+
+@pytest.mark.asyncio
 async def test_get_frame_image_frame_not_found(
     api: tuple[FastAPI, MemoryRepository],
 ) -> None:
@@ -946,6 +1013,7 @@ async def test_search_visual_frames_fallback_query_match_and_window(
         sequence=5,
         start_ms=20000,
         end_ms=25000,
+        capture_ms=22000,
         source="periodic",
         dhash=None,
         is_duplicate=False,
@@ -987,47 +1055,7 @@ async def test_search_visual_frames_fallback_query_match_and_window(
         assert window_response.status_code == 200
         window_data = window_response.json()
         assert any(f["sequence"] == 5 for f in window_data["visual_frames"])
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("location", ["outside-env", "inside-env", "outside-jpeg", "other-video"])
-async def test_frame_endpoint_never_serves_environment_or_unrelated_files(
-    api: tuple[FastAPI, MemoryRepository], tmp_path: Path, location: str
-) -> None:
-    application, repository = api
-    video_id = await seed_api(repository)
-    workspace = tmp_path / "frames"
-    application.state.settings = application.state.settings.model_copy(
-        update={"vision_workspace_root": workspace}
-    )
-    if location == "outside-env":
-        file_path = tmp_path / ".env"
-    elif location == "inside-env":
-        file_path = workspace / str(video_id) / ".env"
-    elif location == "outside-jpeg":
-        file_path = tmp_path / "private.jpg"
-    else:
-        file_path = workspace / str(uuid4()) / "frame.jpg"
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text("SYNTHETIC_KEY=private-regression-value", encoding="utf-8")
-    vision_repo: MemoryVisionRepository = application.state.vision_repository
-    vision_repo.frames[(video_id, 0)] = VideoFrameRow(
-        id=uuid4(),
-        video_id=video_id,
-        scene_id=None,
-        sequence=0,
-        start_ms=0,
-        end_ms=2000,
-        source="periodic",
-        dhash=None,
-        is_duplicate=False,
-        image_path=str(file_path),
-        created_at=datetime.now(UTC),
-    )
-    async with AsyncClient(
-        transport=ASGITransport(app=application), base_url="http://test"
-    ) as client:
-        response = await client.get(f"/v1/videos/{video_id}/frames/0/image")
-    assert response.status_code == 404
-    assert "private-regression-value" not in response.text
-    assert str(file_path) not in response.text
+        excluded = await client.post(
+            f"/v1/videos/{video_id}/search", json={"query": "before 00:15", "mode": "lexical"}
+        )
+        assert excluded.status_code == 200 and excluded.json()["visual_frames"] == []

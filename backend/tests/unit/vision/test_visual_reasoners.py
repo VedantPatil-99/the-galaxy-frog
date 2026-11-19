@@ -6,7 +6,7 @@ import traceback
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import httpx
@@ -75,6 +75,8 @@ class Transport:
             return httpx.Response(503 if self.mode == "cleanup" else 200, json={"done": True})
         if self.mode == "timeout":
             raise httpx.ReadTimeout("private provider diagnostics")
+        if self.mode == "network":
+            raise httpx.ConnectError("private provider diagnostics")
         if self.mode == "deadline":
             raise TimeoutError("private provider diagnostics")
         if self.mode == "http":
@@ -107,7 +109,11 @@ class Transport:
                 "modelVersion": "changed" if self.mode == "revision" else "pinned-v1",
                 "candidates": [
                     {
-                        "finishReason": "MAX_TOKENS" if self.mode == "incomplete" else "STOP",
+                        "finishReason": "SAFETY"
+                        if self.mode == "safety"
+                        else "MAX_TOKENS"
+                        if self.mode == "incomplete"
+                        else "STOP",
                         "content": {"parts": [{"text": json.dumps(answer)}]},
                     }
                 ],
@@ -134,7 +140,14 @@ async def test_reasoners_validate_original_citations_and_identity(
             if cloud
             else OllamaQwenVisualReasoner(base_url="http://127.0.0.1:11434", client=client)
         )
-        result = await provider.reason(replace(value, external_permitted=cloud))
+        verify = AsyncMock()
+        if isinstance(provider, GeminiVisualReasoner):
+            result = await provider.reason(
+                replace(value, external_permitted=True), verify_consent=verify
+            )
+            verify.assert_awaited_once()
+        else:
+            result = await provider.reason(value)
         assert result.cited_frame_ids == (value.frames[0].frame_id,)
         assert result.provider == provider.identity
         if not cloud:
@@ -145,7 +158,7 @@ async def test_reasoners_validate_original_citations_and_identity(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cloud", [False, True])
 @pytest.mark.parametrize(
-    "mode", ["timeout", "deadline", "http", "bytes", "json", "foreign", "incomplete"]
+    "mode", ["timeout", "network", "deadline", "http", "bytes", "json", "foreign", "incomplete"]
 )
 async def test_safe_reasoner_failures(tmp_path: Path, cloud: bool, mode: str) -> None:
     value = request_value(tmp_path)
@@ -306,3 +319,23 @@ async def test_owned_transport_is_closed(tmp_path: Path, cloud: bool) -> None:
         )
         await provider.reason(value)
     assert client.is_closed
+
+
+@pytest.mark.asyncio
+async def test_cloud_safety_block_is_not_a_retryable_capacity_failure(tmp_path: Path) -> None:
+    from galaxy_frog.domain.vision.visual import VisualFailureCode
+
+    value = replace(request_value(tmp_path), external_permitted=True)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(Transport(value, "safety"))
+    ) as client:
+        provider = GeminiVisualReasoner(
+            model="gemini-test",
+            revision="pinned-v1",
+            api_key="test-key",
+            external_enabled=True,
+            client=client,
+        )
+        with pytest.raises(VisualProviderError) as caught:
+            await provider.reason(value)
+        assert caught.value.code is VisualFailureCode.SAFETY_BLOCKED

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -193,7 +193,12 @@ class LlamaParseOCRAdapter:
             raise OCRExtractionError(msg)
         return key
 
-    async def extract(self, request: OCRExtractionRequest) -> OCRExtractionResult:
+    async def extract(
+        self,
+        request: OCRExtractionRequest,
+        *,
+        verify_consent: Callable[[], Awaitable[None]] | None = None,
+    ) -> OCRExtractionResult:
         """Upload a frame to LlamaParse, poll until completion, and return OCR blocks."""
         api_key = self._get_api_key_str()
         if not self._external_permitted:
@@ -209,12 +214,16 @@ class LlamaParseOCRAdapter:
         }
 
         owns_client = self._client is None
-        client = self._client or httpx.AsyncClient(timeout=self._timeout_seconds)
+        client = self._client or httpx.AsyncClient(
+            timeout=self._timeout_seconds, follow_redirects=False, trust_env=False
+        )
 
         try:
             image_bytes = request.frame.path.read_bytes()
             mime_type = _guess_mime_type(request.frame.path)
             files = {"file": (request.frame.path.name, image_bytes, mime_type)}
+            if verify_consent:
+                await verify_consent()
 
             upload_url = f"{self._base_url}/api/parsing/upload"
             try:

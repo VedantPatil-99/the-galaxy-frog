@@ -5,6 +5,7 @@ from uuid import UUID
 
 from galaxy_frog.adapters.vision.frame_pipeline import LocalFramePipeline
 from galaxy_frog.application.ingestion.vision_stage import VisionIndexResult
+from galaxy_frog.application.provider_policy import ProviderFailure
 from galaxy_frog.application.retrieval.visual_ports import VisualIndexer
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
@@ -70,6 +71,8 @@ class PersistVisionIndex:
                         await self._ocr.extract(OCRExtractionRequest(job_id, video_id, sample))
                     )
                 await self._vision.save_ocr_results(video_id, results)
+            except ProviderFailure as exc:
+                warnings.append(exc.code.value)
             except VisionProviderError:
                 warnings.append("ocr_provider_unavailable")
         collection = None

@@ -775,8 +775,36 @@ tests, ten PostgreSQL integration checks, the production build, and pre-commit. 
 Separate document uploads and alignment, new cloud processing, provider configuration,
 and the later evaluation platform are outside this phase.
 
-## Local development maintenance
+## Completed plan: Phase 8 — Provider resilience and configuration
 
-- 2026-11-16 — Launch FastAPI through `python -m fastapi dev` for Windows environments that block
-  the generated console launcher. `bun run dev` started the API and ingestion worker, and the
-  Next.js proxy returned HTTP 200 with PostgreSQL ready.
+Status: **locally complete, 2026-11-19**, on `feat/provider-resilience`. Hosted CI and merge are
+unverified at closeout. No PR or Notion page was created or synchronized for Phase 8.
+
+- [x] P8.1 — FastAPI capability registry, explicit local/cloud/manual modes, immutable profile versions,
+  safe configuration readiness, pricing sources, and generated frontend contracts.
+- [x] P8.2 — Cross-process admission, bounded deadlines, circuit state, compatible collections,
+  explicit failures/fallbacks, and durable requested-versus-actual execution records.
+- [x] P8.3 — Operation/source/profile-bound cloud consent, dispatch-time rechecks, revocation,
+  and lease fencing. Credentials alone never authorize external processing.
+- [x] P8.4 — Optional Gemini answer and Study roles with separate project credentials, bounded
+  structured output, original citation validation, and conservative shared project budgets.
+- [x] P8.5 — Provider settings and decision-trail UI; Study profile selection and backend-owned
+  consent preflight. Local fallback remains usable without cloud consent.
+- [x] P8.6 — Failure/recovery, secret-output, PostgreSQL, contract, browser, and hosted synthetic checks.
+- [x] P8.7 — Local exit gate and the final focused Markdown synchronization.
+
+Implementation anchors: `979f869` (Gemini transport), `6e69b0e` (atomic quota reservation),
+`f3ebe52` (bounded answer validation), `0d75076` (admission deadlines), `5605ca0` (task routing),
+`f746cdb` (recovery coverage), and `5bf49c4` (explicit hosted smoke). Migrations through
+`20261118_0017` were applied to the existing local database.
+
+The clean backend run passed 1,440 tests with four skips and 100% statement/branch coverage.
+All 50 frontend tests, lint, strict types, deterministic contracts, the production build, and
+both frozen benchmark suites passed. Hook constituent checks ran directly because Windows
+blocked generated virtual-environment launchers in this Codex session; no security policy or
+Python version was changed. See the [verification record](docs/phase-8/p8-verification.md).
+
+Hosted acceptance is limited to small synthetic Gemini answer and chapter calls. Real video
+answer quality, larger Study materials, hosted vision/OCR/ASR/Bedrock acceptance, account billing,
+and comparative latency remain unverified. Optional adapters may remain disabled after code
+delivery. The workspace redesign and Phase 9 research are not authorized by this closeout.

@@ -1,5 +1,6 @@
 """Typed configuration for the Galaxy Frog application."""
 
+import re
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
     embedding_model: str = "bge-m3"
     embedding_model_revision: str = "ollama"
     generation_model: str = "qwen3:4b"
+    generation_model_revision: str | None = None
     ingestion_worker_id: str | None = None
     ingestion_lease_seconds: int = Field(default=120, ge=30)
     ingestion_poll_seconds: float = Field(default=1.0, gt=0)
@@ -74,8 +76,79 @@ class Settings(BaseSettings):
     vlm_timeout_seconds: float = Field(default=120, gt=0, le=300)
     qwen_visual_revision: str = "afc393e3572c07db0bc84aa460d928a16c75f3fbb9ca9e0dccc4fbd2dafb573e"
     gemini_api_key: SecretStr | None = None
+    gemini_project_id: str | None = None
+    gemini_study_api_key: SecretStr | None = None
+    gemini_study_project_id: str | None = None
+    gemini_visual_api_key: SecretStr | None = None
+    gemini_visual_project_id: str | None = None
+    gemini_generation_enabled: bool = False
+    gemini_study_enabled: bool = False
+    gemini_generation_model: str | None = None
+    gemini_generation_revision: str | None = None
+    gemini_study_model: str | None = None
+    gemini_study_revision: str | None = None
+    gemini_generation_thinking: Literal["low", "medium", "high"] = "low"
+    gemini_study_thinking: Literal["low", "medium", "high"] = "low"
+    gemini_generation_max_output_tokens: int = Field(default=4096, ge=256, le=16_384)
+    gemini_study_max_output_tokens: int = Field(default=4096, ge=256, le=16_384)
+    gemini_study_evidence_characters: int = Field(default=12_000, ge=1400, le=48_000)
+    gemini_study_excerpt_characters: int = Field(default=1200, ge=320, le=4000)
+    gemini_timeout_seconds: float = Field(default=75, gt=0, le=120)
+    gemini_requests_per_minute: int = Field(default=5, ge=1, le=10_000)
+    gemini_input_tokens_per_minute: int = Field(default=64_000, ge=1, le=2_000_000)
+    gemini_requests_per_day: int = Field(default=50, ge=1, le=1_000_000)
+    gemini_visual_input_token_reservation: int = Field(default=16_384, ge=1, le=131_072)
     gemini_visual_model: str | None = None
     gemini_visual_revision: str | None = None
+    cloudflare_asr_enabled: bool = False
+    cloudflare_account_id: str | None = None
+    cloudflare_api_token: SecretStr | None = None
+    bedrock_text_enabled: bool = False
+    bedrock_region: Literal["us-east-1", "us-east-2", "us-west-2"] = "us-east-1"
+    aws_bearer_token_bedrock: SecretStr | None = None
+
+    def gemini_credentials(
+        self, role: Literal["generation", "study", "vision"]
+    ) -> tuple[SecretStr | None, str | None]:
+        if role == "study":
+            return self.gemini_study_api_key, self.gemini_study_project_id
+        if role == "vision" and self.gemini_visual_api_key is not None:
+            return self.gemini_visual_api_key, self.gemini_visual_project_id
+        return self.gemini_api_key, self.gemini_project_id
+
+    @field_validator("gemini_api_key", "gemini_study_api_key", "gemini_visual_api_key")
+    @classmethod
+    def normalize_gemini_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None or not value.get_secret_value().strip():
+            return None
+        return SecretStr(value.get_secret_value().strip())
+
+    @field_validator("gemini_project_id", "gemini_study_project_id", "gemini_visual_project_id")
+    @classmethod
+    def validate_gemini_project(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        if re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", value) is None:
+            raise ValueError("Gemini project IDs must be valid Google Cloud project IDs")
+        return value
+
+    @model_validator(mode="after")
+    def validate_gemini_visual_override(self) -> Self:
+        if (self.gemini_visual_api_key is None) != (self.gemini_visual_project_id is None):
+            raise ValueError(
+                "GEMINI_VISUAL_API_KEY and GEMINI_VISUAL_PROJECT_ID require each other"
+            )
+        return self
+
+    @field_validator("cloudflare_account_id")
+    @classmethod
+    def validate_cloudflare_account_id(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if re.fullmatch(r"[a-fA-F0-9]{32}", value.strip()) is None:
+            raise ValueError("CLOUDFLARE_ACCOUNT_ID must be a 32-character account ID")
+        return value.strip()
 
     @field_validator("llama_cloud_api_key")
     @classmethod

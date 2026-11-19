@@ -65,6 +65,7 @@ class TranscriptionDevice(StrEnum):
 
     CPU = "cpu"
     CUDA = "cuda"
+    CLOUD = "cloud"
 
 
 class TranscriptionComputeType(StrEnum):
@@ -74,6 +75,7 @@ class TranscriptionComputeType(StrEnum):
     INT8_FLOAT16 = "int8_float16"
     FLOAT16 = "float16"
     FLOAT32 = "float32"
+    UNKNOWN = "unknown"
 
 
 class TranscriptionErrorCode(StrEnum):

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from galaxy_frog.application.retrieval.search import SearchExecution
 from galaxy_frog.application.retrieval.temporal import AnchorChoice, RetrievalStatus
+from galaxy_frog.domain.providers import ProviderSelection
 from galaxy_frog.domain.retrieval.evidence import EvidenceGroup
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.retrieval.pipeline import QueryAnalysis, RetrievalMode, RetrievalWarning
@@ -27,6 +28,7 @@ class RetrievalOptions(BaseModel):
     selected_anchor: str | None = Field(default=None, pattern="^[a-f0-9]{64}$")
     allow_fallback: bool = True
     allow_external_frames: bool = False
+    provider_selection: ProviderSelection | None = None
 
 
 class SearchRequest(RetrievalOptions):

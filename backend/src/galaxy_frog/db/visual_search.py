@@ -61,11 +61,18 @@ def _hash_frame(row: VideoFrameRow) -> tuple[str, str]:
 
 
 class PgVectorVisualSearch:
-    def __init__(self, session: AsyncSession, provider: VisualEmbeddingProvider) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        provider: VisualEmbeddingProvider,
+        *,
+        require_existing: bool = False,
+    ) -> None:
         if provider.collection.dimension != 768:
             raise ValueError("baseline visual storage requires 768 dimensions")
         self._session = session
         self._provider = provider
+        self._require_existing = require_existing
 
     async def _collection(self, *, create: bool = False) -> UUID | None:
         spec = self._provider.collection
@@ -156,6 +163,20 @@ class PgVectorVisualSearch:
         collection = await self._collection()
         if collection is None:
             raise VisualProviderError(VisualFailureCode.UNAVAILABLE)
+        if self._require_existing:
+            existing = _scope(
+                select(VisualEmbeddingRow.frame_id)
+                .join(VideoFrameRow, VideoFrameRow.id == VisualEmbeddingRow.frame_id)
+                .where(
+                    VideoFrameRow.video_id == video_id,
+                    VideoFrameRow.is_duplicate.is_(False),
+                    VisualEmbeddingRow.collection_id == collection,
+                    VisualEmbeddingRow.content_sha256 == VideoFrameRow.content_sha256,
+                ),
+                window,
+            ).limit(1)
+            if await self._session.scalar(existing) is None:
+                return ()
         vector = await self._provider.embed_query(query)
         validate_vector(vector, self._provider.collection)
         distance = VisualEmbeddingRow.embedding.cosine_distance(list(vector)).label("distance")

@@ -10,6 +10,9 @@ evidence and produce timestamp-grounded answers.
 
 ## Current status
 
+- Phase 8 — Provider resilience and configuration: locally complete on `feat/provider-resilience`
+  (2026-11-19); hosted CI and merge unverified. See the current handoff below.
+- Phase 7 Study generation and Phase 6 moment explanations are extended by the Phase 8 provider policy.
 - Phase 0 — Foundation and Contracts
 - Step 1 — Scope, repository, and invariants: completed
 - Step 2 — Frontend and backend foundations: completed
@@ -93,6 +96,40 @@ Docker was not required for Step 2. Step 3A uses Docker Desktop with the WSL 2 b
 PostgreSQL rather than installing PostgreSQL and pgvector natively on Windows.
 
 ## Current state and next task
+
+### Phase 8 handoff — 2026-11-19
+
+The local implementation and exit gate are complete. The final documentation packet follows the
+passing gate, as requested; no Phase 8 Notion access or per-packet Markdown reports were used.
+The implementation lives in `feat/provider-resilience`, separate from the user's other checkout
+and saved workspace-redesign plan. Do not start that redesign or Phase 9 automatically.
+
+FastAPI owns provider capabilities, versioned modes/profiles, scoped consent, admission and quota
+state, collection compatibility, and saved decisions. Next.js consumes generated OpenAPI types.
+Local-only remains the default. The `gemini` profile explicitly selects Gemini answer generation,
+vision, and Study while preserving local retrieval; optional vision still needs its own model,
+revision and privacy configuration. Study now accepts a provider selection and persists it with
+the queued run. The worker rechecks consent and its lease before every external dispatch, pins
+one successful provider for the material, and publishes the actual provider/model/prompt version.
+
+Apply migrations through `20261118_0017` before starting the API and worker. Configure interactive
+and Study credentials only in the active checkout's ignored server `.env`; no key belongs in a
+browser variable. Source feature flags remain opt-in. Browser acceptance used process-local
+Gemini enable/model overrides, without changing `.env`. See
+[the provider runbook](runbook.md#phase-8-provider-configuration).
+
+The clean local gate passed 1,440 backend tests with four skips and 100% statement/branch coverage,
+50 frontend tests, generated contracts, lint, strict types, both frozen benchmark checks, and the
+webpack production build. Browser acceptance verified visible capabilities/budgets, manual Gemini
+chains, and a consent warning before Study queueing. A queued run created while finding that UX
+issue was removed by its exact unclaimed test-run ID; existing videos and artifacts were preserved.
+
+Hosted Gemini acceptance used synthetic text only. Initial answer/Study calls took 3.791/7.100 s;
+output-capture repeats produced a chapter in 1.193 s and an answer in 9.064 s, with one intervening
+unknown completion outcome. These are individual checks, not latency or accuracy estimates.
+Vision, Cloudflare, LlamaParse and Bedrock hosted acceptance and account charges remain unverified.
+See [the complete verification record](phase-8/p8-verification.md) and
+[ADR 0009](adr/0009-provider-policy-and-gemini-roles.md).
 
 ### Phase 7 handoff — 2026-11-08
 

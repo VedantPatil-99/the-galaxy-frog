@@ -8,6 +8,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from galaxy_frog.db.models import IngestionJobRow, JobEventRow
+from galaxy_frog.db.provider_profiles import PostgresProviderProfiles
+from galaxy_frog.db.provider_runtime import locked_consent
 from galaxy_frog.domain.ingestion.models import (
     TERMINAL_JOB_STATUSES,
     IngestionEvent,
@@ -17,6 +19,7 @@ from galaxy_frog.domain.ingestion.models import (
     IngestionStage,
     can_advance_stage,
 )
+from galaxy_frog.domain.providers import ProviderOperation, ProviderSelection
 from galaxy_frog.domain.videos.models import SourceReference, VideoSourceKind
 
 
@@ -35,6 +38,7 @@ class PostgresIngestionRepository:
         source: SourceReference,
         input_fingerprint: str,
         *,
+        provider_selection: ProviderSelection | None = None,
         now: datetime | None = None,
     ) -> tuple[IngestionJob, bool]:
         timestamp = now or datetime.now(UTC)
@@ -47,6 +51,9 @@ class PostgresIngestionRepository:
                 external_id=source.external_id,
                 canonical_url=source.canonical_url,
                 input_fingerprint=input_fingerprint,
+                provider_selection=provider_selection.model_dump(mode="json")
+                if provider_selection is not None
+                else None,
                 status=IngestionJobStatus.QUEUED,
                 stage=IngestionStage.SOURCE_RESOLUTION,
                 attempt=0,
@@ -60,6 +67,7 @@ class PostgresIngestionRepository:
         created = inserted_id is not None
         if created:
             row = await self._locked_job(job_id)
+            await self._bind_grant(row, provider_selection)
             await self._append_event(row, IngestionEventType.CREATED, timestamp)
             await self._session.commit()
             return self._job(row), True
@@ -243,7 +251,13 @@ class PostgresIngestionRepository:
         await self._session.commit()
         return self._job(row)
 
-    async def retry(self, job_id: UUID, *, now: datetime | None = None) -> IngestionJob:
+    async def retry(
+        self,
+        job_id: UUID,
+        *,
+        now: datetime | None = None,
+        provider_selection: ProviderSelection | None = None,
+    ) -> IngestionJob:
         timestamp = now or datetime.now(UTC)
         row = await self._locked_job(job_id)
         if (
@@ -251,6 +265,14 @@ class PostgresIngestionRepository:
             or row.last_error_retryable is not True
         ):
             raise IngestionRepositoryError("Only retryable failed jobs can be queued again.")
+        if provider_selection is not None:
+            await self._bind_grant(row, provider_selection)
+            row.provider_selection = provider_selection.model_dump(mode="json")
+        elif row.provider_selection is not None:
+            previous = ProviderSelection.model_validate(row.provider_selection)
+            row.provider_selection = ProviderSelection(profile=previous.profile).model_dump(
+                mode="json"
+            )
         row.status = IngestionJobStatus.QUEUED
         row.completed_at = None
         row.last_error_code = None
@@ -261,6 +283,29 @@ class PostgresIngestionRepository:
         await self._append_event(row, IngestionEventType.RETRY_REQUESTED, timestamp)
         await self._session.commit()
         return self._job(row)
+
+    async def _bind_grant(self, row: IngestionJobRow, selection: ProviderSelection | None) -> None:
+        if selection is None:
+            return
+        version = await PostgresProviderProfiles(self._session).get(selection.profile)
+        if version is None:
+            raise IngestionRepositoryError("The provider profile version does not exist.")
+        if version.policy.evaluation:
+            raise IngestionRepositoryError("Evaluation profiles require existing indexed evidence.")
+        if selection.consent_id is None:
+            return
+        grant = await locked_consent(self._session, selection.consent_id)
+        if (
+            grant is None
+            or grant.revoked_at is not None
+            or grant.run_id is not None
+            or grant.operation != ProviderOperation.IMPORT
+            or grant.source != row.external_id
+            or grant.profile_id != selection.profile.profile_id
+            or grant.profile_version != selection.profile.version
+        ):
+            raise IngestionRepositoryError("The cloud consent grant cannot be used for this job.")
+        grant.run_id = row.id
 
     async def cancel(
         self,

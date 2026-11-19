@@ -25,6 +25,7 @@ import {
   type QuestionRequest,
   type RetrievalTraceResponse,
 } from "@/lib/api/contracts"
+import type { ProviderSelection } from "@/lib/api/providers"
 
 const PROXY_BASE_PATH = "/api/proxy"
 const DELIBERATE_ERROR_PATH = "/phase-0-deliberate-error"
@@ -110,10 +111,11 @@ export async function requestApi<T>(
 export async function importVideo(
   sourceUrl: string,
   fetcher: Fetcher = fetch,
+  providerSelection?: ProviderSelection,
 ): Promise<ImportVideoResponse> {
   return requestApi("/v1/videos/import", isImportVideoResponse, fetcher, {
     method: "POST",
-    body: JSON.stringify({ source_url: sourceUrl }),
+    body: JSON.stringify({ source_url: sourceUrl, provider_selection: providerSelection }),
   })
 }
 
@@ -153,12 +155,13 @@ export async function getIngestionEvents(
 export async function retryIngestionJob(
   jobId: string,
   fetcher: Fetcher = fetch,
+  providerSelection?: ProviderSelection,
 ): Promise<IngestionJobResponse> {
   return requestApi(
     `/v1/jobs/${encodeURIComponent(jobId)}/retry`,
     isIngestionJobResponse,
     fetcher,
-    { method: "POST" },
+    { method: "POST", body: providerSelection && JSON.stringify(providerSelection) },
   )
 }
 

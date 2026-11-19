@@ -11,6 +11,7 @@ from typing import Protocol
 from pydantic import BaseModel, Field, ValidationError
 
 from galaxy_frog.domain.study import (
+    PROMPT_VERSION,
     Chapter,
     FlashcardItem,
     NoteItem,
@@ -51,6 +52,8 @@ class DraftBatch:
     items: tuple[object, ...]
     model: str
     aliases: dict[str, str] | None = None
+    provider: str = "ollama"
+    prompt_version: str = PROMPT_VERSION
 
 
 class StudyGenerator(Protocol):
@@ -63,6 +66,7 @@ class GeneratedStudy:
     fingerprint: str
     provider: str
     model: str
+    prompt_version: str = PROMPT_VERSION
 
 
 class DraftCitation(BaseModel):
@@ -93,7 +97,11 @@ def _normalize(text: str) -> str:
 
 
 def _batch(
-    timeline: StudyTimeline, span: ChapterSpan, kind: StudyKind
+    timeline: StudyTimeline,
+    span: ChapterSpan,
+    kind: StudyKind,
+    max_characters: int = 1400,
+    max_excerpt: int = 320,
 ) -> tuple[tuple[StudyCitation, ...], bool]:
     buckets: list[list[StudyCitation]] = [[] for _ in range(8)]
     seen_ocr: set[str] = set()
@@ -113,7 +121,7 @@ def _batch(
                 continue
             seen_ocr.add(_normalize(item.quote))
             seek = item.capture_ms
-        excerpt = item.quote[:320]
+        excerpt = item.quote[:max_excerpt]
         sampled |= len(excerpt) < len(item.quote)
         index = (seek - span.start_ms) * len(buckets) // (span.end_ms - span.start_ms)
         buckets[index].append(
@@ -133,7 +141,7 @@ def _batch(
             if index >= len(bucket):
                 continue
             item = bucket[index]
-            if not remaining[item.modality] or characters + len(item.quote) > 1_400:
+            if not remaining[item.modality] or characters + len(item.quote) > max_characters:
                 sampled = True
                 continue
             characters += len(item.quote)
@@ -235,7 +243,12 @@ async def generate_study(
     pinned: StudyVersion | None,
     generator: StudyGenerator,
     progress: Progress,
+    *,
+    evidence_characters: int = 1400,
+    excerpt_characters: int = 320,
 ) -> GeneratedStudy:
+    if not 1400 <= evidence_characters <= 48_000 or not 320 <= excerpt_characters <= 4000:
+        raise ValueError("Study evidence budgets are outside their safe bounds.")
     if not timeline.evidence:
         raise StudyError(
             "STUDY_INSUFFICIENT_EVIDENCE",
@@ -251,8 +264,10 @@ async def generate_study(
     chapters: list[Chapter] = []
     sections: list[StudySection] = []
     actual_model: str | None = None
+    actual_provider: str | None = None
+    actual_prompt = PROMPT_VERSION
     for number, (span, title) in enumerate(spans, start=1):
-        evidence, sampled = _batch(timeline, span, kind)
+        evidence, sampled = _batch(timeline, span, kind, evidence_characters, excerpt_characters)
         if sampled:
             warnings.append(f"Chapter {number}: evidence was sampled across the interval.")
         fingerprint.update(json.dumps([span.start_ms, span.end_ms, span.reasons]).encode())
@@ -262,14 +277,20 @@ async def generate_study(
         rejected = False
         if evidence:
             batch = await generator.draft(kind, evidence)
-            if actual_model is not None and actual_model != batch.model:
+            if actual_model is not None and (
+                actual_model != batch.model
+                or actual_provider != batch.provider
+                or actual_prompt != batch.prompt_version
+            ):
                 raise StudyError(
                     "STUDY_MODEL_CHANGED",
-                    "The local model changed during generation.",
+                    "The provider or model changed during generation.",
                     retryable=True,
-                    action="Retry the material with a stable Ollama model.",
+                    action="Retry the material with one stable provider and model.",
                 )
             actual_model = batch.model
+            actual_provider = batch.provider
+            actual_prompt = batch.prompt_version
             sources = {item.source_id: item for item in evidence}
             if batch.aliases is not None:
                 sources = {alias: sources[source_id] for alias, source_id in batch.aliases.items()}
@@ -341,6 +362,7 @@ async def generate_study(
             warnings=tuple(warnings),
         ),
         fingerprint.hexdigest(),
-        "ollama" if actual_model is not None else "none",
+        actual_provider or "none",
         actual_model or "none",
+        actual_prompt,
     )

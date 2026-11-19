@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from datetime import timedelta
 from pathlib import Path
 from typing import cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,6 +16,7 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from galaxy_frog.api import provider_execution
 from galaxy_frog.api.app import create_app
 from galaxy_frog.application.ingestion import (
     IngestionJobRunner,
@@ -89,7 +91,7 @@ class FixtureSource:
 class FixtureEmbeddings:
     """Stable 1,024-dimensional vectors without an external model service."""
 
-    spec = EmbeddingCollectionSpec("fixture", "bge-m3", "integration", 1024, "l2")
+    spec = EmbeddingCollectionSpec("ollama", "bge-m3", "integration", 1024, "l2")
 
     async def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
         return tuple((1.0, *([0.0] * 1023)) for _text in texts)
@@ -128,8 +130,20 @@ def migrated_database() -> None:
 
 
 @pytest.mark.asyncio
-async def test_import_retrieval_and_question_endpoints_are_idempotent() -> None:
+async def test_import_retrieval_and_question_endpoints_are_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     settings = Settings(app_env="test", database_url=SecretStr(_database_url()))
+    monkeypatch.setattr(
+        provider_execution,
+        "probe_ollama_models",
+        AsyncMock(
+            return_value={
+                "bge-m3:latest": "integration",
+                settings.generation_model: "fixture-generation",
+            }
+        ),
+    )
     application = create_app(settings)
     source = FixtureSource()
     application.state.video_sources = (source,)

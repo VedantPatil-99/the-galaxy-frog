@@ -168,6 +168,7 @@ def test_source_file_validation(tmp_path: Path) -> None:
         "extract_failure",
         "denied",
         "ocr_error",
+        "ocr_policy_error",
         "ocr_saved",
         "embedding_error",
         "success",
@@ -201,6 +202,10 @@ async def test_index_retains_transcript_and_reports_providers(tmp_path: Path, mo
         pipeline.extract.side_effect = VisualProviderError(VisualFailureCode.TIMEOUT)
     if mode == "ocr_error":
         ocr.extract.side_effect = OCRExtractionError("private")
+    if mode == "ocr_policy_error":
+        from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
+
+        ocr.extract.side_effect = ProviderFailure(ProviderCode.CONSENT_REQUIRED)
     if mode == "embedding_error":
         visual.ensure_indexed.side_effect = VisualProviderError(VisualFailureCode.UNAVAILABLE)
     visual.ensure_indexed.return_value = uuid4()
@@ -217,6 +222,8 @@ async def test_index_retains_transcript_and_reports_providers(tmp_path: Path, mo
             await index.execute(item.video_id, uuid4())
         return
     result = await index.execute(item.video_id, uuid4())
+    if mode == "ocr_policy_error":
+        assert "PROVIDER_CONSENT_REQUIRED" in result.warnings
     assert result.frame_count >= 0
     if mode in {"denied", "extract_failure", "new", "embedding_error", "ocr_error"}:
         assert result.warnings

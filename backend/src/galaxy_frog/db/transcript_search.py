@@ -1,6 +1,7 @@
 """Version-safe pgvector indexing and video-scoped dense retrieval."""
 
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 from uuid import UUID, uuid4
@@ -31,10 +32,14 @@ class PgVectorTranscriptSearch:
         session: AsyncSession,
         videos: SqlAlchemyVideoRepository,
         provider: TextEmbeddingProvider,
+        require_existing: bool = False,
+        on_missing_collection: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._session = session
         self._videos = videos
         self._provider = provider
+        self._require_existing = require_existing
+        self._on_missing_collection = on_missing_collection
 
     async def ensure_indexed(self, video_id: UUID) -> UUID:
         transcript = await self._videos.get_transcript(video_id)
@@ -107,7 +112,17 @@ class PgVectorTranscriptSearch:
             raise ValueError("limit must be between 1 and 30")
         if window is not None and window.start_ms == window.end_ms:
             return ()
-        collection_id = await self.ensure_indexed(video_id)
+        if self._require_existing:
+            collection = await self._find_collection(self._provider.spec)
+            if collection is None or not await self.is_indexed(video_id):
+                if self._on_missing_collection:
+                    await self._on_missing_collection()
+                from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
+
+                raise EmbeddingProviderError("The selected video has no matching text collection.")
+            collection_id = collection.id
+        else:
+            collection_id = await self.ensure_indexed(video_id)
         vectors = await self._provider.embed((query,))
         query_vector = list(vectors[0])
         distance = TextEmbeddingRow.embedding.cosine_distance(query_vector).label("distance")

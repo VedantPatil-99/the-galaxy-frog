@@ -19,6 +19,7 @@ from galaxy_frog.application.ingestion.runner import (
     IngestionStageHandler,
     StageContext,
 )
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
 from galaxy_frog.application.videos.ports import VideoRepository
 from galaxy_frog.domain.ingestion import (
     IngestionEvent,
@@ -265,7 +266,7 @@ class FixtureTranscriptionProvider:
 
     def __init__(self) -> None:
         self.requests: list[TranscriptionRequest] = []
-        self.failure: TranscriptionError | None = None
+        self.failure: TranscriptionError | ProviderFailure | None = None
 
     async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         self.requests.append(request)
@@ -580,9 +581,31 @@ async def test_missing_audio_file_is_retired_before_reacquisition(tmp_path: Path
     assert assets.asset is not None and assets.asset.audio.attempt == 2
 
 
+@pytest.mark.parametrize(
+    ("failure", "code", "recovery"),
+    [
+        (
+            TranscriptionError(
+                TranscriptionErrorCode.EXECUTION_FAILED,
+                "The transcription provider could not process the audio.",
+                retryable=True,
+            ),
+            TranscriptionErrorCode.EXECUTION_FAILED,
+            "could not process the audio",
+        ),
+        (
+            ProviderFailure(ProviderCode.QUOTA_EXHAUSTED),
+            ProviderCode.QUOTA_EXHAUSTED,
+            "Wait for the reset or retry with a local profile",
+        ),
+    ],
+)
 @pytest.mark.asyncio
 async def test_failed_transcription_retries_from_audio_and_reuses_completed_output(
     tmp_path: Path,
+    failure: TranscriptionError | ProviderFailure,
+    code: TranscriptionErrorCode | ProviderCode,
+    recovery: str,
 ) -> None:
     job = running_job(IngestionStage.TRANSCRIPTION)
     audio_acquirer = FixtureAudioAcquirer(tmp_path / "attempt-1" / "audio.wav")
@@ -599,11 +622,7 @@ async def test_failed_transcription_retries_from_audio_and_reuses_completed_outp
     audio_assets.asset = AudioAsset(uuid4(), acquired)
     transcriptions = MemoryTranscriptions()
     provider = FixtureTranscriptionProvider()
-    provider.failure = TranscriptionError(
-        TranscriptionErrorCode.EXECUTION_FAILED,
-        "The transcription provider could not process the audio.",
-        retryable=True,
-    )
+    provider.failure = failure
     stages = handler_map(
         source=FixtureSource(),
         videos=MemoryVideos(),
@@ -614,9 +633,9 @@ async def test_failed_transcription_retries_from_audio_and_reuses_completed_outp
     )
     context, _repository = stage_context(job)
 
-    with pytest.raises(IngestionStageError) as failed:
+    with pytest.raises(IngestionStageError, match=recovery) as failed:
         await stages[IngestionStage.TRANSCRIPTION].execute(job, context)  # type: ignore[attr-defined]
-    assert failed.value.code == TranscriptionErrorCode.EXECUTION_FAILED
+    assert failed.value.code == code
     assert failed.value.retryable is True
     assert audio_assets.asset.is_available is True
 

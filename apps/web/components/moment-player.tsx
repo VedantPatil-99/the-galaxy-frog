@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type RefObject } from "react"
 
 import { ApiClientError, explainVideoMoment } from "@/lib/api/client"
+import { ProviderRun } from "@/components/provider-run"
+import { ProviderSelectionFields, useProviderSelection } from "@/components/provider-selection"
 import type { ExplainMomentResponse, VideoResponse } from "@/lib/api/contracts"
 import { timestamp } from "@/lib/timestamp"
 import { loadYouTubeApi, pausedPlayheadMs, YOUTUBE_PLAYER_ORIGIN, type YouTubePlayer } from "@/lib/youtube-player"
@@ -19,7 +21,9 @@ export function MomentPlayer({ video, iframeRef }: {
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedTrace, setFailedTrace] = useState<string | null>(null)
   const [result, setResult] = useState<ExplainMomentResponse | null>(null)
+  const policy = useProviderSelection("moment")
   const { external_id: externalId, title } = video
 
   useEffect(() => {
@@ -67,18 +71,26 @@ export function MomentPlayer({ video, iframeRef }: {
   async function explain() {
     if (!player.current || pending.current) return
     setError(null)
+    setFailedTrace(null)
     setResult(null)
     try {
       const timestampMs = pausedPlayheadMs(player.current, video.duration_ms)
       pending.current = true
       setBusy(true)
-      const response = await explainVideoMoment(video.video_id, { timestamp_ms: timestampMs, allow_external_frames: false })
+      const selected = await policy.selection(video.video_id)
+      const response = await explainVideoMoment(video.video_id, {
+        timestamp_ms: timestampMs,
+        allow_external_frames: false,
+        provider_selection: selected,
+      })
       if (response.video_id !== video.video_id || response.timestamp_ms !== timestampMs) {
         throw new Error("The response did not match the requested video and playhead.")
       }
       setResult(response)
     } catch (caught) {
       const action = caught instanceof ApiClientError ? caught.response?.error.suggested_action : null
+      const trace = caught instanceof ApiClientError ? caught.response?.error.details?.trace_id : null
+      if (typeof trace === "string") setFailedTrace(trace)
       const message = caught instanceof Error ? caught.message : "The moment could not be explained."
       setError(action ? `${message} ${action}` : message)
     } finally {
@@ -103,9 +115,11 @@ export function MomentPlayer({ video, iframeRef }: {
             {status === "unavailable" ? "YouTube player controls are unavailable. Reload to try again." : "Pause the video to explain the current playhead."}
           </p>
         </div>
+        <ProviderSelectionFields control={policy} busy={busy} />
         {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         <div aria-live="polite" aria-busy={busy}>
           {result ? <MomentEvidence result={result} onSeek={seek} /> : null}
+          {result || failedTrace ? <ProviderRun operation="moment" runId={result?.trace_id ?? failedTrace ?? ""} /> : null}
         </div>
       </div>
     </>

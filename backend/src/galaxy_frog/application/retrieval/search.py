@@ -8,6 +8,7 @@ from time import perf_counter
 from typing import cast
 from uuid import UUID, uuid4
 
+from galaxy_frog.application.provider_policy import ProviderFailure
 from galaxy_frog.application.retrieval.reasoning import AdaptiveVisualReasoning, ReasoningExecution
 from galaxy_frog.application.retrieval.temporal import (
     InvalidAnchor,
@@ -123,6 +124,7 @@ class SearchTranscript:
         allow_fallback: bool = True,
         reason: bool = False,
         external_permission: bool = False,
+        trace_id: UUID | None = None,
     ) -> SearchExecution:
         started = self._clock()
         payload: dict[str, object] = {
@@ -189,6 +191,7 @@ class SearchTranscript:
             InvalidAnchor,
             RetrievalIntegrityError,
             VisualProviderError,
+            ProviderFailure,
         ) as exc:
             code = (
                 "EMBEDDING_UNAVAILABLE"
@@ -201,12 +204,14 @@ class SearchTranscript:
                 if isinstance(exc, InvalidAnchor)
                 else "RETRIEVAL_INTEGRITY_FAILED"
                 if isinstance(exc, RetrievalIntegrityError)
+                else exc.code.value
+                if isinstance(exc, ProviderFailure)
                 else "VISUAL_UNAVAILABLE"
             )
             payload.update(
                 status="failed", failure_code=code, elapsed_ms=(self._clock() - started) * 1000
             )
-            trace = await self._persist(video_id, payload)
+            trace = await self._persist(video_id, payload, trace_id)
             raise TracedRetrievalFailure(trace, exc, code) from exc
         payload.update(
             status=result.status,
@@ -249,15 +254,20 @@ class SearchTranscript:
         if reasoning_result is not None:
             payload["visual_reasoning"] = reasoning_result.trace_payload()
         return SearchExecution(
-            await self._persist(video_id, payload), result, visual_result, reasoning_result
+            await self._persist(video_id, payload, trace_id),
+            result,
+            visual_result,
+            reasoning_result,
         )
 
-    async def _persist(self, video_id: UUID, payload: dict[str, object]) -> RetrievalTrace:
+    async def _persist(
+        self, video_id: UUID, payload: dict[str, object], trace_id: UUID | None
+    ) -> RetrievalTrace:
         # Convert UUIDs/enums/tuples to a portable JSON value tree. Transcript text
         # is excluded from stage/group copies; IDs and original lineage are kept.
         value = cast(
             dict[str, TraceValue], json.loads(json.dumps(payload, default=str, allow_nan=False))
         )
-        trace = RetrievalTrace(uuid4(), video_id, datetime.now(UTC), value)
+        trace = RetrievalTrace(trace_id or uuid4(), video_id, datetime.now(UTC), value)
         await self._traces.save(trace)
         return trace

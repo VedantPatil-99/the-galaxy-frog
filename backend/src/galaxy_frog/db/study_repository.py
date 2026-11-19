@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from galaxy_frog.db.models import Base, VideoRow
+from galaxy_frog.db.provider_profiles import PostgresProviderProfiles
+from galaxy_frog.domain.providers import ProviderSelection
 from galaxy_frog.domain.study import (
     MAX_VIDEO_MS,
     PROMPT_VERSION,
@@ -74,6 +76,7 @@ class StudyRunRow(Base):
     total_chapters: Mapped[int]
     warnings: Mapped[list[str]] = mapped_column(JSON)
     failure: Mapped[dict[str, JsonValue] | None] = mapped_column(JSON)
+    provider_selection: Mapped[dict[str, JsonValue] | None] = mapped_column(JSON)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +103,9 @@ def _run(row: StudyRunRow) -> StudyRun:
         failure=StudyFailure.model_validate(row.failure) if row.failure is not None else None,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        provider_selection=ProviderSelection.model_validate(row.provider_selection)
+        if row.provider_selection is not None
+        else None,
     )
 
 
@@ -196,7 +202,12 @@ class StudyRepository:
         return tuple(map(_run, rows))
 
     async def regenerate(
-        self, artifact_id: UUID, request_id: UUID, chapter_version_id: UUID | None
+        self,
+        artifact_id: UUID,
+        request_id: UUID,
+        chapter_version_id: UUID | None,
+        *,
+        provider_selection: ProviderSelection | None = None,
     ) -> StudyRun:
         parent = await self._artifact(artifact_id)
         return await self.enqueue(
@@ -205,6 +216,7 @@ class StudyRepository:
             request_id,
             chapter_version_id,
             parent_id=artifact_id,
+            provider_selection=provider_selection,
         )
 
     async def enqueue(
@@ -215,6 +227,7 @@ class StudyRepository:
         chapter_version_id: UUID | None = None,
         *,
         parent_id: UUID | None = None,
+        provider_selection: ProviderSelection | None = None,
     ) -> StudyRun:
         video = await self.require_video(video_id, lock=True)
         prior = await self.session.scalar(
@@ -225,6 +238,8 @@ class StudyRepository:
         if prior is not None:
             if (
                 prior.kind != kind
+                or prior.provider_selection
+                != (provider_selection.model_dump(mode="json") if provider_selection else None)
                 or prior.parent_id != parent_id
                 or (
                     chapter_version_id is not None
@@ -235,6 +250,15 @@ class StudyRepository:
                     "STUDY_REQUEST_CONFLICT", "This request ID was used for different inputs."
                 )
             return _run(prior)
+        if (
+            provider_selection is not None
+            and await PostgresProviderProfiles(self.session).get(provider_selection.profile) is None
+        ):
+            raise StudyError(
+                "PROVIDER_PROFILE_NOT_FOUND",
+                "The selected provider profile version does not exist.",
+                status=422,
+            )
         if not 0 < video.duration_ms <= MAX_VIDEO_MS:
             raise StudyError(
                 "STUDY_VIDEO_TOO_LONG",
@@ -310,6 +334,9 @@ class StudyRepository:
             total_chapters=0,
             warnings=[],
             failure=None,
+            provider_selection=provider_selection.model_dump(mode="json")
+            if provider_selection
+            else None,
         )
         self.session.add(row)
         result = _run(row)
@@ -404,6 +431,8 @@ class StudyRepository:
         fingerprint: str,
         provider: str,
         model: str,
+        *,
+        prompt_version: str = PROMPT_VERSION,
     ) -> StudyVersion:
         now = datetime.now(UTC)
         row = await self._owned(claim, now)
@@ -420,7 +449,7 @@ class StudyRepository:
             chapter_version_id=row.chapter_version_id,
             created_at=now,
             schema_version=SCHEMA_VERSION,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=prompt_version,
             evidence_fingerprint=fingerprint,
             provider=provider,
             model=model,

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from galaxy_frog.api.app import create_app
 from galaxy_frog.api.dependencies import get_video_repository
 from galaxy_frog.api.routes.retrieval import get_moment_service
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
 from galaxy_frog.application.retrieval.explain_moment import MomentCitation, MomentExplanation
 from galaxy_frog.application.retrieval.moment import (
     InvalidMomentTimestamp,
@@ -78,6 +79,7 @@ async def test_moment_api_returns_bounded_window_and_safe_lineage(with_frame: bo
         (InvalidMomentTimestamp("bad timestamp"), 422, "INVALID_MOMENT_TIMESTAMP"),
         (TraceLimitExceeded(), 422, "RETRIEVAL_TRACE_LIMIT_EXCEEDED"),
         (SQLAlchemyError(), 503, "DATABASE_UNAVAILABLE"),
+        (ProviderFailure(ProviderCode.RATE_LIMITED), 429, "RATE_LIMITED"),
     ],
 )
 async def test_moment_error_mapping(error: Exception, status: int, code: str) -> None:
@@ -104,3 +106,22 @@ async def test_moment_composition_checks_video_and_rejects_fractional_timestamp(
         invalid = await client.post(path, json={"timestamp_ms": 0.5})
         missing = await client.post(path, json={"timestamp_ms": 0})
     assert invalid.status_code == 422 and missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_selected_moment_requires_durable_policy_storage() -> None:
+    app = create_app()
+    service = AsyncMock()
+    app.dependency_overrides[get_moment_service] = lambda: service
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/v1/videos/{uuid4()}/explain-moment",
+            json={
+                "timestamp_ms": 0,
+                "provider_selection": {"profile": {"profile_id": "gemini", "version": 1}},
+            },
+        )
+    assert (
+        response.status_code == 503 and response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+    )
+    service.execute.assert_not_awaited()

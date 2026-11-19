@@ -31,6 +31,15 @@ def mock_client(payload: object, *, status: int = 200) -> httpx.AsyncClient:
 
 
 @pytest.mark.asyncio
+async def test_local_adapters_refuse_off_machine_endpoints() -> None:
+    remote = "http://ollama.example"
+    with pytest.raises(EmbeddingProviderError, match="loopback"):
+        await OllamaBgeM3EmbeddingProvider(base_url=remote).embed(("Private evidence",))
+    with pytest.raises(GenerationProviderError, match="loopback"):
+        await OllamaGenerationProvider(base_url=remote, model="fixture").generate("Question", ())
+
+
+@pytest.mark.asyncio
 async def test_moment_generation_keeps_source_ids_and_labels() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         prompt = json.loads(request.content)["prompt"]
@@ -171,7 +180,7 @@ async def test_generation_provider_parses_structured_json() -> None:
         request_body = json.loads(request.content)
         assert request_body["model"] == "qwen3:4b"
         assert request_body["stream"] is False
-        assert request_body["format"] == "json"
+        assert request_body["format"]["required"] == ["answer", "confidence", "citations"]
         assert request_body["think"] is False
         assert request_body["options"] == {"temperature": 0}
         return httpx.Response(200, json={"response": json.dumps(body)})

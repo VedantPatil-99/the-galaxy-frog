@@ -20,3 +20,8 @@ IDs before storage. Summary and notes still require review for semantic support.
 The model receives text through the configured loopback Ollama endpoint. Phase 7 exports
 render the selected saved version, so later generation and provider availability cannot change
 a historical export.
+
+Phase 8 extends the local-provider decision through explicit selected profiles, separately
+configured Gemini Study credentials, dispatch-time consent/lease checks, and actual provider
+provenance. See [ADR 0009](0009-provider-policy-and-gemini-roles.md). Local defaults and immutable
+saved-version exports remain intact.

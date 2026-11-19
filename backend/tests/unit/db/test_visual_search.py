@@ -164,6 +164,24 @@ async def test_search_scope_and_nearby_preserve_ids(tmp_path: Path) -> None:
         await adapter.search(original.video_id, "diagram")
 
 
+@pytest.mark.parametrize("indexed", [False, True])
+@pytest.mark.asyncio
+async def test_selected_visual_collection_never_reindexes(tmp_path: Path, indexed: bool) -> None:
+    db, provider = session(), Provider()
+    original = row(tmp_path)
+    original.content_sha256 = "a" * 64
+    db.scalar.side_effect = [uuid4(), original.id if indexed else None]
+    db.execute.return_value = Mock(all=lambda: [(original, 0.25)])
+    adapter = PgVectorVisualSearch(cast(AsyncSession, db), provider, require_existing=True)
+    found = await adapter.search(original.video_id, "diagram", window=TimeWindow(0, 1000))
+    assert bool(found) is indexed
+    assert provider.calls == 0
+    if indexed:
+        assert found[0].frame.frame_id == original.id
+    else:
+        db.execute.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_search_missing_collection_and_invalid_arguments() -> None:
     db, provider = session(), Provider()

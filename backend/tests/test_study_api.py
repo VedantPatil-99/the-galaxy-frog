@@ -13,6 +13,7 @@ from galaxy_frog.api.routes.study import get_study_repository
 from galaxy_frog.config import Settings
 from galaxy_frog.db.study_repository import StudyRepository
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.domain.providers import ProfileRef, ProviderSelection
 from galaxy_frog.domain.study import (
     RunState,
     StudyDocument,
@@ -106,6 +107,30 @@ async def test_start_poll_read_page_and_export_saved_artifact() -> None:
         markdown = await client.get(f"{path}/artifacts/{artifact}/export?format=markdown")
         assert markdown.headers["content-disposition"].endswith('chapters-v2.md"')
         assert "Fixture" in markdown.text
+
+        selection = ProviderSelection(
+            profile=ProfileRef(profile_id="gemini", version=1), consent_id=uuid4()
+        )
+        selected_body = {**body, "provider_selection": selection.model_dump(mode="json")}
+        assert (await client.post(f"{path}/chapters", json=selected_body)).status_code == 202
+        repo.enqueue.assert_awaited_with(
+            video, StudyKind.CHAPTERS, request_id, provider_selection=selection
+        )
+        assert (
+            await client.post(
+                f"{path}/artifacts",
+                json={**selected_body, "kind": "quiz", "chapter_version_id": str(artifact)},
+            )
+        ).status_code == 202
+        repo.enqueue.assert_awaited_with(
+            video, StudyKind.QUIZ, request_id, artifact, provider_selection=selection
+        )
+        assert (
+            await client.post(f"/v1/artifacts/{artifact}/regenerate", json=selected_body)
+        ).status_code == 202
+        repo.regenerate.assert_awaited_with(
+            artifact, request_id, None, provider_selection=selection
+        )
 
         repo.run.side_effect = StudyError("STUDY_RUN_NOT_FOUND", "Run unavailable.", status=404)
         missing = await client.get(f"{path}/artifact-runs/{run}")

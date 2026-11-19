@@ -14,7 +14,7 @@ from galaxy_frog.db.models import (
     OCREmbeddingRow,
     VideoFrameRow,
 )
-from galaxy_frog.domain.retrieval.errors import OCRIndexError
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError, OCRIndexError
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.retrieval.ports import TextEmbeddingProvider
 from galaxy_frog.domain.retrieval.temporal import TimeWindow
@@ -101,9 +101,11 @@ class PgVectorOCRSearch:
         *,
         session: AsyncSession,
         provider: TextEmbeddingProvider,
+        require_existing: bool = False,
     ) -> None:
         self._session = session
         self._provider = provider
+        self._require_existing = require_existing
 
     async def ensure_indexed(self, video_id: UUID) -> UUID:
         """Ensure all OCR blocks for a video have embeddings in the current collection."""
@@ -203,7 +205,13 @@ class PgVectorOCRSearch:
                 available = available.where(VideoFrameRow.capture_ms < window.end_ms)
         if await self._session.scalar(available) is None:
             return ()
-        collection_id = await self.ensure_indexed(video_id)
+        if self._require_existing:
+            collection = await self._find_collection(self._provider.spec)
+            if collection is None or not await self.is_indexed(video_id):
+                raise EmbeddingProviderError("The selected video has no matching OCR collection.")
+            collection_id = collection.id
+        else:
+            collection_id = await self.ensure_indexed(video_id)
         vectors = await self._provider.embed((query,))
         query_vector = list(vectors[0])
         distance = OCREmbeddingRow.embedding.cosine_distance(query_vector).label("distance")

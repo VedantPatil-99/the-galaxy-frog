@@ -14,7 +14,7 @@ describe("ingestion progress presentation", () => {
   test("describes the caption-to-ASR path without hiding skipped stages", () => {
     expect(presentStage("caption_retrieval")).toEqual({
       label: "Checking captions",
-      description: "Preferring viable timestamped captions before local ASR.",
+      description: "Preferring viable timestamped captions before transcription.",
       progress: 28,
     })
     expect(presentStage("transcription").progress).toBeGreaterThan(
@@ -39,7 +39,7 @@ describe("ingestion progress presentation", () => {
     }
 
     expect(ingestionStatusLabel("failed")).toBe("Needs attention")
-    expect(ingestionEventLabel(event)).toBe("Stage completed: Transcribing locally")
+    expect(ingestionEventLabel(event)).toBe("Stage completed: Transcribing audio")
   })
 
   test("explains ASR selection and measured processing time", () => {

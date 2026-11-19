@@ -1,7 +1,7 @@
 """Resumable caption-first ingestion with explicit local ASR fallback."""
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Never
 from uuid import UUID
 
@@ -15,6 +15,7 @@ from galaxy_frog.application.ingestion.runner import (
     StageContext,
     StageResult,
 )
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
 from galaxy_frog.application.videos.import_video import ImportVideo, select_caption_track
 from galaxy_frog.application.videos.ports import VideoRepository
 from galaxy_frog.domain.ingestion.models import (
@@ -29,6 +30,7 @@ from galaxy_frog.domain.media import (
     AudioAcquisitionRequest,
     AudioFallbackReason,
 )
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.retrieval.ports import TranscriptSearch
 from galaxy_frog.domain.transcription import (
     TranscriptionCheckpoint,
@@ -53,6 +55,7 @@ class _TranscriptStage:
         audio_assets: AudioAssetRepository | None,
         transcription_checkpoints: TranscriptionCheckpointRepository | None,
         transcription_provider: TranscriptionProvider | None,
+        transcript_search_for_job: Callable[[IngestionJob], TranscriptSearch] | None = None,
     ) -> None:
         self._sources = tuple(sources)
         self._videos = videos
@@ -62,6 +65,7 @@ class _TranscriptStage:
         self._audio_assets = audio_assets
         self._transcription_checkpoints = transcription_checkpoints
         self._transcription_provider = transcription_provider
+        self._transcript_search_for_job = transcript_search_for_job
         self._chunker = TemporalChunker()
 
     def _source(self, job: IngestionJob) -> VideoSource:
@@ -330,6 +334,22 @@ class TranscriptionStage(_TranscriptStage):
             )
         except TranscriptionError as exc:
             self._raise_transcription_error(exc)
+        except ProviderFailure as exc:
+            message = {
+                ProviderCode.QUOTA_EXHAUSTED: "Cloud ASR quota is exhausted. Wait for the reset or retry with a local profile.",
+                ProviderCode.RATE_LIMITED: "Cloud ASR is temporarily throttled. Check the retry time in Provider decisions.",
+                ProviderCode.CONSENT_REQUIRED: "This run lacks cloud audio consent. Retry locally or grant fresh consent.",
+                ProviderCode.INPUT_LIMIT: "The audio exceeds the cloud ASR limit. Retry with a local profile.",
+                ProviderCode.OUTCOME_UNKNOWN: "The cloud ASR outcome is unknown. Check provider activity before submitting again.",
+            }.get(
+                exc.code,
+                "The selected transcription route could not complete. Check provider health.",
+            )
+            raise IngestionStageError(
+                exc.code,
+                message,
+                retryable=exc.code not in {ProviderCode.SAFETY_BLOCKED, ProviderCode.INVALID_INPUT},
+            ) from exc
         checkpoint = await checkpoints.save(asset.asset_id, result)
         return self._result(checkpoint, reused=False)
 
@@ -433,9 +453,19 @@ class EmbeddingStage(_TranscriptStage):
                 "The persisted video could not be loaded for indexing.",
                 retryable=True,
             )
-        collection_id = await context.run_with_heartbeats(
-            self._transcript_search.ensure_indexed(video.video_id)
+        search = (
+            self._transcript_search_for_job(job)
+            if self._transcript_search_for_job
+            else self._transcript_search
         )
+        try:
+            collection_id = await context.run_with_heartbeats(search.ensure_indexed(video.video_id))
+        except EmbeddingProviderError as exc:
+            raise IngestionStageError(
+                "EMBEDDING_UNAVAILABLE",
+                "Transcript indexing requires a compatible embedding provider.",
+                retryable=True,
+            ) from exc
         return StageResult(
             IngestionStage.CLEANUP,
             {"video_id": str(video.video_id), "embedding_collection_id": str(collection_id)},
@@ -491,6 +521,7 @@ def caption_ingestion_handlers(
     audio_assets: AudioAssetRepository | None = None,
     transcription_checkpoints: TranscriptionCheckpointRepository | None = None,
     transcription_provider: TranscriptionProvider | None = None,
+    transcript_search_for_job: Callable[[IngestionJob], TranscriptSearch] | None = None,
 ) -> tuple[IngestionStageHandler, ...]:
     """Build caption-first handlers and activate ASR only when every service is configured."""
 
@@ -534,6 +565,7 @@ def caption_ingestion_handlers(
             audio_assets=audio_assets,
             transcription_checkpoints=transcription_checkpoints,
             transcription_provider=transcription_provider,
+            transcript_search_for_job=transcript_search_for_job,
         )
         for handler_type in handler_types
     )

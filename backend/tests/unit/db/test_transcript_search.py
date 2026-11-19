@@ -147,6 +147,24 @@ async def test_indexing_rejects_missing_video_and_incomplete_batch() -> None:
 
 
 @pytest.mark.asyncio
+async def test_selected_missing_collection_fails_without_indexing() -> None:
+    from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
+
+    session = FakeSession()
+    session.scalar_values.append(None)
+    provider = FakeProvider(())
+    adapter = PgVectorTranscriptSearch(
+        session=cast(AsyncSession, session),
+        videos=cast(SqlAlchemyVideoRepository, FakeVideos(())),
+        provider=provider,
+        require_existing=True,
+    )
+    with pytest.raises(EmbeddingProviderError, match="no matching text collection"):
+        await adapter.search(uuid4(), "query")
+    assert provider.inputs == [] and session.commits == 0
+
+
+@pytest.mark.asyncio
 async def test_indexing_creates_collection_embeddings_and_is_idempotent() -> None:
     item = unit()
     record = transcript(item)

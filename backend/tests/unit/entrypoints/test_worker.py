@@ -52,6 +52,43 @@ def test_build_worker_composes_the_caption_pipeline() -> None:
     assert isinstance(result, IngestionWorker)
 
 
+def test_worker_composes_job_scoped_embedding_and_ocr(monkeypatch: pytest.MonkeyPatch) -> None:
+    from collections.abc import Callable
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from uuid import uuid4
+
+    from pydantic import SecretStr
+
+    from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
+    from galaxy_frog.domain.ingestion.models import IngestionJob
+    from galaxy_frog.entrypoints.worker_providers import RoutedOCR
+
+    original = worker_entrypoint.caption_ingestion_handlers
+    selected: list[PgVectorTranscriptSearch] = []
+
+    def handlers(**kwargs: Any) -> Any:
+        factory = cast(
+            Callable[[IngestionJob], PgVectorTranscriptSearch], kwargs["transcript_search_for_job"]
+        )
+        selected.append(factory(cast(IngestionJob, SimpleNamespace(job_id=uuid4()))))
+        return original(**kwargs)
+
+    index = Mock(wraps=worker_entrypoint.PersistVisionIndex)
+    monkeypatch.setattr(worker_entrypoint, "caption_ingestion_handlers", handlers)
+    monkeypatch.setattr(worker_entrypoint, "PersistVisionIndex", index)
+    built = worker_entrypoint.build_worker(
+        settings=settings(
+            vision_ingestion_enabled=True, llama_cloud_api_key=SecretStr("synthetic-key")
+        ),
+        session=cast(AsyncSession, object()),
+        worker_id="test-worker",
+        engine=cast(AsyncEngine, object()),
+    )
+    assert isinstance(built, IngestionWorker) and len(selected) == 1
+    assert isinstance(index.call_args.kwargs["ocr"], RoutedOCR)
+
+
 def test_build_audio_acquirer_composes_bounded_local_providers(tmp_path: Path) -> None:
     result = worker_entrypoint.build_audio_acquirer(
         settings(

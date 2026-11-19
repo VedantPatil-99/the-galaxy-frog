@@ -7,12 +7,14 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from galaxy_frog.application.provider_policy import ProviderCode
 from galaxy_frog.application.study_generation import GeneratedStudy
 from galaxy_frog.config import Settings
 from galaxy_frog.db.study_evidence import StudyEvidenceReader
 from galaxy_frog.db.study_repository import ClaimedStudyRun, StudyLeaseLost, StudyRepository
+from galaxy_frog.domain.providers import ProfileRef, ProviderSelection
 from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.study import (
     RunState,
@@ -81,7 +83,11 @@ async def test_worker_publishes_only_after_generation_and_size_check(
         _pinned: StudyVersion | None,
         _provider: StudyGenerator,
         report: Progress,
+        *,
+        evidence_characters: int = 1400,
+        excerpt_characters: int = 320,
     ) -> GeneratedStudy:
+        assert (evidence_characters, excerpt_characters) == (1400, 320)
         await report(1, 1, ())
         return result
 
@@ -92,7 +98,12 @@ async def test_worker_publishes_only_after_generation_and_size_check(
     artifact.assert_awaited_once_with(claimed.run.video_id, claimed.run.chapter_version_id)
     progress.assert_awaited_once_with(claimed, 1, 1, ())
     publish.assert_awaited_once_with(
-        claimed, result.document, result.fingerprint, "ollama", "fixture"
+        claimed,
+        result.document,
+        result.fingerprint,
+        "ollama",
+        "fixture",
+        prompt_version=result.prompt_version,
     )
 
     source.title = "x" * 525_000
@@ -156,3 +167,98 @@ async def test_worker_retries_transient_polling_and_classifies_run_failures(
     monkeypatch.setattr(study_worker, "execute_study_run", fake_execute)
     await study_worker.run_study_worker(Settings(ingestion_poll_seconds=0.001), sessions, stop)
     assert steps == 3 and fake_execute.await_count == 1
+
+
+@pytest.mark.parametrize("digest", [None, "different", "pinned"])
+@pytest.mark.asyncio
+async def test_study_worker_checks_and_records_the_local_model(
+    monkeypatch: pytest.MonkeyPatch, digest: str | None
+) -> None:
+    settings = Settings(generation_model_revision="pinned", ingestion_poll_seconds=0.001)
+    engine = create_async_engine("postgresql+asyncpg://localhost/db")
+    sessions = async_sessionmaker(engine)
+    stop = asyncio.Event()
+    claimed = claim()
+    execute = AsyncMock()
+    record = AsyncMock()
+    fail = AsyncMock()
+
+    async def claim_once() -> ClaimedStudyRun:
+        stop.set()
+        return claimed
+
+    monkeypatch.setattr(StudyRepository, "claim", AsyncMock(side_effect=claim_once))
+    monkeypatch.setattr(StudyRepository, "fail", fail)
+    monkeypatch.setattr(study_worker, "execute_study_run", execute)
+    monkeypatch.setattr(study_worker.PostgresProviderRuntime, "record", record)
+    monkeypatch.setattr(
+        study_worker,
+        "probe_ollama_models",
+        AsyncMock(return_value={settings.generation_model: digest} if digest else {}),
+    )
+    try:
+        await study_worker.run_study_worker(settings, sessions, stop, engine=engine)
+    finally:
+        await engine.dispose()
+    record.assert_awaited_once()
+    call = record.await_args
+    assert call is not None
+    attempt = call.args[1]
+    if digest == "pinned":
+        execute.assert_awaited_once()
+        fail.assert_not_awaited()
+        assert attempt.status == "succeeded" and attempt.revision == digest
+    else:
+        execute.assert_not_awaited()
+        fail.assert_awaited_once()
+        assert attempt.status == "skipped" and attempt.reason == ProviderCode.SETUP_REQUIRED
+
+
+@pytest.mark.parametrize("database", [False, True])
+@pytest.mark.asyncio
+async def test_selected_study_worker_routes_with_bounded_evidence(
+    monkeypatch: pytest.MonkeyPatch, database: bool
+) -> None:
+    from galaxy_frog.entrypoints import study_providers
+
+    engine = create_async_engine("postgresql+asyncpg://localhost/db")
+    sessions = async_sessionmaker(engine)
+    stop = asyncio.Event()
+    claimed = claim()
+    claimed.run.provider_selection = ProviderSelection(
+        profile=ProfileRef(profile_id="gemini", version=1)
+    )
+
+    async def claim_once() -> ClaimedStudyRun:
+        stop.set()
+        return claimed
+
+    selected = AsyncMock()
+    selected.evidence_characters = 12000
+    selected.excerpt_characters = 1200
+    factory = AsyncMock(return_value=selected)
+    execute, fail = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(study_providers, "selected_study_generator", factory)
+    monkeypatch.setattr(StudyRepository, "claim", AsyncMock(side_effect=claim_once))
+    monkeypatch.setattr(StudyRepository, "fail", fail)
+    monkeypatch.setattr(study_worker, "execute_study_run", execute)
+    try:
+        await study_worker.run_study_worker(
+            Settings(), sessions, stop, engine=engine if database else None
+        )
+    finally:
+        await engine.dispose()
+    if database:
+        factory.assert_awaited_once()
+        assert execute.await_args is not None
+        assert execute.await_args.args[3] is selected
+        assert execute.await_args.kwargs == {
+            "evidence_characters": 12000,
+            "excerpt_characters": 1200,
+        }
+        fail.assert_not_awaited()
+    else:
+        factory.assert_not_awaited()
+        execute.assert_not_awaited()
+        assert fail.await_args is not None
+        assert fail.await_args.args[1].code == "DATABASE_UNAVAILABLE"

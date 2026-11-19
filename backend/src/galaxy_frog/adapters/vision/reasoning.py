@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import re
+from collections.abc import Awaitable, Callable
 from hashlib import sha256
 from time import perf_counter
 from urllib.parse import urlsplit
@@ -245,7 +246,12 @@ class GeminiVisualReasoner:
         )
         self._lock = asyncio.Lock()
 
-    async def reason(self, request: VisualReasoningRequest) -> VisualReasoningResult:
+    async def reason(
+        self,
+        request: VisualReasoningRequest,
+        *,
+        verify_consent: Callable[[], Awaitable[None]] | None = None,
+    ) -> VisualReasoningResult:
         # Enforce privacy before file reads, cache access, client creation, or network calls.
         if not self._enabled or not request.external_permitted:
             raise VisualProviderError(VisualFailureCode.PRIVACY_DENIED)
@@ -254,11 +260,13 @@ class GeminiVisualReasoner:
         async with self._lock:
             started = perf_counter()
             client = self._client or httpx.AsyncClient(
-                timeout=self._timeout, follow_redirects=False
+                timeout=self._timeout, follow_redirects=False, trust_env=False
             )
             try:
                 async with asyncio.timeout(self._timeout):
                     images = await asyncio.to_thread(_image_bytes, request.frames)
+                    if verify_consent:
+                        await verify_consent()
                     response = await client.post(
                         f"https://generativelanguage.googleapis.com/v1beta/models/{self.identity.model}:generateContent",
                         headers={"x-goog-api-key": self._key},
@@ -295,6 +303,8 @@ class GeminiVisualReasoner:
                     if payload["modelVersion"] != self.identity.revision:
                         raise ValueError("Gemini returned a different model revision")
                     candidate = payload["candidates"][0]
+                    if candidate["finishReason"] in {"SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT"}:
+                        raise VisualProviderError(VisualFailureCode.SAFETY_BLOCKED)
                     if candidate["finishReason"] != "STOP":
                         raise ValueError("Gemini response was incomplete")
                     return _validated(
@@ -305,8 +315,20 @@ class GeminiVisualReasoner:
                     )
             except httpx.TimeoutException, TimeoutError:
                 raise VisualProviderError(VisualFailureCode.TIMEOUT) from None
-            except httpx.HTTPError:
-                raise VisualProviderError(VisualFailureCode.UNAVAILABLE) from None
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                code = (
+                    VisualFailureCode.AUTH_FAILED
+                    if status in {401, 403}
+                    else VisualFailureCode.RATE_LIMITED
+                    if status == 429
+                    else VisualFailureCode.OUTCOME_UNKNOWN
+                    if status >= 500
+                    else VisualFailureCode.UNAVAILABLE
+                )
+                raise VisualProviderError(code) from None
+            except httpx.RequestError:
+                raise VisualProviderError(VisualFailureCode.OUTCOME_UNKNOWN) from None
             except KeyError, TypeError, ValueError, IndexError, OSError:
                 raise VisualProviderError(VisualFailureCode.INVALID_OUTPUT) from None
             finally:
