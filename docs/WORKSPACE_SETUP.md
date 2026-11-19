@@ -47,22 +47,18 @@ Enabling private mode deliberately locks all existing video, transcript, frame, 
 
 No new runtime packages or migration are needed for W1.2 beyond W1.1's `20261119_0018`. The current packet tests the Auth adapter with synthetic responses and real PostgreSQL notebook isolation. Live provider acceptance and browser sign-in/cookie lifecycle remain pending; the sign-in UI is part of the workspace shell.
 
-### W1.2 verification and remaining build check
+### W1.2 verification
 
-The local backend/PostgreSQL gate passed 1,517 tests with four optional skips and 100% statement/branch coverage. Backend lint/format/types, generated-contract freshness, frontend lint/types, and all 52 frontend tests passed. The supported Webpack production build also passed:
+The local backend/PostgreSQL gate passed 1,517 tests with four optional skips and 100% statement/branch coverage. Backend lint/format/types, generated-contract freshness, frontend lint/types, and all 52 frontend tests passed. Both the default Turbopack production build and the supported Webpack production build passed:
 
 ```bash
+bun run build
 bun run --cwd apps/web build --webpack
 ```
 
-The default Turbopack build failed during loader-worker startup for the existing transcript component: the Node worker exited before it could connect. The tool's attempt to invoke a Git Bash shell also failed before running the command. No machine or security settings were changed, and the project still uses its original default build configuration. Confirm the normal build manually from Git Bash:
+The agent execution environment initially failed during Turbopack loader-worker startup. On 2026-11-19, the user's PowerShell terminal was directly inspected: the normal `bun run build` compiled successfully, completed TypeScript, generated all 10 static pages, finalized optimization, and returned to the prompt. The default-build gate is closed without changing project configuration or machine/security settings.
 
-```bash
-cd "/e/Projects/Galaxy Frog Root/galaxy-frog"
-bun run build
-```
-
-Until that passes, the default-build gate remains open. Supabase read-only discovery and the separately approved $0 project creation completed; live Supabase verification is still pending application configuration. Design and approve a least-privilege hosted application database role separately from migration/admin access before hosted data is enabled.
+Supabase read-only discovery and the separately approved $0 project creation completed; live Supabase verification is still pending application configuration. Design and approve a least-privilege hosted application database role separately from migration/admin access before hosted data is enabled.
 
 Use Supabase's [server-side authentication guidance](https://supabase.com/docs/guides/auth/server-side), with cookie-based sessions and PKCE, when implementing Next.js sign-in/session forwarding. FastAPI remains responsible for verified identity and application ownership. Next.js does not query the application database. Live auth and storage checks stay pending until the project is configured; local tests must label simulated identity clearly.
 

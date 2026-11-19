@@ -1,6 +1,6 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: Implementation started, 2026-11-19, on `feat/workspace`; W0 and W1.1 are locally complete, and W1.2 adds the private authentication/API boundary.
+Status: Implementation started, 2026-11-19, on `feat/workspace`; W0 and W1.1 are locally complete, and W1.2's local code/build checks pass. Live Supabase configuration and authentication acceptance remain pending.
 Saved: 2026-11-18 (Asia/Calcutta).
 Updated: 2026-11-19 (Asia/Calcutta) — local skill requirements, UI design process, and typography direction.
 This document records the agreed future workspace program. It is separate from Phase 8.

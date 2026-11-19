@@ -822,8 +822,8 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   validation, and transaction tests. No HTTP exposure or automatic legacy ownership.
 - [ ] W1.2 — Verified Supabase authentication, invite-only creators, generated HTTP contracts,
   and authorization fences covering existing resource paths before workspace exposure.
-  Implementation and local API checks are verified; default Turbopack build confirmation and
-  live Supabase acceptance remain open. The supported Webpack production build passes.
+  Implementation, local API checks, and both production build modes are verified.
+  Live Supabase configuration and acceptance remain open.
 - [ ] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
 - [ ] W2 — Implement both workspace layouts and the selected typography system after W1.
 
@@ -855,10 +855,12 @@ Supabase authentication/storage acceptance are pending.
   coverage**. Includes real-database HTTP owner-isolation with synthetic Auth responses.
   Ruff lint/format, strict Pyright, deterministic contracts, frontend lint/type checks,
   all **52 frontend tests**, and the supported Webpack production build passed.
-- The normal `bun run build` failed twice while Turbopack started a Node loader worker for the
-  existing transcript component; the worker exited before connection. The alternate build
-  `bun run --cwd apps/web build --webpack` passed without changing project configuration.
-  Default-build confirmation is still required; exact Git Bash steps are in the setup guide.
+- The normal `bun run build` initially failed in the agent execution environment during
+  Turbopack loader-worker startup. On 2026-11-19, the user's PowerShell terminal was directly
+  inspected and confirmed the standard build passed against implementation `9137ee2`:
+  Turbopack compiled in 2.9s, TypeScript finished in 2.0s, all 10 static pages were generated,
+  optimization completed, and the terminal returned to its prompt. The default-build gate is
+  closed. The supported Webpack build also passed without changing project configuration.
 - With explicit approval, Supabase read-only organization/project discovery completed. A separate
   `galaxy-frog` project was then created in Mumbai after the operator approved creation only at
   $0 and Supabase quoted $0/month. It reports `ACTIVE_HEALTHY`. No hosted SQL, migrations, or
