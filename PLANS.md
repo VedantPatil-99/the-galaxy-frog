@@ -818,8 +818,8 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 
 - [x] W0 — Compare layout concepts, record the selected working-surface design, require local
   design skills, specify Doto from Google Fonts, and document installation stages.
-- [ ] W1.1 — Local owner-scoped account/notebook persistence, additive migration, isolation,
-  validation, and transaction tests. In progress; no HTTP exposure or automatic legacy ownership.
+- [x] W1.1 — Local owner-scoped account/notebook persistence, additive migration, isolation,
+  validation, and transaction tests. No HTTP exposure or automatic legacy ownership.
 - [ ] W1.2 — Verified Supabase authentication, invite-only creators, generated HTTP contracts,
   and authorization fences covering existing resource paths before workspace exposure.
 - [ ] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
@@ -827,3 +827,15 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 
 Later packets remain ordered by the workspace plan. No Supabase project is configured yet;
 live authentication/storage acceptance is pending. Do not access Notion for this program.
+
+### W1.1 local verification — 2026-11-19
+
+Migration `20261119_0018` was applied to the existing localhost PostgreSQL database. All six
+new PostgreSQL ownership checks passed, including cross-account isolation, transaction rollback,
+database constraints, and RLS without browser policies. The full backend gate passed **1,462 tests,
+four optional skips, and 100% statement/branch coverage** with `RUN_DATABASE_INTEGRATION=1`.
+Ruff lint/format, strict Pyright, and both generated-contract checks passed. The checkout's missing
+locked Google GenAI dependencies were installed with `uv sync --locked --inexact`; existing
+optional packages were preserved. No new workspace package dependencies or frontend changes
+were introduced. Browser acceptance belongs to the later shell packet. Hosted CI/merge and live
+Supabase authentication/storage acceptance are pending.
