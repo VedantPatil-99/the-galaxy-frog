@@ -12,4 +12,5 @@ test("renders the transcript-first workspace", () => {
   expect(markup).toContain("Phase 3 · Temporal evidence")
   expect(markup).toContain("bounded local audio")
   expect(markup).toContain('aria-label="Toggle color theme"')
+  expect(markup).toContain('href="/workflow"')
 })

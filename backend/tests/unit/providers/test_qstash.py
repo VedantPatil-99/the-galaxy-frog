@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import traceback
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -79,7 +80,7 @@ async def test_qstash_publishes_only_identifier_action_and_deduplicates() -> Non
 
 @pytest.mark.parametrize(
     "response",
-    [RuntimeError("network"), object(), PublishResponse("", False)],
+    [RuntimeError("synthetic-provider-credential"), object(), PublishResponse("", False)],
 )
 @pytest.mark.asyncio
 async def test_qstash_translates_provider_failures(response: object) -> None:
@@ -89,8 +90,9 @@ async def test_qstash_translates_provider_failures(response: object) -> None:
         publisher=Publisher(response),
     )
 
-    with pytest.raises(JobDispatchError, match="QStash"):
+    with pytest.raises(JobDispatchError, match="QStash") as caught:
         await dispatcher.dispatch(DispatchMessage(job_id=uuid4()))
+    assert "synthetic-provider-credential" not in "".join(traceback.format_exception(caught.value))
 
 
 def test_qstash_dispatcher_rejects_invalid_configuration() -> None:

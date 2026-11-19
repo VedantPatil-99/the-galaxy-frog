@@ -11,7 +11,7 @@
     "sync:backend": "uv sync --directory backend --locked",
     "dev": "bun run --parallel dev:web dev:api dev:worker",
     "dev:web": "bun run --cwd apps/web dev",
-    "dev:api": "PYTHONUTF8=1 uv run --directory backend fastapi dev",
+    "dev:api": "PYTHONUTF8=1 uv run --directory backend python -m fastapi dev",
     "dev:worker": "PYTHONUTF8=1 uv run --directory backend python -m galaxy_frog.entrypoints.worker",
     "infra:up": "docker compose up -d postgres",
     "infra:down": "docker compose down",

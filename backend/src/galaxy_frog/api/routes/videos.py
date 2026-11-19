@@ -44,6 +44,7 @@ from galaxy_frog.application.questions.answer_question import (
     CitationValidationError,
 )
 from galaxy_frog.application.retrieval.temporal import RetrievalStatus
+from galaxy_frog.config import Settings
 from galaxy_frog.db.ingestion_repository import PostgresIngestionRepository
 from galaxy_frog.db.transcript_search import PgVectorTranscriptSearch
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
@@ -264,6 +265,7 @@ async def get_transcript(
 async def get_frame_image(
     video_id: UUID,
     sequence: int,
+    request: Request,
     repository: RepositoryDependency,
     vision_repository: VisionRepositoryDependency,
 ) -> FileResponse:
@@ -285,7 +287,17 @@ async def get_frame_image(
             message="The requested video frame does not exist.",
             retryable=False,
         )
-    if not await AnyPath(frame.image_path).is_file():
+    # Only generated JPEGs for this video may cross the file-serving boundary.
+    # A stale or corrupted database path must never expose .env or other files.
+    image_path = Path(await AnyPath(frame.image_path).resolve())
+    settings: Settings = request.app.state.settings
+    workspace_root = Path(await AnyPath(settings.vision_workspace_root).resolve())
+    video_directory = workspace_root / str(video_id)
+    if (
+        not image_path.is_relative_to(video_directory)
+        or image_path.suffix.lower() not in {".jpg", ".jpeg"}
+        or not await AnyPath(image_path).is_file()
+    ):
         raise ApiError(
             status_code=HTTPStatus.NOT_FOUND,
             code="FRAME_IMAGE_NOT_FOUND",
@@ -293,7 +305,7 @@ async def get_frame_image(
             retryable=False,
         )
     return FileResponse(
-        Path(frame.image_path),
+        image_path,
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=86400, immutable"},
     )

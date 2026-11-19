@@ -61,6 +61,7 @@ async def run_async_migrations() -> None:
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        hide_parameters=True,
         connect_args={"server_settings": POSTGRES_SERVER_SETTINGS},
     )
 

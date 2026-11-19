@@ -136,10 +136,10 @@ def trial(base_url, case, mode, query):
             )
             record.update(status="passed", result=result, trace=trace["payload"])
         except urllib.error.HTTPError as exc:
-            try:
-                error = json.loads(exc.read())
-            except (ValueError, UnicodeDecodeError):
-                error = {"error": {"code": f"HTTP_{exc.code}"}}
+            exc.close()
+            # Provider/proxy response bodies can contain credentials or private
+            # diagnostics. Persist only the HTTP status for failed trials.
+            error = {"error": {"code": f"HTTP_{exc.code}"}}
             record.update(status="failed", error=error)
         except (OSError, ValueError, KeyError) as exc:
             record.update(status="failed", error={"error": {"code": type(exc).__name__}})

@@ -1,6 +1,9 @@
 """Metric checks independent of services and model quality."""
 
+import io
 import unittest
+import urllib.error
+from email.message import Message
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -8,6 +11,17 @@ from phase_3_benchmark import fingerprint, metrics, overlap_score, scored, summa
 
 
 class MetricsTests(unittest.TestCase):
+    def test_failed_trial_does_not_persist_raw_response_body(self):
+        secret = "synthetic-credential-in-provider-error"
+        failure = urllib.error.HTTPError(
+            "http://localhost", 503, "Unavailable", Message(), io.BytesIO(secret.encode())
+        )
+        with patch("phase_3_benchmark.request", side_effect=failure), patch("phase_3_benchmark.GpuSampler") as gpu:
+            gpu.return_value.__enter__.return_value = SimpleNamespace(samples=[], error=None)
+            result = trial("http://localhost", {"id": "case", "video_id": "video"}, "reranked", "query")
+        self.assertEqual(result["error"], {"error": {"code": "HTTP_503"}})
+        self.assertNotIn(secret, repr(result))
+
     def test_strict_trial_rejects_fallback_and_unresolved_results(self):
         for degraded, status in ((True, "resolved"), (False, "anchor_selection_required")):
             with (
