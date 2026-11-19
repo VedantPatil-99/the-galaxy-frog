@@ -808,3 +808,22 @@ Hosted acceptance is limited to small synthetic Gemini answer and chapter calls.
 answer quality, larger Study materials, hosted vision/OCR/ASR/Bedrock acceptance, account billing,
 and comparative latency remain unverified. Optional adapters may remain disabled after code
 delivery. The workspace redesign and Phase 9 research are not authorized by this closeout.
+
+## Active program — Workspace redesign
+
+Authorized by the user on 2026-11-19. Phase 8 merge is user-confirmed; this program starts from
+merged `origin/main` at `4299de6` on `feat/workspace`, without repeating the Phase 8 audit.
+See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
+[design direction](docs/WORKSPACE_DESIGN.md), and [setup stages](docs/WORKSPACE_SETUP.md).
+
+- [x] W0 — Compare layout concepts, record the selected working-surface design, require local
+  design skills, specify Doto from Google Fonts, and document installation stages.
+- [ ] W1.1 — Local owner-scoped account/notebook persistence, additive migration, isolation,
+  validation, and transaction tests. In progress; no HTTP exposure or automatic legacy ownership.
+- [ ] W1.2 — Verified Supabase authentication, invite-only creators, generated HTTP contracts,
+  and authorization fences covering existing resource paths before workspace exposure.
+- [ ] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
+- [ ] W2 — Implement both workspace layouts and the selected typography system after W1.
+
+Later packets remain ordered by the workspace plan. No Supabase project is configured yet;
+live authentication/storage acceptance is pending. Do not access Notion for this program.
