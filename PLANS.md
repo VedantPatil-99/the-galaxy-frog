@@ -820,16 +820,17 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   design skills, specify Doto from Google Fonts, and document installation stages.
 - [x] W1.1 — Local owner-scoped account/notebook persistence, additive migration, isolation,
   validation, and transaction tests. No HTTP exposure or automatic legacy ownership.
-- [ ] W1.2 — Verified Supabase authentication, invite-only creators, generated HTTP contracts,
+- [x] W1.2 — Verified Supabase authentication, invite-only creators, generated HTTP contracts,
   and authorization fences covering existing resource paths before workspace exposure.
   Implementation, local API checks, and both production build modes are verified.
-  Live Supabase configuration and acceptance remain open.
+  Real Supabase email-session acceptance through FastAPI passed on 2026-11-20.
 - [ ] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
 - [ ] W2 — Implement both workspace layouts and the selected typography system after W1.
 
-Later packets remain ordered by the workspace plan. A separate Supabase project has been
-created with approval, but application authentication/storage configuration and live acceptance
-are pending. Do not access Notion for this program.
+The next active checkpoint is W1.3; later packets remain ordered by the workspace plan. A separate
+Supabase project and local Auth configuration are approved, connected, and live-verified.
+Storage configuration, browser sign-in UI, hosted deployment/CI, and merge are separate gates.
+Do not access Notion for this program.
 
 ### W1.1 local verification — 2026-11-19
 
@@ -865,6 +866,41 @@ Supabase authentication/storage acceptance are pending.
   `galaxy-frog` project was then created in Mumbai after the operator approved creation only at
   $0 and Supabase quoted $0/month. It reports `ACTIVE_HEALTHY`. No hosted SQL, migrations, or
   authentication-setting changes were made. Application credentials/configuration and live
-  acceptance remain pending; the unrelated pre-existing project was not modified.
-- Browser sign-in/session UI belongs to W2. Hosted CI, merge, and live provider acceptance are
-  unverified. W1.2 remains open for its recorded gates; do not report it as fully complete.
+  acceptance were completed on 2026-11-20 below; the unrelated project was not modified.
+- Browser sign-in/session UI belongs to W2. Hosted CI, merge, and hosted application deployment
+  remain separate from the completed local/API packet and live Auth acceptance below.
+
+### W1.2 live Auth acceptance — 2026-11-20
+
+- Live acceptance passed at **16:52:35 IST (11:22:35 UTC)**: real creator identity was verified
+  through FastAPI against Supabase Auth; private notebook access succeeded; anonymous requests
+  returned 401; legacy-resource requests returned 403; private responses used `no-store`; and
+  Supabase accepted logout of the test session. All six receipt checks are true.
+- With approval, connected the project's URL and modern publishable key in ignored `.env`,
+  added the selected creator email to the allowlist, and requested a test sign-in email.
+  Two further fresh-link tests were authorized in the conversation; the third email completed
+  acceptance after the user paused Raycast previews. Earlier receipts are preserved and the
+  helper prevents unapproved automatic resends.
+- Added `scripts/workspace_auth_smoke.py` and its focused tests. The helper accepts proof only
+  through a hidden local input, pins confirmation/session origins, validates identity through
+  the real FastAPI boundary against Supabase, checks private notebook access and denial paths,
+  and logs out the test session. It only uses the existing localhost application DB. Token input
+  and session values stay in memory; ignored receipts store only status, time, and boolean checks.
+- Earlier replay attempts returned `otp_expired`. Approved read-only Auth logs showed an earlier
+  successful login four seconds before the helper exchanged that link. The next test worked
+  after Raycast link previews were paused; the earlier opener remains unproven. A synthetic
+  Windows dialog transport check also returned exactly the supplied test address.
+- All 19 helper behavior tests, Ruff lint/format, and targeted strict Pyright passed. No hosted
+  database SQL, migrations, or Auth-template/settings changes were performed.
+- Final backend/PostgreSQL regression gate after local Auth configuration: **1,536 passed,
+  four optional skips, 100% statement/branch coverage**. Full backend Ruff lint/format and strict
+  Pyright, plus the helper's explicit lint/format/type checks, passed. No frontend or HTTP schema
+  changes were introduced; the previously verified frontend, contract, and build gates stand.
+- No new dependencies, frontend changes, or later-phase functionality were introduced. The
+  ordinary local application has not been switched to private mode. Setup/consent instructions
+  are recorded in [WORKSPACE_SETUP.md](docs/WORKSPACE_SETUP.md).
+- Corrected the proposed OTP template route after checking Supabase's 2026-06-03 breaking change:
+  this new Free project cannot edit templates with built-in SMTP. Custom SMTP permits editing
+  without Pro; Send Email Hook is another Free-plan option requiring a provider and handler.
+  These are optional later delivery setup. The successful check needed no SMTP provider, hook,
+  template change, paid upgrade, or installation.

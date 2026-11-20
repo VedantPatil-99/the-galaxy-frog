@@ -1,15 +1,15 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: Implementation started, 2026-11-19, on `feat/workspace`; W0 and W1.1 are locally complete, and W1.2's local code/build checks pass. Live Supabase configuration and authentication acceptance remain pending.
+Status: Implementation started, 2026-11-19, on `feat/workspace`; W0 through W1.2 are locally complete, including live Supabase email-session acceptance. W1.3 private storage/legacy ownership is the next checkpoint, followed by the workspace shell in W2.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated: 2026-11-19 (Asia/Calcutta) — local skill requirements, UI design process, and typography direction.
+Updated: 2026-11-20 (Asia/Calcutta) — local Auth connection, live acceptance status, and numeric-code setup alternative.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
 
 Phase 8 merge was confirmed by the user on 2026-11-19. Workspace work starts from merged `origin/main` at `4299de6`; do not repeat the Phase 8 status audit. Keep the completed provider/consent behavior intact.
 
-Follow [the design direction](WORKSPACE_DESIGN.md) and [the staged setup instructions](WORKSPACE_SETUP.md). A separate `galaxy-frog` Supabase project has been created with explicit approval at a quoted $0/month. Hosted authentication and storage configuration/acceptance remain pending.
+Follow [the design direction](WORKSPACE_DESIGN.md) and [the staged setup instructions](WORKSPACE_SETUP.md). A separate `galaxy-frog` Supabase project has been created with explicit approval at a quoted $0/month, and its approved local Auth connection passed live email-session acceptance through FastAPI. Storage configuration/acceptance and the browser sign-in UI remain pending in their later packets.
 
 The redesigned product will provide:
 
@@ -317,8 +317,10 @@ Use the user's confirmed Git identity for both author and committer in this buil
 
 Keep commits focused and preserve the installed skills/MCP configuration. Do not access Notion. Phase 8 documentation timing remains unchanged.
 
-**Active work:** W1.2 adds verified Supabase bearer authentication, explicit creator access, private notebook APIs, generated contracts, and a fail-closed boundary around legacy resources. Follow [ADR 0010](adr/0010-private-workspace-auth.md). Private storage and explicit legacy-data migration follow in W1.3 before the workspace shell and browser sign-in/session UI. Track local checks separately from live Supabase acceptance, hosted CI, and merge status in `PLANS.md`.
+**Next active checkpoint:** W1.3 adds private storage authorization and explicit legacy-resource ownership migration before the workspace shell and browser sign-in/session UI in W2. W1.2's verified Supabase bearer authentication, explicit creator access, private notebook APIs, generated contracts, and legacy-resource lock passed local checks and live email-session acceptance. Follow [ADR 0010](adr/0010-private-workspace-auth.md). Track local checks separately from hosted deployment/CI and merge status in `PLANS.md`.
 
 Supabase plugin use requires the user's approval. Read-only organization/project discovery was approved on 2026-11-19; project creation, SQL, migrations, and authentication configuration require approval for the specific proposed action. Installation of a plugin alone does not authorize those changes.
 
 On 2026-11-19, the user separately approved creating `galaxy-frog` in their organization, in Mumbai, only at $0. Supabase quoted $0/month and the project was created successfully. This did not authorize hosted SQL, migrations, authentication-setting changes, or paid upgrades.
+
+On 2026-11-20, the user approved connecting Galaxy Frog using their creator email and sending a test sign-in email, then approved a retry and read-only Auth log inspection. A further fresh-link test after the user paused Raycast previews passed at 16:52:35 IST: real creator identity, private notebook access, anonymous denial, the legacy-resource lock, private-response caching protection, and test-session logout all passed. Three email requests were accepted in total. The project URL/publishable key and creator allowlist are configured in ignored `.env`; verification used the existing localhost application database. No SMTP provider, email hook, or Auth-template change was needed. Further email requests, hosted database SQL, migrations, and authentication-setting/template changes still need approval for their specific scope.

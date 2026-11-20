@@ -4,16 +4,18 @@ Date: 2026-11-19
 
 ## Status
 
-Accepted for the W1.2 local implementation. Live Supabase sign-in, Google/email flows,
-private storage, hosted CI, and merge remain separate acceptance gates.
+Accepted for W1.2. Live Supabase email-session acceptance through the local FastAPI application
+passed on 2026-11-20. Browser sign-in/cookies, Google OAuth, private storage, hosted deployment,
+CI, and merge remain separate acceptance gates.
 
 ## Context
 
 The existing local application has videos, transcripts, jobs, provider grants, and Study artifacts
 without account ownership. W1.1 introduced account/notebook roots without assigning legacy data.
 Exposing private notebooks must not also expose those unowned resources to signed-in users.
-No Supabase project is configured yet, so local tests must distinguish simulated Auth from live
-identity-provider acceptance.
+At the time of this decision, no Supabase project was configured. Local tests must distinguish
+simulated Auth from live identity-provider acceptance. The separately approved project and local
+connection subsequently passed live email-session acceptance on 2026-11-20.
 
 ## Decision
 

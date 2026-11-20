@@ -1,6 +1,6 @@
 # Workspace setup and installation stages
 
-Updated: 2026-11-19. Local foundations are implemented. A separate `galaxy-frog` Supabase project was created with explicit approval at a quoted $0/month; application configuration and live acceptance remain pending.
+Updated: 2026-11-20. Local foundations are implemented. The separately approved $0/month `galaxy-frog` Supabase project is connected through ignored local configuration. Live Supabase identity verification through FastAPI passed, together with private notebook access and denial checks. Browser sign-in UI and private storage remain later packets.
 
 ## Needed for the first packet
 
@@ -23,13 +23,13 @@ For the full backend coverage gate, use `RUN_DATABASE_INTEGRATION=1 uv run --no-
 
 ## Supabase setup for the authentication and storage packets
 
-A dedicated `galaxy-frog` project was created in Mumbai with explicit user approval after Supabase quoted $0/month. Project readiness is `ACTIVE_HEALTHY`. No hosted SQL, migrations, authentication-setting changes, or paid upgrades were authorized or performed. Keep application configuration and live sign-in/storage acceptance separate from project creation.
+A dedicated `galaxy-frog` project was created in Mumbai with explicit user approval after Supabase quoted $0/month. Project readiness is `ACTIVE_HEALTHY`. The user subsequently approved connecting its URL and modern publishable key in the ignored root `.env`, allowlisting their creator email, and sending a test login email. One retry, read-only Auth log inspection, and a further fresh-link test after pausing Raycast previews were approved in the conversation. Three email requests were accepted in total; the last completed application verification. No hosted database SQL, migrations, authentication-setting changes, or paid upgrades were authorized or performed. The existing local database remains the application database.
 
 The setup needs the project URL, publishable key, a private FastAPI database connection, configured Google sign-in credentials, email-code delivery, allowed callback URLs, and private storage buckets. Keep actual values in ignored local environment files. Never put a service-role key, database password, or provider key in a `NEXT_PUBLIC_*` variable.
 
 ### W1.2 server configuration
 
-The following settings are now consumed by FastAPI and documented in `.env.example`. Keep private mode disabled in the local environment until an actual project is configured. In production, private mode is mandatory even if the flag is false.
+The following settings are now consumed by FastAPI and documented in `.env.example`. The live smoke helper enables private mode only in its own process; the ordinary local environment has not been switched to private mode. In production, private mode is mandatory even if the flag is false.
 
 ```bash
 export WORKSPACE_AUTH_ENABLED=true
@@ -45,11 +45,11 @@ The new API provides `/v1/workspace/status`, `/session`, `/notebooks`, and `/not
 
 Enabling private mode deliberately locks all existing video, transcript, frame, retrieval, Study, provider, and job routes, including for invited creators. These resources remain unavailable until W1.3 adds explicit ownership migration and resource authorization. The signed internal dispatch callback retains its separate authorization boundary. Health and safe workspace readiness are public. See [ADR 0010](adr/0010-private-workspace-auth.md).
 
-No new runtime packages or migration are needed for W1.2 beyond W1.1's `20261119_0018`. The current packet tests the Auth adapter with synthetic responses and real PostgreSQL notebook isolation. Live provider acceptance and browser sign-in/cookie lifecycle remain pending; the sign-in UI is part of the workspace shell.
+No new runtime packages or migration are needed for W1.2 beyond W1.1's `20261119_0018`. The packet tests the Auth adapter with synthetic responses and real PostgreSQL notebook isolation, and now has a successful live Supabase email-session check. Browser sign-in/cookie lifecycle remains pending; the sign-in UI is part of the workspace shell.
 
 ### W1.2 verification
 
-The local backend/PostgreSQL gate passed 1,517 tests with four optional skips and 100% statement/branch coverage. Backend lint/format/types, generated-contract freshness, frontend lint/types, and all 52 frontend tests passed. Both the default Turbopack production build and the supported Webpack production build passed:
+The final local backend/PostgreSQL gate passed **1,536 tests with four optional skips and 100% statement/branch coverage** after local Auth configuration, including 19 helper tests. Backend/helper lint, format, and strict types passed. W1.2's previously verified generated-contract freshness, frontend lint/types, all 52 frontend tests, and both production build modes remain valid: the live-check packet changes no frontend or HTTP schemas.
 
 ```bash
 bun run build
@@ -58,9 +58,52 @@ bun run --cwd apps/web build --webpack
 
 The agent execution environment initially failed during Turbopack loader-worker startup. On 2026-11-19, the user's PowerShell terminal was directly inspected: the normal `bun run build` compiled successfully, completed TypeScript, generated all 10 static pages, finalized optimization, and returned to the prompt. The default-build gate is closed without changing project configuration or machine/security settings.
 
-Supabase read-only discovery and the separately approved $0 project creation completed; live Supabase verification is still pending application configuration. Design and approve a least-privilege hosted application database role separately from migration/admin access before hosted data is enabled.
+Live application acceptance passed at **2026-11-20 16:52:35 IST (11:22:35 UTC)**. The helper exchanged a fresh email link, verified the creator through FastAPI against Supabase Auth, successfully accessed private notebooks, confirmed anonymous requests return 401 and legacy-resource requests return 403, confirmed private responses use `Cache-Control: no-store`, and received a successful logout response for the test session. Its ignored receipt contains only status, timestamp, and boolean check results. These checks used the existing localhost application database; they do not demonstrate a hosted application deployment, browser cookie lifecycle, Google OAuth, or private storage.
 
-Use Supabase's [server-side authentication guidance](https://supabase.com/docs/guides/auth/server-side), with cookie-based sessions and PKCE, when implementing Next.js sign-in/session forwarding. FastAPI remains responsible for verified identity and application ownership. Next.js does not query the application database. Live auth and storage checks stay pending until the project is configured; local tests must label simulated identity clearly.
+Earlier replay attempts returned `otp_expired`; the approved read-only Auth logs showed that the previous link had already completed a login four seconds before the helper exchanged it. The next test passed after the user paused Raycast link previews. This is consistent with prefetching as the cause, but does not prove which process opened the earlier link. No SMTP or template change was needed for the successful check. Design and approve a least-privilege hosted application database role separately from migration/admin access before hosted data is enabled.
+
+### Local live Auth check
+
+`scripts/workspace_auth_smoke.py` uses the configured creator email, Supabase URL/publishable key, and the existing localhost database. It requires the W1.1 workspace tables before sending an email. It never runs hosted SQL or changes Auth settings. No additional package or machine installation is needed.
+
+The approved live check is complete. For a future explicitly authorized test, from the repository root in **Git Bash**, verify the email requested for that test:
+
+```bash
+./backend/.venv/Scripts/python.exe scripts/workspace_auth_smoke.py --verify --email 'your-allowlisted-email@example.com'
+```
+
+On Windows, this opens a password-style paste field that supports Ctrl+V. Use an unopened email confirmation link, a numeric code if the email contains one, or the local browser address obtained after opening the link. Keep these credentials out of chat, command arguments, and shell history. `--terminal-input` retains the hidden terminal prompt as an explicit fallback.
+
+The existing email template sends a link by default, so a numeric code is not expected. If the link was already opened, verification can use the issued session in the returned `http://localhost:3000/#access_token=…` address instead of replaying the one-time link. Other session origins are rejected. The token remains untrusted until the existing FastAPI verifier checks it with the configured Supabase Auth authority. Expired or already-used links without a usable returned session require approval for a fresh email; the helper never resends automatically. See [Supabase passwordless email behavior](https://supabase.com/docs/guides/auth/auth-email-passwordless).
+
+#### Numeric code alternative for link previews
+
+The user reported Raycast previews copied links. A preview opening a one-time Auth link could consume it before verification; Supabase documents prefetching as a cause of invalid/expired link errors. A fresh-link test passed after previews were paused, without configuring another provider. The numeric-code alternatives below remain optional future delivery setup, not a prerequisite for the completed W1.2 check.
+
+**Template availability correction:** Since 2026-06-03, new Free projects using Supabase's built-in SMTP cannot edit Auth email templates. This project was created after that date, so the template-only instructions previously suggested are insufficient. Free projects can customize templates after configuring their own SMTP provider; a Supabase Pro upgrade is not required for that route. See the [specific breaking change](https://supabase.com/changelog/46599-changes-to-email-template-customisation-on-free-tier).
+
+For a manual setup using numeric codes:
+
+1. Obtain an email provider's SMTP host, port, username, password, and an authorized sender address. Provider signup, sender/domain verification, and any provider charges are separate from Supabase.
+2. Configure these in the `galaxy-frog` project's [SMTP Settings](https://supabase.com/dashboard/project/uuzjwtdpkmbzxslpojrb/auth/smtp), keeping credentials private. No SMTP provider has been configured by the agent.
+3. Open [Email Templates](https://supabase.com/dashboard/project/uuzjwtdpkmbzxslpojrb/auth/templates). Select **Magic Link** (or **Magic link / OTP**). Set the subject to `Your Galaxy Frog sign-in code` and replace its body with:
+
+   ```html
+   <h2>Your Galaxy Frog sign-in code</h2>
+   <p>Enter this code in Galaxy Frog:</p>
+   <p><strong>{{ .Token }}</strong></p>
+   ```
+
+4. Save the template. To use codes for first-time accounts too, apply the same body to **Confirm signup**. The current test account has already confirmed its email.
+5. Explicitly approve one new test email after saving. Enter its numeric code in the existing local verification window; the helper already supports email OTPs. Template changes do not replace previously sent emails.
+
+The user also identified the [Send Email Hook](https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook). It is [available on Free and Pro](https://supabase.com/docs/guides/auth/auth-hooks) and replaces built-in email delivery with a custom provider. It requires a deployed handler, webhook signature verification, and private provider/hook credentials; it is an alternative to custom SMTP, not a template-only switch. The guide shows an Edge Function with Resend. No hook implementation, deployment, or hosted configuration change is authorized merely by discussing this option.
+
+For a further test using the existing built-in service, temporarily pausing Raycast's link previews before handling a newly approved link avoids adding an email provider. Whether it resolves this instance still needs live verification. The built-in provider allows two emails per hour, so another request may need to wait for its allowance after the two approved sends. Custom SMTP and hooks have their own limits and provider requirements. Do not increase limits or configure paid email services automatically. See [email prefetching and OTP templates](https://supabase.com/docs/guides/auth/auth-email-templates#email-prefetching) and [Auth rate limits](https://supabase.com/docs/guides/auth/rate-limits).
+
+The check verifies the creator identity, notebook access, anonymous denial, the legacy-resource lock, and `Cache-Control: no-store`, then attempts to log out the test session. It stores only status/time/boolean results in ignored `tmp/workspace-auth/verification.json`. This receipt blocks another email request through `--send-code` by default. Only after separate explicit approval for one further email may `--fresh-email-approved` be added; it archives the previous receipt before one new dispatch, without retries. Never remove the receipt to bypass authorization. The helper has 19 focused tests covering origin restrictions, the separate resend approval, one-attempt dispatch, used-link handling, and credential redaction.
+
+Use Supabase's [server-side authentication guidance](https://supabase.com/docs/guides/auth/server-side), with cookie-based sessions and PKCE, when implementing Next.js sign-in/session forwarding. The smoke helper's handling of the default email redirect is only a local acceptance aid. FastAPI remains responsible for verified identity and application ownership. Next.js does not query the application database. Browser sign-in and storage acceptance belong to their later packets; local tests must label simulated identity clearly.
 
 ## Application dependencies added when needed
 
