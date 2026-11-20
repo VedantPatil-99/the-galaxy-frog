@@ -118,6 +118,10 @@ async def test_docs_and_openapi_are_available() -> None:
         "/v1/workspace/session",
         "/v1/workspace/notebooks",
         "/v1/workspace/notebooks/{notebook_id}",
+        "/v1/workspace/notebooks/{notebook_id}/sources",
+        "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/transcript",
+        "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/frames",
+        "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/frames/{sequence}/image",
     }
 
     ready_path = cast(dict[str, object], paths["/health/ready"])

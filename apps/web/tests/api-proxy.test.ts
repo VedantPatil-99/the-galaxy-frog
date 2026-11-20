@@ -45,6 +45,7 @@ describe("API proxy", () => {
             "X-Correlation-ID": "backend-id",
             "X-Private-Header": "not-forwarded",
             "WWW-Authenticate": "Bearer",
+            "X-Content-Type-Options": "nosniff",
           },
         },
       )
@@ -69,6 +70,7 @@ describe("API proxy", () => {
     expect(response.headers.get("X-Private-Header")).toBeNull()
     expect(response.headers.get("Cache-Control")).toBe("no-store")
     expect(response.headers.get("WWW-Authenticate")).toBe("Bearer")
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff")
   })
 
   test("rejects traversal paths before contacting FastAPI", async () => {

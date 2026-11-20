@@ -825,11 +825,14 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   Implementation, local API checks, and both production build modes are verified.
   Real Supabase email-session acceptance through FastAPI passed on 2026-11-20.
 - [ ] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
+  - [x] Add the local assignment migration, operator command, and authenticated source reads.
+  - [x] Implement the optional private Supabase preview reader with simulated Storage checks.
+  - [ ] Provision the private preview bucket and record live Storage acceptance.
 - [ ] W2 — Implement both workspace layouts and the selected typography system after W1.
 
-The next active checkpoint is W1.3; later packets remain ordered by the workspace plan. A separate
+The active checkpoint is W1.3. Later packets remain ordered by the workspace plan. A separate
 Supabase project and local Auth configuration are approved, connected, and live-verified.
-Storage configuration, browser sign-in UI, hosted deployment/CI, and merge are separate gates.
+Live Storage acceptance, browser sign-in UI, hosted deployment/CI, and merge are separate gates.
 Do not access Notion for this program.
 
 ### W1.1 local verification — 2026-11-19
@@ -849,7 +852,8 @@ Supabase authentication/storage acceptance are pending.
 - Added a request-scoped Supabase Auth verifier using the existing HTTPX dependency, confirmed
   email creator allowlists, HTTPS origin/publishable-key validation, safe errors, and private
   notebook/session APIs with generated OpenAPI/TypeScript contracts. No new runtime packages.
-- In private mode, all 28 legacy API operations are locked pending W1.3 ownership migration.
+- In private mode, all 28 global legacy API operations are locked. W1.3 uses new
+  notebook-scoped routes for assigned resources.
   Production cannot disable this boundary. Existing local development mode is preserved.
   The internal signed callback remains separate. See [ADR 0010](docs/adr/0010-private-workspace-auth.md).
 - Full PostgreSQL/backend gate: **1,517 passed, four optional skips, 100% statement/branch
@@ -904,3 +908,25 @@ Supabase authentication/storage acceptance are pending.
   without Pro; Send Email Hook is another Free-plan option requiring a provider and handler.
   These are optional later delivery setup. The successful check needed no SMTP provider, hook,
   template change, paid upgrade, or installation.
+
+### W1.3 ownership and storage — 2026-11-20
+
+- Migration `20261120_0019` was applied to localhost PostgreSQL. It creates an empty
+  assignment table with RLS and leaves source data in place. Assignments require explicit
+  selection of the owner, notebook, and legacy video IDs. The operator command previews by
+  default, applies an entire batch atomically, and rejects conflicting assignments.
+- New notebook-scoped source, transcript, frame metadata, and preview reads verify the
+  creator and assignment. They preserve original IDs and time intervals and omit local
+  file locations. Existing global routes remain locked in private mode.
+- FastAPI serves bounded JPEGs from local storage or the optional private Supabase bucket.
+  The bucket's privacy is checked before fetching a deterministic object, and failures
+  return errors without switching backends. The proxy forwards the private response
+  headers. No dependencies were added.
+- Application verification uses real PostgreSQL and synthetic Auth and Storage responses.
+  Hosted bucket provisioning, secret configuration, and a live two-identity test remain
+  open. No existing user videos were assigned or uploaded. See
+  [the setup steps](docs/WORKSPACE_SETUP.md#w13-legacy-video-assignments-and-private-previews)
+  and [ADR 0011](docs/adr/0011-private-legacy-source-reads.md).
+- Local verification passed: 1,560 backend tests, four optional skips, and 100% statement
+  and branch coverage with PostgreSQL integration enabled. All 52 frontend tests, lint,
+  formatting, type checks, generated contracts, and the standard production build passed.

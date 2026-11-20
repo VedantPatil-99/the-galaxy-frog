@@ -1,6 +1,6 @@
 # Workspace setup and installation stages
 
-Updated: 2026-11-20. Local foundations are implemented. The separately approved $0/month `galaxy-frog` Supabase project is connected through ignored local configuration. Live Supabase identity verification through FastAPI passed, together with private notebook access and denial checks. Browser sign-in UI and private storage remain later packets.
+Updated: 2026-11-20. Live Supabase email sign-in through FastAPI passed. W1.3 adds explicit local assignments and private source reads. Hosted preview storage and browser sign-in remain pending live acceptance.
 
 ## Needed for the first packet
 
@@ -43,7 +43,7 @@ Use the project's current publishable key, not a secret/service-role key or lega
 
 The new API provides `/v1/workspace/status`, `/session`, `/notebooks`, and `/notebooks/{notebook_id}` under the workspace prefix. All except status require `Authorization: Bearer <user-access-token>`. The existing Next.js proxy forwards this header to FastAPI and preserves the Bearer challenge. Notebook create/rename bodies contain only `title`; the server obtains owner IDs from verified identity.
 
-Enabling private mode deliberately locks all existing video, transcript, frame, retrieval, Study, provider, and job routes, including for invited creators. These resources remain unavailable until W1.3 adds explicit ownership migration and resource authorization. The signed internal dispatch callback retains its separate authorization boundary. Health and safe workspace readiness are public. See [ADR 0010](adr/0010-private-workspace-auth.md).
+Enabling private mode locks the old global video, transcript, frame, retrieval, Study, provider, and job routes. W1.3 provides separate notebook-scoped source, transcript, and frame reads for explicitly assigned videos. The signed internal dispatch callback retains its separate authorization boundary. Health and safe workspace readiness are public. See [ADR 0010](adr/0010-private-workspace-auth.md) and [ADR 0011](adr/0011-private-legacy-source-reads.md).
 
 No new runtime packages or migration are needed for W1.2 beyond W1.1's `20261119_0018`. The packet tests the Auth adapter with synthetic responses and real PostgreSQL notebook isolation, and now has a successful live Supabase email-session check. Browser sign-in/cookie lifecycle remains pending; the sign-in UI is part of the workspace shell.
 
@@ -104,6 +104,48 @@ For a further test using the existing built-in service, temporarily pausing Rayc
 The check verifies the creator identity, notebook access, anonymous denial, the legacy-resource lock, and `Cache-Control: no-store`, then attempts to log out the test session. It stores only status/time/boolean results in ignored `tmp/workspace-auth/verification.json`. This receipt blocks another email request through `--send-code` by default. Only after separate explicit approval for one further email may `--fresh-email-approved` be added; it archives the previous receipt before one new dispatch, without retries. Never remove the receipt to bypass authorization. The helper has 19 focused tests covering origin restrictions, the separate resend approval, one-attempt dispatch, used-link handling, and credential redaction.
 
 Use Supabase's [server-side authentication guidance](https://supabase.com/docs/guides/auth/server-side), with cookie-based sessions and PKCE, when implementing Next.js sign-in/session forwarding. The smoke helper's handling of the default email redirect is only a local acceptance aid. FastAPI remains responsible for verified identity and application ownership. Next.js does not query the application database. Browser sign-in and storage acceptance belong to their later packets; local tests must label simulated identity clearly.
+
+### W1.3 legacy video assignments and private previews
+
+Apply the additive W1.3 schema to the local application database with
+`uv run --no-sync --directory backend python -m alembic upgrade head`. Migration
+`20261120_0019` creates an empty ownership table. Use the account ID and notebook ID of an
+existing creator notebook and the original video ID for each source selected for that notebook.
+The authenticated session and notebook responses include the account and notebook IDs.
+The application's local PostgreSQL `videos` table contains the source IDs and titles.
+
+From the repository root in Git Bash, preview the assignment:
+
+```bash
+uv run --no-sync --directory backend python -m galaxy_frog.entrypoints.workspace_assign_legacy \
+  --owner-id "$CREATOR_ID" --notebook-id "$NOTEBOOK_ID" --video-id "$VIDEO_ID"
+```
+
+Set the shell variables to the selected UUIDs first. Repeat `--video-id` to specify up to
+100 distinct videos. After checking the selection, add `--apply` to that command to commit it.
+The command accepts a localhost database only, applies the batch atomically, and rejects an
+attempt to move a video that already belongs to another notebook. An identical repeat
+reports zero new assignments. Applied assignments can be read under
+`/v1/workspace/notebooks/{notebook_id}/sources`, with transcript and frame routes scoped by
+video ID. Private mode must be enabled. Test with two verified accounts before hosted use.
+
+Local previews use the existing `VISION_WORKSPACE_ROOT`. To activate the optional hosted reader:
+
+1. Configure a Supabase bucket named `workspace-previews` as **private** and ensure Storage
+   has no policies granting client roles access to this bucket. Limit uploads to JPEGs up to 8 MiB.
+2. Stage an approved JPEG under `<video UUID>/<frame UUID>.jpg` using the matching frame record.
+   Use a synthetic JPEG fixture for the first live check.
+3. Store a separate modern secret key in FastAPI's private environment as
+   `SUPABASE_STORAGE_SECRET_KEY`, and set `WORKSPACE_PREVIEW_STORAGE=supabase`. The existing
+   `SUPABASE_URL` selects the project. The secret key is elevated and belongs only to this server.
+4. Verify the owning creator can fetch the preview through FastAPI. Check that anonymous
+   requests receive 401, another creator receives 404, and neither browser role can fetch the
+   object directly from Storage. Confirm the served response uses `Cache-Control: no-store`.
+
+Hosted provisioning and the live Storage check are pending. The local adapter requires no
+additional dependencies. See [private buckets](https://supabase.com/docs/guides/storage/buckets/fundamentals),
+[Storage access control](https://supabase.com/docs/guides/storage/security/access-control), and
+[Supabase secret keys](https://supabase.com/docs/guides/getting-started/api-keys).
 
 ## Application dependencies added when needed
 

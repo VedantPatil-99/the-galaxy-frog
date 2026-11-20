@@ -36,8 +36,9 @@ connection subsequently passed live email-session acceptance on 2026-11-20.
   non-sensitive workspace readiness remain public.
 - Wrap all existing video, retrieval, frame, Study, provider, and job routes in one legacy guard.
   In private mode they return `LEGACY_RESOURCES_LOCKED`, including for invited creators. W1.3
-  must implement explicit ownership/migration and resource authorization before those paths
-  can be enabled for account use. Registering an account never transfers old data.
+  adds separate notebook-scoped routes with explicit assignments and leaves the global routes
+  locked in private mode. Registering an account never transfers old data. See
+  [ADR 0011](0011-private-legacy-source-reads.md).
 - Preserve the internal QStash callback's separate signature boundary. Never expose it through
   the browser proxy. A user bearer token is not a dispatch signature.
 - New `/v1/workspace` endpoints provide readiness, verified session information, and notebook

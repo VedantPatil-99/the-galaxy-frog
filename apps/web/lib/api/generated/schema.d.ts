@@ -567,6 +567,74 @@ export interface paths {
         patch: operations["rename_notebook_v1_workspace_notebooks__notebook_id__patch"];
         trace?: never;
     };
+    "/v1/workspace/notebooks/{notebook_id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notebook Sources */
+        get: operations["list_notebook_sources_v1_workspace_notebooks__notebook_id__sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/frames": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notebook Frames */
+        get: operations["list_notebook_frames_v1_workspace_notebooks__notebook_id__sources__video_id__frames_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/frames/{sequence}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Notebook Frame Image */
+        get: operations["read_notebook_frame_image_v1_workspace_notebooks__notebook_id__sources__video_id__frames__sequence__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Notebook Transcript */
+        get: operations["read_notebook_transcript_v1_workspace_notebooks__notebook_id__sources__video_id__transcript_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/session": {
         parameters: {
             query?: never;
@@ -1081,7 +1149,7 @@ export interface components {
         };
         /**
          * Notebook
-         * @description An owned Galaxy; source membership is introduced in a later packet.
+         * @description An owned Galaxy notebook.
          */
         Notebook: {
             /**
@@ -2294,6 +2362,22 @@ export interface components {
              */
             created_at: string;
         };
+        /** WorkspaceFrameResponse */
+        WorkspaceFrameResponse: {
+            /** Capture Ms */
+            capture_ms: number | null;
+            /** End Ms */
+            end_ms: number;
+            /**
+             * Frame Id
+             * Format: uuid
+             */
+            frame_id: string;
+            /** Sequence */
+            sequence: number;
+            /** Start Ms */
+            start_ms: number;
+        };
         /** WorkspaceSessionResponse */
         WorkspaceSessionResponse: {
             account: components["schemas"]["WorkspaceAccount"];
@@ -2305,6 +2389,13 @@ export interface components {
              * @constant
              */
             role: "creator";
+        };
+        /** WorkspaceSourceListResponse */
+        WorkspaceSourceListResponse: {
+            /** Next After */
+            next_after: string | null;
+            /** Sources */
+            sources: components["schemas"]["WorkspaceVideoSourceResponse"][];
         };
         /** WorkspaceStatusResponse */
         WorkspaceStatusResponse: {
@@ -2319,6 +2410,30 @@ export interface components {
              * @enum {string}
              */
             mode: "local" | "workspace";
+        };
+        /** WorkspaceTranscriptResponse */
+        WorkspaceTranscriptResponse: {
+            /** Cues */
+            cues: components["schemas"]["TranscriptCueResponse"][];
+            /** Retrieval Units */
+            retrieval_units: components["schemas"]["RetrievalUnitResponse"][];
+            source: components["schemas"]["WorkspaceVideoSourceResponse"];
+            transcription: components["schemas"]["TranscriptionRunResponse"] | null;
+        };
+        /** WorkspaceVideoSourceResponse */
+        WorkspaceVideoSourceResponse: {
+            /** Canonical Url */
+            canonical_url: string | null;
+            /** Duration Ms */
+            duration_ms: number;
+            source_kind: components["schemas"]["VideoSourceKind"];
+            /** Title */
+            title: string;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
         };
     };
     responses: never;
@@ -4012,6 +4127,281 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Notebook"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_notebook_sources_v1_workspace_notebooks__notebook_id__sources_get: {
+        parameters: {
+            query?: {
+                after?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSourceListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_notebook_frames_v1_workspace_notebooks__notebook_id__sources__video_id__frames_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFrameResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_notebook_frame_image_v1_workspace_notebooks__notebook_id__sources__video_id__frames__sequence__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+                sequence: number;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private JPEG preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_notebook_transcript_v1_workspace_notebooks__notebook_id__sources__video_id__transcript_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTranscriptResponse"];
                 };
             };
             /** @description Unauthorized */

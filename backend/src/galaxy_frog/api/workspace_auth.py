@@ -30,7 +30,7 @@ def prevent_workspace_caching(response: Response) -> None:
 
 
 async def require_legacy_resource_access(request: Request) -> None:
-    """Lock every pre-workspace route until explicit ownership migration exists."""
+    """Keep global pre-workspace routes outside the private API."""
 
     if workspace_settings(request).workspace_auth_required:
         raise ApiError(
@@ -38,7 +38,7 @@ async def require_legacy_resource_access(request: Request) -> None:
             code="LEGACY_RESOURCES_LOCKED",
             message="This resource is unavailable in the private workspace.",
             retryable=False,
-            suggested_action="Use workspace resources. Legacy ownership migration is not enabled.",
+            suggested_action="Use notebook-scoped workspace routes for assigned sources.",
         )
 
 

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     supabase_publishable_key: SecretStr | None = None
     workspace_creator_emails: tuple[EmailStr, ...] = ()
     workspace_auth_timeout_seconds: float = Field(default=5, gt=0, le=15)
+    workspace_preview_storage: Literal["local", "supabase"] = "local"
+    supabase_storage_secret_key: SecretStr | None = None
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "bge-m3"
     embedding_model_revision: str = "ollama"
@@ -165,6 +167,16 @@ class Settings(BaseSettings):
         if value is None or not value.get_secret_value().strip():
             return None
         return SecretStr(value.get_secret_value().strip())
+
+    @field_validator("supabase_storage_secret_key")
+    @classmethod
+    def validate_supabase_storage_secret_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        key = value.get_secret_value().strip()
+        if re.fullmatch(r"sb_secret_[A-Za-z0-9_-]{1,256}", key) is None:
+            raise ValueError("Use a modern Supabase secret key for server storage.")
+        return SecretStr(key)
 
     @field_validator("gemini_project_id", "gemini_study_project_id", "gemini_visual_project_id")
     @classmethod

@@ -1,0 +1,278 @@
+"""Exercise explicit assignments and private reads through FastAPI and PostgreSQL."""
+
+import os
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock
+from uuid import UUID, uuid4
+
+import httpx
+import pytest
+import pytest_asyncio
+from sqlalchemy import delete, text
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from tests.test_workspace_auth import auth_settings
+
+from galaxy_frog.api.app import create_app
+from galaxy_frog.api.routes import workspace as workspace_routes
+from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
+from galaxy_frog.config import Settings
+from galaxy_frog.db.models import VideoFrameRow, VideoRow
+from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
+from galaxy_frog.db.workspace import WorkspaceAccountRow, WorkspaceNotebookRow, WorkspaceRepository
+from galaxy_frog.db.workspace_sources import (
+    LegacySourceAssignmentError,
+    WorkspaceLegacySourceRow,
+    WorkspaceSourceRepository,
+)
+from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
+from galaxy_frog.domain.videos.models import (
+    CaptionKind,
+    SafeVideoMetadata,
+    SourceReference,
+    VideoSourceKind,
+)
+from galaxy_frog.domain.workspace import NotebookDraft, NotebookNotFound, VerifiedWorkspaceIdentity
+from galaxy_frog.entrypoints.workspace_assign_legacy import assign
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_DATABASE_INTEGRATION") != "1", reason="requires migrated PostgreSQL"
+)
+
+JPEG = b"\xff\xd8\xfffixture\xff\xd9"
+OWNER_EMAIL = "owner@example.com"
+OTHER_EMAIL = "other@example.com"
+OWN = {"authorization": "Bearer owner-token"}
+OTHER = {"authorization": "Bearer other-token"}
+CUE_ID = "c" * 64
+UNIT_ID = "a" * 64
+
+
+@pytest_asyncio.fixture
+async def workspace(
+    tmp_path: Path,
+) -> AsyncGenerator[tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID]]:
+    owner, outsider = uuid4(), uuid4()
+    identities = {
+        "owner-token": VerifiedWorkspaceIdentity(account_id=owner, email=OWNER_EMAIL),
+        "other-token": VerifiedWorkspaceIdentity(account_id=outsider, email=OTHER_EMAIL),
+    }
+    settings = auth_settings(
+        database_url=Settings().database_url,
+        workspace_creator_emails=[OWNER_EMAIL, OTHER_EMAIL],
+        vision_workspace_root=tmp_path / "vision",
+    )
+    app = create_app(settings)
+    verifier = Mock(verify=AsyncMock(side_effect=identities.__getitem__))
+    app.dependency_overrides[get_workspace_identity_verifier] = lambda: verifier
+    async with app.router.lifespan_context(app):
+        engine: AsyncEngine = app.state.database_engine
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        video_ids: list[UUID] = []
+        frame_id = uuid4()
+        try:
+            async with sessions() as session:
+                videos = SqlAlchemyVideoRepository(session)
+                for kind in (
+                    VideoSourceKind.LOCAL_FILE,
+                    VideoSourceKind.YOUTUBE,
+                    VideoSourceKind.YOUTUBE,
+                ):
+                    external_id = str(uuid4())
+                    is_local = kind is VideoSourceKind.LOCAL_FILE
+                    reference = SourceReference(
+                        kind,
+                        external_id,
+                        "file:///private/source.mp4"
+                        if is_local
+                        else f"https://www.youtube.com/watch?v={external_id}",
+                    )
+                    cue = TranscriptCue(
+                        CUE_ID,
+                        reference,
+                        "en",
+                        0,
+                        123,
+                        456,
+                        "Original evidence",
+                        track_id="original-track",
+                        caption_kind=CaptionKind.MANUAL,
+                    )
+                    unit = RetrievalUnit(UNIT_ID, 123, 456, cue.text, (cue.cue_id,))
+                    video = await videos.save_import(
+                        SafeVideoMetadata(reference, "Evidence fixture", 1000),
+                        (cue,) if is_local else (),
+                        (unit,) if is_local else (),
+                    )
+                    video_ids.append(video.video_id)
+                preview_dir = settings.vision_workspace_root / str(video_ids[0])
+                preview_dir.mkdir(parents=True)
+                valid_path = preview_dir / "preview.jpg"
+                valid_path.write_bytes(JPEG)
+                outside_path = tmp_path / "outside.jpg"
+                outside_path.write_bytes(JPEG)
+                for sequence, path in enumerate((valid_path, outside_path)):
+                    session.add(
+                        VideoFrameRow(
+                            id=frame_id if sequence == 0 else uuid4(),
+                            video_id=video_ids[0],
+                            sequence=sequence,
+                            source="periodic",
+                            capture_ms=123,
+                            start_ms=120,
+                            end_ms=240,
+                            is_duplicate=sequence == 1,
+                            image_path=str(path),
+                            created_at=datetime.now(UTC),
+                        )
+                    )
+                await session.commit()
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                yield client, engine, owner, outsider, tuple(video_ids), frame_id
+        finally:
+            async with sessions.begin() as session:
+                await session.execute(
+                    delete(WorkspaceLegacySourceRow).where(
+                        WorkspaceLegacySourceRow.video_id.in_(video_ids)
+                    )
+                )
+                await session.execute(delete(VideoRow).where(VideoRow.id.in_(video_ids)))
+                await session.execute(
+                    delete(WorkspaceNotebookRow).where(
+                        WorkspaceNotebookRow.owner_id.in_([owner, outsider])
+                    )
+                )
+                await session.execute(
+                    delete(WorkspaceAccountRow).where(WorkspaceAccountRow.id.in_([owner, outsider]))
+                )
+
+
+@pytest.mark.asyncio
+async def test_migrated_sources_preserve_evidence_and_never_cross_notebook_boundaries(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, engine, owner, outsider, videos, frame_id = workspace
+    created = await client.post("/v1/workspace/notebooks", headers=OWN, json={"title": "Evidence"})
+    assert created.status_code == 201
+    notebook_id = UUID(created.json()["notebook_id"])
+    path = f"/v1/workspace/notebooks/{notebook_id}/sources"
+    source = f"{path}/{videos[0]}"
+    assert (await client.get(path, headers=OWN)).json() == {"sources": [], "next_after": None}
+    assert (await client.get(f"{source}/transcript", headers=OWN)).status_code == 404
+
+    settings = Settings()
+    assert await assign(settings, owner, notebook_id, videos[:2], apply=False) == 2
+    assert (await client.get(path, headers=OWN)).json()["sources"] == []
+    assert await assign(settings, owner, notebook_id, videos[:2], apply=True) == 2
+    assert await assign(settings, owner, notebook_id, videos[:2], apply=True) == 0
+    page = (await client.get(f"{path}?limit=1", headers=OWN)).json()
+    bottom = (await client.get(f"{path}?limit=1&after={page['next_after']}", headers=OWN)).json()
+    assert [item["video_id"] for item in page["sources"] + bottom["sources"]] == [
+        str(item) for item in sorted(videos[:2])
+    ]
+    assert bottom["next_after"] is None
+
+    async with async_sessionmaker(engine)() as session:
+        notebooks = WorkspaceRepository(session)
+        await notebooks.register_account(outsider)
+        other_notebook = await notebooks.create_notebook(outsider, NotebookDraft(title="Other"))
+        await session.commit()
+        assignments = WorkspaceSourceRepository(session)
+        with pytest.raises(NotebookNotFound):
+            await assignments.assign_legacy_videos(outsider, notebook_id, videos)
+        with pytest.raises(LegacySourceAssignmentError, match="distinct video IDs"):
+            await assignments.assign_legacy_videos(owner, notebook_id, [videos[0], videos[0]])
+        with pytest.raises(LegacySourceAssignmentError, match="do not exist"):
+            await assignments.assign_legacy_videos(owner, notebook_id, [videos[2], uuid4()])
+        with pytest.raises(LegacySourceAssignmentError, match="already assigned"):
+            await assignments.assign_legacy_videos(outsider, other_notebook.notebook_id, videos)
+        await session.commit()
+        flags = await session.execute(
+            text(
+                "SELECT relrowsecurity, "
+                "(SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND "
+                "tablename = 'workspace_legacy_sources') "
+                "FROM pg_class WHERE oid = 'public.workspace_legacy_sources'::regclass"
+            )
+        )
+        assert flags.one() == (True, 0)
+    other_path = f"/v1/workspace/notebooks/{other_notebook.notebook_id}/sources"
+    assert (await client.get(other_path, headers=OTHER)).json()["sources"] == []
+    assert (await client.get(path, headers=OTHER)).status_code == 404
+    assert (await client.get(f"{path}/{videos[2]}/transcript", headers=OWN)).status_code == 404
+
+    transcript = await client.get(f"{source}/transcript", headers=OWN)
+    assert transcript.status_code == 200
+    assert transcript.headers["cache-control"] == "no-store"
+    body = transcript.json()
+    assert body["source"]["canonical_url"] is None and "file:" not in transcript.text
+    assert body["cues"][0]["cue_id"] == CUE_ID
+    assert body["cues"][0]["origin"] == "caption"
+    assert body["cues"][0]["track_id"] == "original-track"
+    unit = body["retrieval_units"][0]
+    assert (unit["retrieval_unit_id"], unit["start_ms"], unit["end_ms"], unit["cue_ids"]) == (
+        UNIT_ID,
+        123,
+        456,
+        [CUE_ID],
+    )
+
+    frames = await client.get(f"{source}/frames", headers=OWN)
+    assert frames.json() == [
+        {
+            "frame_id": str(frame_id),
+            "sequence": 0,
+            "start_ms": 120,
+            "end_ms": 240,
+            "capture_ms": 123,
+        }
+    ]
+    preview = f"{source}/frames/0/image"
+    response = await client.get(preview, headers=OWN)
+    assert response.content == JPEG and response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-type"] == "image/jpeg"
+    for suffix in ("transcript", "frames", "frames/0/image"):
+        assert (await client.get(f"{source}/{suffix}")).status_code == 401
+        assert (await client.get(f"{source}/{suffix}", headers=OTHER)).status_code == 404
+        assert (
+            await client.get(f"{other_path}/{videos[0]}/{suffix}", headers=OTHER)
+        ).status_code == 404
+    for sequence in (1, 2):
+        denied = await client.get(f"{source}/frames/{sequence}/image", headers=OWN)
+        assert denied.status_code == 404
+        assert denied.json()["error"]["code"] == "WORKSPACE_PREVIEW_NOT_FOUND"
+    assert (
+        await client.get(f"/v1/videos/{videos[0]}/frames/0/image", headers=OWN)
+    ).status_code == 403
+
+    remote = AsyncMock(return_value=JPEG)
+    monkeypatch.setattr(workspace_routes, "read_supabase_preview", remote)
+    monkeypatch.setattr(
+        workspace_routes,
+        "workspace_settings",
+        Mock(return_value=auth_settings(workspace_preview_storage="supabase")),
+    )
+    unavailable = await client.get(preview, headers=OWN)
+    assert unavailable.status_code == 503
+    assert unavailable.json()["error"]["code"] == "WORKSPACE_PREVIEW_STORAGE_UNAVAILABLE"
+    remote.assert_not_awaited()
+    monkeypatch.setattr(
+        workspace_routes,
+        "workspace_settings",
+        Mock(
+            return_value=auth_settings(
+                workspace_preview_storage="supabase",
+                supabase_storage_secret_key="sb_secret_synthetic",
+            )
+        ),
+    )
+    assert (await client.get(preview, headers=OTHER)).status_code == 404
+    remote.assert_not_awaited()
+    assert (await client.get(preview, headers=OWN)).content == JPEG
+    remote.assert_awaited_once()

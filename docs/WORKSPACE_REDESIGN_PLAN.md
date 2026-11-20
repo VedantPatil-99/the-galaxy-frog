@@ -1,6 +1,6 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: Implementation started, 2026-11-19, on `feat/workspace`; W0 through W1.2 are locally complete, including live Supabase email-session acceptance. W1.3 private storage/legacy ownership is the next checkpoint, followed by the workspace shell in W2.
+Status: Implementation started on `feat/workspace`. W0 through W1.2 are complete, including live Supabase email-session acceptance. W1.3 has local ownership and private source reads, with hosted preview Storage acceptance pending. The workspace shell follows in W2.
 Saved: 2026-11-18 (Asia/Calcutta).
 Updated: 2026-11-20 (Asia/Calcutta) — local Auth connection, live acceptance status, and numeric-code setup alternative.
 This document records the agreed future workspace program. It is separate from Phase 8.
@@ -311,13 +311,12 @@ Maintain generated-contract freshness, frontend lint/type/build checks, behavior
 
 Legacy records require an explicit ownership migration. Never assign existing private data automatically to the first user who signs up. Preserve existing source identifiers and citations.
 
-Use the user's confirmed Git identity for both author and committer in this build:
-
-`VedantPatil-99 <vedantpatil9977@gmail.com>`
+Use the user's globally configured Git identity for commits on this laptop. Per-command
+author and committer overrides are unnecessary.
 
 Keep commits focused and preserve the installed skills/MCP configuration. Do not access Notion. Phase 8 documentation timing remains unchanged.
 
-**Next active checkpoint:** W1.3 adds private storage authorization and explicit legacy-resource ownership migration before the workspace shell and browser sign-in/session UI in W2. W1.2's verified Supabase bearer authentication, explicit creator access, private notebook APIs, generated contracts, and legacy-resource lock passed local checks and live email-session acceptance. Follow [ADR 0010](adr/0010-private-workspace-auth.md). Track local checks separately from hosted deployment/CI and merge status in `PLANS.md`.
+**Active checkpoint:** W1.3 adds private storage authorization and explicit legacy video ownership before the workspace shell in W2. The operator migration and notebook-scoped API preserve existing citation and frame provenance. The optional Supabase preview reader requires live acceptance with a private bucket. See [ADR 0011](adr/0011-private-legacy-source-reads.md) and track the gates in [PLANS.md](../PLANS.md#active-program--workspace-redesign).
 
 Supabase plugin use requires the user's approval. Read-only organization/project discovery was approved on 2026-11-19; project creation, SQL, migrations, and authentication configuration require approval for the specific proposed action. Installation of a plugin alone does not authorize those changes.
 

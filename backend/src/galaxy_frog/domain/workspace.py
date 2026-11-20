@@ -29,7 +29,7 @@ class WorkspaceAccount(BaseModel):
 
 
 class Notebook(BaseModel):
-    """An owned Galaxy; source membership is introduced in a later packet."""
+    """An owned Galaxy notebook."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
