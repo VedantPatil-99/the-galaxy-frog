@@ -1,6 +1,7 @@
 """Private notebook endpoints with verified ownership on every operation."""
 
-from typing import Annotated
+from hashlib import sha256
+from typing import Annotated, cast
 from uuid import UUID
 
 import httpx
@@ -9,6 +10,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response
 from pydantic import ValidationError
 
+from galaxy_frog.adapters.workspace_documents import (
+    DocumentProcessingTimeout,
+    DocumentProcessingUnavailable,
+    WorkspaceDocumentProcessor,
+    document_original,
+    store_document,
+)
 from galaxy_frog.adapters.workspace_previews import (
     PreviewStorageUnavailable,
     PreviewUnavailable,
@@ -26,6 +34,7 @@ from galaxy_frog.api.workspace_auth import (
 )
 from galaxy_frog.api.workspace_schemas import (
     NotebookListResponse,
+    WorkspaceDocumentListResponse,
     WorkspaceFrameResponse,
     WorkspaceSessionResponse,
     WorkspaceSourceListResponse,
@@ -39,6 +48,7 @@ from galaxy_frog.db.models import VideoFrameRow, VideoRow
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.db.workspace import WorkspaceRepository
+from galaxy_frog.db.workspace_documents import DocumentImport, WorkspaceDocumentRepository
 from galaxy_frog.db.workspace_sources import WorkspaceSourceRepository
 from galaxy_frog.db.workspace_text import WorkspaceTextRepository
 from galaxy_frog.domain.videos.models import VideoSourceKind
@@ -47,6 +57,16 @@ from galaxy_frog.domain.workspace import (
     NotebookDraft,
     NotebookNotFound,
     VerifiedWorkspaceIdentity,
+)
+from galaxy_frog.domain.workspace_documents import (
+    DOCUMENT_MAX_BYTES,
+    DOCUMENT_MAX_PAGES,
+    DocumentNotFound,
+    DocumentRejected,
+    DocumentStorageUnavailable,
+    WorkspaceDocumentSection,
+    WorkspaceDocumentSource,
+    document_filename,
 )
 from galaxy_frog.domain.workspace_text import (
     WorkspaceTextDraft,
@@ -223,6 +243,189 @@ async def get_notebook_text_version(
         )
     except WorkspaceTextNotFound:
         raise _source_not_found() from None
+
+
+def _document_error(
+    error: DocumentRejected
+    | DocumentProcessingTimeout
+    | DocumentProcessingUnavailable
+    | DocumentStorageUnavailable,
+) -> ApiError:
+    if isinstance(error, DocumentRejected):
+        return ApiError(
+            status_code=422, code="WORKSPACE_DOCUMENT_REJECTED", message=str(error), retryable=False
+        )
+    if isinstance(error, DocumentProcessingTimeout):
+        return ApiError(
+            status_code=504,
+            code="WORKSPACE_DOCUMENT_TIMEOUT",
+            message="The document exceeded the processing time limit.",
+            retryable=False,
+        )
+    code, message = (
+        ("WORKSPACE_DOCUMENT_STORAGE_UNAVAILABLE", "Private document storage is unavailable.")
+        if isinstance(error, DocumentStorageUnavailable)
+        else ("WORKSPACE_DOCUMENT_PROCESSOR_UNAVAILABLE", "Document processing is unavailable.")
+    )
+    return ApiError(status_code=503, code=code, message=message, retryable=True)
+
+
+def _document_processor(request: Request) -> WorkspaceDocumentProcessor:
+    return cast(WorkspaceDocumentProcessor, request.app.state.workspace_document_processor)
+
+
+@router.post(
+    "/notebooks/{notebook_id}/documents",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
+            },
+        }
+    },
+    responses={code: {"model": ErrorResponse} for code in (413, 415, 422, 504)},
+)
+async def import_notebook_document(
+    notebook_id: UUID,
+    request: Request,
+    identity: Creator,
+    repository: Repository,
+    filename: Annotated[str, Query(min_length=1, max_length=160)],
+) -> WorkspaceDocumentSource:
+    try:
+        await repository.get_notebook(identity.account_id, notebook_id)
+        await repository.session.rollback()
+        name, format = document_filename(filename)
+    except NotebookNotFound:
+        raise _notebook_not_found() from None
+    except DocumentRejected as exc:
+        raise _document_error(exc) from None
+    media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if media_type != "application/octet-stream":
+        raise ApiError(
+            status_code=415,
+            code="WORKSPACE_DOCUMENT_MEDIA_TYPE",
+            message="Send the original file bytes as application/octet-stream.",
+            retryable=False,
+        )
+    body = bytearray()
+    digest = sha256()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > DOCUMENT_MAX_BYTES:
+            raise ApiError(
+                status_code=413,
+                code="WORKSPACE_DOCUMENT_TOO_LARGE",
+                message="Choose a file of 8 MiB or less.",
+                retryable=False,
+            )
+        digest.update(chunk)
+        body.extend(chunk)
+    data = bytes(body)
+    file_sha256 = digest.hexdigest()
+    try:
+        content = await _document_processor(request).extract(data, format)
+        document = await WorkspaceDocumentRepository(repository.session).save(
+            identity.account_id,
+            notebook_id,
+            DocumentImport(name, format, file_sha256, len(data), content),
+        )
+        await store_document(
+            workspace_settings(request).workspace_document_root, notebook_id, file_sha256, data
+        )
+        await repository.session.commit()
+    except NotebookNotFound:
+        raise _notebook_not_found() from None
+    except (
+        DocumentRejected,
+        DocumentProcessingTimeout,
+        DocumentProcessingUnavailable,
+        DocumentStorageUnavailable,
+    ) as exc:
+        raise _document_error(exc) from None
+    return document
+
+
+@router.get("/notebooks/{notebook_id}/documents")
+async def list_notebook_documents(
+    notebook_id: UUID,
+    identity: Creator,
+    repository: Repository,
+    after: UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+) -> WorkspaceDocumentListResponse:
+    try:
+        sources = await WorkspaceDocumentRepository(repository.session).list_sources(
+            identity.account_id, notebook_id, after=after, limit=limit + 1
+        )
+    except NotebookNotFound:
+        raise _notebook_not_found() from None
+    return WorkspaceDocumentListResponse(
+        sources=sources[:limit],
+        next_after=sources[limit - 1].source_id if len(sources) > limit else None,
+    )
+
+
+@router.get(
+    "/notebooks/{notebook_id}/documents/{source_id}/versions/{version_id}/sections/{section_number}"
+)
+async def get_document_section(
+    notebook_id: UUID,
+    source_id: UUID,
+    version_id: UUID,
+    section_number: Annotated[int, Path(ge=1, le=DOCUMENT_MAX_PAGES)],
+    identity: Creator,
+    repository: Repository,
+) -> WorkspaceDocumentSection:
+    try:
+        return await WorkspaceDocumentRepository(repository.session).section(
+            identity.account_id, notebook_id, source_id, version_id, section_number
+        )
+    except DocumentNotFound:
+        raise _source_not_found() from None
+
+
+@router.get(
+    "/notebooks/{notebook_id}/documents/{source_id}/versions/{version_id}/pages/{page_number}/image",
+    response_class=Response,
+    responses={
+        200: {"content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}},
+        422: {"model": ErrorResponse},
+        504: {"model": ErrorResponse},
+    },
+)
+async def get_document_page_image(
+    notebook_id: UUID,
+    source_id: UUID,
+    version_id: UUID,
+    page_number: Annotated[int, Path(ge=1, le=DOCUMENT_MAX_PAGES)],
+    request: Request,
+    identity: Creator,
+    repository: Repository,
+) -> Response:
+    try:
+        digest = await WorkspaceDocumentRepository(repository.session).pdf_digest(
+            identity.account_id, notebook_id, source_id, version_id, page_number
+        )
+        await repository.session.rollback()
+        original = await document_original(
+            workspace_settings(request).workspace_document_root, notebook_id, digest
+        )
+        preview = await _document_processor(request).preview(original, page_number)
+    except DocumentNotFound:
+        raise _source_not_found() from None
+    except (
+        DocumentRejected,
+        DocumentProcessingTimeout,
+        DocumentProcessingUnavailable,
+        DocumentStorageUnavailable,
+    ) as exc:
+        raise _document_error(exc) from None
+    return Response(
+        preview,
+        media_type="image/png",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 def _source_response(video: VideoRow) -> WorkspaceVideoSourceResponse:

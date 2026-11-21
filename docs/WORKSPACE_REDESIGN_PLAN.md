@@ -1,6 +1,6 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W1.3 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W2 is implemented locally with live browser sign-in pending. W3.1 adds private pasted text and Markdown.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. The user confirmed W2 browser sign-in on 2026-11-22. W3.1 adds private pasted text and Markdown.
 Saved: 2026-11-18 (Asia/Calcutta).
 Updated 2026-11-21 (Asia/Calcutta) after private Storage acceptance.
 This document records the agreed future workspace program. It is separate from Phase 8.
@@ -193,7 +193,17 @@ W3.1 accepts plain text and Markdown pasted into an owned notebook. It normalize
 and stores the resulting text, immutable version ID, and exact block spans. A repeated paste of the
 same title, format, and text in the same notebook reuses its version. The Sources pane shows the
 saved text, with Markdown displayed as source text. File uploads, OCR, embedding, and answering
-over documents are later W3 work.
+over documents are separate W3 work.
+
+W3.2 accepts PDF, DOCX, TXT, and Markdown files of up to 8 MiB. Format validation, an
+80-page PDF limit, archive expansion limits, and subprocess deadlines bound local parsing.
+PDF page numbers and immutable version-scoped blocks survive reopening. PDF image previews
+are generated one page at a time and sent through the owner-authorized API. The original
+remains in private local storage. PDF pages without extractable text are flagged for OCR.
+DOCX previews show main-body text and table cells without page numbers.
+The remaining W3 work covers pending OCR processing and mixed-source retrieval and indexing.
+[PDF extraction guidance](https://pypdf.readthedocs.io/en/stable/user/extract-text.html)
+[PDFium Python API](https://pypdfium2.readthedocs.io/en/stable/python_api.html)
 
 ### Models and retrieval profiles
 
@@ -324,9 +334,9 @@ Keep commits focused and preserve the installed skills/MCP configuration. Do not
 
 **W2 is implemented locally.** The workspace defaults to Notebook with sources beside the
 question area. Focus is available, and the transcript and evidence details open on demand.
-Doto appears in the wordmark and Commissioner handles reading and controls. Hosted browser
-email-link acceptance remains open. W3 started with pasted plain text and Markdown, and the
-next packet adds bounded document file import.
+Doto appears in the wordmark and Commissioner handles reading and controls. Live browser
+email-link acceptance was user-confirmed. W3 started with pasted plain text and Markdown and
+continues with bounded document file import.
 
 W1.3 added private storage authorization and explicit legacy
 video ownership. The operator migration and notebook-scoped API preserve existing

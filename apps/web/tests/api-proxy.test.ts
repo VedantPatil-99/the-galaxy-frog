@@ -3,13 +3,16 @@ import { describe, expect, spyOn, test } from "bun:test"
 import { buildUpstreamUrl, proxyRequest } from "@/lib/api/proxy"
 
 describe("API proxy", () => {
-  test("allows bounded retrieval time for search and questions", async () => {
+  test("allows bounded processing time for retrieval and document previews", async () => {
     const timeout = spyOn(AbortSignal, "timeout").mockImplementation(() => new AbortController().signal)
     try {
       for (const [path, method, expected] of [
         [["v1", "videos", "id", "search"], "POST", 300_000],
         [["v1", "videos", "id", "questions"], "POST", 300_000],
         [["v1", "videos", "import"], "POST", 120_000],
+        [["v1", "workspace", "notebooks", "id", "documents"], "POST", 60_000],
+        [["v1", "workspace", "notebooks", "id", "documents", "id", "versions", "id", "pages", "1", "image"], "GET", 60_000],
+        [["v1", "workspace", "notebooks", "id", "documents"], "GET", 10_000],
         [["health", "live"], "GET", 10_000],
       ] as const) {
         await proxyRequest(new Request("http://web.test/api/proxy/check", { method }), path, async () => Response.json({}), "http://api.test")

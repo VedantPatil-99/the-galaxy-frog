@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { WorkspaceShell, type WorkspacePane } from "@/components/workspace-shell"
 import { workspaceAuthAction } from "@/components/workspace-sign-in"
+import { WorkspaceDocumentPreview, WorkspaceDocuments } from "@/components/workspace-documents"
 import { WorkspaceTextPreview, WorkspaceTextSources } from "@/components/workspace-text-sources"
 import { ApiClientError } from "@/lib/api/client"
-import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
+import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceDocument, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
 import { timestamp } from "@/lib/timestamp"
 import { YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 
@@ -86,6 +87,8 @@ function SourcePreview({ notebookId, source, onExpired }: {
   )
 }
 
+type SelectedSource = WorkspaceSource | WorkspaceTextSource | WorkspaceDocument
+
 function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId }: {
   notebook: Notebook
   pane: WorkspacePane
@@ -97,7 +100,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
   const [sources, setSources] = useState<WorkspaceSource[]>([])
   const [after, setAfter] = useState<string | null>(null)
   const [nextAfter, setNextAfter] = useState<string | null>(null)
-  const [selected, setSelected] = useState<WorkspaceSource | WorkspaceTextSource | null>(null)
+  const [selected, setSelected] = useState<SelectedSource | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [attempt, setAttempt] = useState(0)
@@ -120,9 +123,10 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
   }, [after, attempt, notebook.notebook_id, onExpired])
 
   const selectedVideo = selected && "video_id" in selected ? selected : null
-  const selectedText = selected && "source_id" in selected ? selected : null
+  const selectedText = selected && "title" in selected && "source_id" in selected ? selected : null
+  const selectedDocument = selected && "filename" in selected ? selected : null
 
-  function openSource(source: WorkspaceSource | WorkspaceTextSource) {
+  function openSource(source: SelectedSource) {
     setSelected(source)
     setPane("sources")
   }
@@ -131,7 +135,9 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
     ? <SourcePreview key={selectedVideo.video_id} notebookId={notebook.notebook_id} source={selectedVideo} onExpired={onExpired} />
     : selectedText
       ? <WorkspaceTextPreview key={selectedText.version_id} notebookId={notebook.notebook_id} source={selectedText} onExpired={onExpired} />
-      : <p className="text-sm text-muted-foreground">{loading ? "Loading sources…" : "Select a source in the workspace to preview it here."}</p>
+      : selectedDocument
+        ? <WorkspaceDocumentPreview key={selectedDocument.version_id} notebookId={notebook.notebook_id} source={selectedDocument} onExpired={onExpired} />
+        : <p className="text-sm text-muted-foreground">{loading ? "Loading sources…" : "Select a source in the workspace to preview it here."}</p>
 
   return (
     <WorkspaceShell
@@ -144,6 +150,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
     >
       <div className="space-y-5">
         <h1 className="text-3xl font-semibold tracking-tight">{notebook.title}</h1>
+        <WorkspaceDocuments notebookId={notebook.notebook_id} selectedId={selectedDocument?.source_id} onSelect={openSource} onExpired={onExpired} />
         <WorkspaceTextSources notebookId={notebook.notebook_id} selectedId={selectedText?.source_id} onSelect={openSource} onExpired={onExpired} />
         <h2 className="text-base font-semibold">Videos</h2>
         {sources.length ? (

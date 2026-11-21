@@ -829,13 +829,15 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   - [x] Implement the optional private Supabase preview reader with simulated Storage checks.
   - [x] Provision the private preview bucket and verify live reads through FastAPI.
   - [x] Verify that ordinary signed-in users have no direct Storage read policy.
-- [ ] W2 — Both workspace layouts and typography implemented and checked locally.
-  Live browser acceptance of the Supabase email callback and sign-out remains open.
+- [x] W2 — Both workspace layouts and typography checked locally. The user confirmed
+  the live browser callback, session persistence after refresh, and sign-out.
 - [ ] W3 — Mixed-source pipeline.
   - [x] W3.1 — Private notebook paste import for plain text and Markdown, immutable source
     versions, stable block citations, and ownership and retry checks.
-  - [ ] Remaining W3 — File imports and bounded extraction, PDF/DOCX citation and preview
-    support, OCR coverage, and mixed-source retrieval and indexing with explicit profiles.
+  - [x] W3.2 — Bounded PDF, DOCX, plain text, and Markdown file import. Keep originals
+    private and preserve PDF pages and immutable text blocks in source previews.
+  - [ ] Remaining W3 — OCR processing with explicit permission, mixed-source retrieval,
+    validated citations in answers, and indexing with explicit profiles.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
@@ -843,11 +845,24 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the active checkpoint. W3.1 passed locally. The next work packet is bounded document file
-imports and source previews. W2 browser email-link acceptance still needs an allowed localhost
-callback and an end-to-end browser session. The separate Supabase project passed live Auth and
-private preview Storage through FastAPI in W1. Hosted deployment, CI, and merge are separate gates.
+W3 is the active checkpoint. W3.1 and W3.2 passed locally. The remaining work is OCR processing,
+mixed-source retrieval, and indexing. The user confirmed W2 live browser acceptance on
+2026-11-22. The separate Supabase project also passed live Auth and private preview Storage
+through FastAPI in W1.
+Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.2 local verification — 2026-11-22
+
+- Private notebooks can import PDF, DOCX, TXT, and Markdown files. Originals are kept in
+  private local storage, and repeat uploads preserve the immutable source version.
+- PDF extraction preserves page numbers, and the Sources pane renders one authorized page
+  at a time. Pages without embedded text show an OCR hint. DOCX and text sources keep stable
+  block references without invented page numbers or timestamps.
+- The additive migration, parser tests, and owner-scoped PostgreSQL integration checks passed.
+  The browser fixture verified binary upload, page navigation, reload, and mobile reflow.
+- The full backend suite passed with 1,615 tests, 4 skips, and 100% coverage. The 57 web tests,
+  lint, type checks, generated contract checks, and production build passed locally.
 
 ### W3.1 local verification — 2026-11-22
 

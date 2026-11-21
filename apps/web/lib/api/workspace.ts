@@ -10,6 +10,8 @@ export type WorkspaceTranscript = Schema["WorkspaceTranscriptResponse"]
 export type WorkspaceTextSource = Schema["WorkspaceTextSource"]
 export type WorkspaceTextVersion = Schema["WorkspaceTextVersion"]
 export type WorkspaceTextDraft = paths["/v1/workspace/notebooks/{notebook_id}/text-sources"]["post"]["requestBody"]["content"]["application/json"]
+export type WorkspaceDocument = Schema["WorkspaceDocumentSource"]
+export type WorkspaceDocumentSection = Schema["WorkspaceDocumentSection"]
 
 const base = "/v1/workspace"
 
@@ -79,10 +81,14 @@ function textVersion(value: unknown): value is WorkspaceTextVersion {
   const { text, blocks } = value
   return textSource(value) && typeof text === "string" && Array.isArray(blocks)
     && blocks.length === value.block_count
-    && blocks.every(block => object(block) && typeof block.block_id === "string"
-      && typeof block.start_char === "number" && typeof block.end_char === "number"
-      && Number.isInteger(block.start_char) && Number.isInteger(block.end_char)
-      && block.start_char >= 0 && block.end_char > block.start_char && typeof block.text === "string")
+    && blocks.every(textBlock)
+}
+
+function textBlock(block: unknown): block is Schema["WorkspaceTextBlock"] {
+  return object(block) && typeof block.block_id === "string"
+    && typeof block.start_char === "number" && typeof block.end_char === "number"
+    && Number.isInteger(block.start_char) && Number.isInteger(block.end_char)
+    && block.start_char >= 0 && block.end_char > block.start_char && typeof block.text === "string"
 }
 
 function textPath(notebookId: string) {
@@ -103,4 +109,46 @@ export function pasteTextSource(notebookId: string, draft: WorkspaceTextDraft, s
 export function getTextVersion(notebookId: string, source: WorkspaceTextSource, signal: AbortSignal) {
   const path = `${textPath(notebookId)}/${encodeURIComponent(source.source_id)}/versions/${encodeURIComponent(source.version_id)}`
   return requestApi(path, textVersion, fetch, { signal })
+}
+
+function documentSource(value: unknown): value is WorkspaceDocument {
+  return object(value) && typeof value.source_id === "string" && typeof value.version_id === "string"
+    && typeof value.filename === "string" && typeof value.created_at === "string"
+    && ["pdf", "docx", "plain", "markdown"].includes(String(value.format))
+    && typeof value.size_bytes === "number" && value.size_bytes > 0
+    && typeof value.section_count === "number" && Number.isInteger(value.section_count) && value.section_count > 0
+    && (value.pages_without_text === null || typeof value.pages_without_text === "number")
+}
+
+function documentPath(notebookId: string) {
+  return `${base}/notebooks/${encodeURIComponent(notebookId)}/documents`
+}
+
+function documentVersionPath(notebookId: string, source: WorkspaceDocument) {
+  return `${documentPath(notebookId)}/${encodeURIComponent(source.source_id)}/versions/${encodeURIComponent(source.version_id)}`
+}
+
+export function listDocuments(notebookId: string, after: string | null, signal: AbortSignal) {
+  const suffix = after ? `?after=${encodeURIComponent(after)}` : ""
+  return requestApi(`${documentPath(notebookId)}${suffix}`, (value): value is Schema["WorkspaceDocumentListResponse"] =>
+    object(value) && Array.isArray(value.sources) && value.sources.every(documentSource)
+      && (value.next_after === null || typeof value.next_after === "string"), fetch, { signal })
+}
+
+export function importDocument(notebookId: string, file: File, signal: AbortSignal) {
+  const query = new URLSearchParams({ filename: file.name })
+  return requestApi(`${documentPath(notebookId)}?${query}`, documentSource, fetch, {
+    method: "POST", headers: { "content-type": "application/octet-stream" }, body: file, signal,
+  })
+}
+
+export function getDocumentSection(notebookId: string, source: WorkspaceDocument, section: number, signal: AbortSignal) {
+  return requestApi(`${documentVersionPath(notebookId, source)}/sections/${section}`, (value): value is WorkspaceDocumentSection =>
+    object(value) && value.source_id === source.source_id && value.version_id === source.version_id
+      && value.section_number === section && value.page_number === (source.format === "pdf" ? section : null)
+      && typeof value.text === "string" && Array.isArray(value.blocks) && value.blocks.every(textBlock), fetch, { signal })
+}
+
+export function documentPageImageUrl(notebookId: string, source: WorkspaceDocument, page: number) {
+  return `/api/proxy${documentVersionPath(notebookId, source)}/pages/${page}/image`
 }

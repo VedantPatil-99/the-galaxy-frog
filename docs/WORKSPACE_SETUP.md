@@ -1,6 +1,6 @@
 # Workspace setup and installation stages
 
-Updated 2026-11-22. Live Supabase email sign-in and private preview Storage through FastAPI passed. W2 adds the browser sign-in routes and notebook shell. Live validation of the browser callback remains open.
+Updated 2026-11-22. Live Supabase email sign-in and private preview Storage through FastAPI passed. The user also confirmed the W2 browser email callback, session after refresh, and sign-out.
 
 ## Needed for the first packet
 
@@ -180,6 +180,27 @@ Apply the additive Alembic migration to the intended local database with `bun ru
 In a private notebook, open **Text sources → Paste text** and choose plain text or Markdown.
 Pastes are limited to 65,536 characters, 128 KiB of UTF-8 text, and 2,048 blocks.
 The paste flow uses the existing database and web dependencies.
+
+## W3.2 document file imports
+
+The backend dependencies now include `pypdf`, `python-docx`, and `pypdfium2`. The
+local migration and dependency install use the existing tools:
+
+```bash
+uv sync --directory backend --locked --inexact
+bun run db:migrate
+```
+
+In a private notebook, open **Documents → Import a document**. Choose a PDF, DOCX, TXT,
+or Markdown file of up to 8 MiB. PDFs support up to 80 pages and have a page-by-page image
+preview. Open **Extracted text** to read the text from that page. Pages without extractable
+text are marked as candidates for OCR. DOCX previews include main-body paragraphs and table
+cells. TXT and Markdown files use UTF-8 and open as text.
+
+The original is stored in the backend's private `WORKSPACE_DOCUMENT_ROOT` directory, which
+defaults to `tmp/workspace-documents` in the repository. A backup of document sources includes
+both the database and this directory. The file path stays server-side, and only a
+verified notebook owner can request its extracted text or generated page images.
 
 ## Application dependencies added when needed
 

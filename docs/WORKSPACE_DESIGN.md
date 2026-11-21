@@ -45,6 +45,11 @@ Use concept B as the common shell/state model. **Notebook mode** expands a dedic
 
 Notebook is the default based on the user's preference for the source and question area side by side on a laptop. Frog Lab opens on demand. At intermediate widths it uses the secondary pane until the user returns to Sources or Workspace. A citation opens Source preview and seeks to the cited millisecond when the player is ready. The full transcript is collapsed by default. Answer citations and required temporal choices remain in the work area. Detailed transcript matches, frame and OCR evidence, traces, and provider settings are available through disclosures. Evidence-only search keeps its own composer control.
 
+File import lives with the notebook's Documents list. A successful import opens the source
+preview on desktop and switches to Sources on a phone. PDF pages show the image and page
+number first, with extracted text available on demand. DOCX and text previews show their
+content in the same Sources pane.
+
 ## Visual system and typography
 
 Use a cool, lightly colored work surface, clear text, and a restrained teal action color drawn from the frog identity. The personality should come from Doto, the original frog mark, and well-composed evidence, not ornamental cards or animation. Dark mode uses the same hierarchy and restrained accent.

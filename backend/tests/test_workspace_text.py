@@ -40,6 +40,11 @@ def test_long_paragraphs_are_split_without_losing_coordinates() -> None:
     assert source.spans == ((0, 4096), (4096, 4097))
 
 
+def test_whitespace_only_chunks_do_not_become_evidence() -> None:
+    source = prepare_workspace_text(" " * 4096 + "Content")
+    assert source.spans == ((4096, 4103),)
+
+
 @pytest.mark.parametrize(
     "text",
     [" \n\t", "invalid\0value", "\ud800", "x" * 65_537, "🧊" * 33_000, "x\n\n" * 2_049],
