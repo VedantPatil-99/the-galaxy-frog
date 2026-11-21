@@ -67,3 +67,7 @@ private database connection still requires explicit ownership filtering on every
 
 References: [Supabase Auth user endpoint](https://github.com/supabase/auth#readme),
 [Supabase API key roles](https://supabase.com/docs/guides/api/api-keys).
+
+## W2 browser session transport
+
+Next.js requests a PKCE email link for an existing account and exchanges the callback code on the server. The configured web origin determines the callback and subsequent redirect. The Supabase SSR client stores session data in HttpOnly cookies with SameSite Lax and sets Secure for HTTPS. Next.js forwards the access token only on notebook-scoped workspace API requests. It checks Origin for cookie-authenticated mutations, and FastAPI still verifies the token, creator allowlist, and resource ownership. Public workspace status remains unauthenticated, and existing direct Bearer callers keep their API contract.

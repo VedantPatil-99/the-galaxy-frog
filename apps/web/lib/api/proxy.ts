@@ -156,6 +156,7 @@ export async function proxyRequest(
   path: readonly string[],
   fetcher: Fetcher = fetch,
   baseUrl = process.env.FASTAPI_BASE_URL ?? DEFAULT_FASTAPI_BASE_URL,
+  workspaceToken?: string,
 ): Promise<Response> {
   let upstreamUrl: URL
   try {
@@ -182,9 +183,12 @@ export async function proxyRequest(
     (path[3] === "search" || path[3] === "questions" || path[3] === "explain-moment")
   const timeoutMs = isRetrievalRequest ? 300_000 :
     isVideoPost && path[2] === "import" ? 120_000 : 10_000
+  const headers = forwardedRequestHeaders(request)
+  if (workspaceToken) headers.set("Authorization", `Bearer ${workspaceToken}`)
+
   const init: StreamingRequestInit = {
     method: request.method,
-    headers: forwardedRequestHeaders(request),
+    headers,
     cache: "no-store",
     redirect: "manual",
     signal: AbortSignal.timeout(timeoutMs),
