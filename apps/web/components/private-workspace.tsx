@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { WorkspaceShell, type WorkspacePane } from "@/components/workspace-shell"
 import { workspaceAuthAction } from "@/components/workspace-sign-in"
+import { WorkspaceTextPreview, WorkspaceTextSources } from "@/components/workspace-text-sources"
 import { ApiClientError } from "@/lib/api/client"
-import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceSource, type WorkspaceTranscript } from "@/lib/api/workspace"
+import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
 import { timestamp } from "@/lib/timestamp"
 import { YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 
@@ -96,7 +97,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
   const [sources, setSources] = useState<WorkspaceSource[]>([])
   const [after, setAfter] = useState<string | null>(null)
   const [nextAfter, setNextAfter] = useState<string | null>(null)
-  const [selected, setSelected] = useState<WorkspaceSource | null>(null)
+  const [selected, setSelected] = useState<WorkspaceSource | WorkspaceTextSource | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [attempt, setAttempt] = useState(0)
@@ -118,6 +119,20 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
     return () => request.abort()
   }, [after, attempt, notebook.notebook_id, onExpired])
 
+  const selectedVideo = selected && "video_id" in selected ? selected : null
+  const selectedText = selected && "source_id" in selected ? selected : null
+
+  function openSource(source: WorkspaceSource | WorkspaceTextSource) {
+    setSelected(source)
+    setPane("sources")
+  }
+
+  const preview = selectedVideo
+    ? <SourcePreview key={selectedVideo.video_id} notebookId={notebook.notebook_id} source={selectedVideo} onExpired={onExpired} />
+    : selectedText
+      ? <WorkspaceTextPreview key={selectedText.version_id} notebookId={notebook.notebook_id} source={selectedText} onExpired={onExpired} />
+      : <p className="text-sm text-muted-foreground">{loading ? "Loading sources…" : "Select a source in the workspace to preview it here."}</p>
+
   return (
     <WorkspaceShell
       title={notebook.title}
@@ -125,25 +140,24 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
       onPaneChange={setPane}
       galaxy={galaxy}
       preferenceKey={accountId}
-      sources={selected ? <SourcePreview key={selected.video_id} notebookId={notebook.notebook_id} source={selected} onExpired={onExpired} /> : (
-        <p className="text-sm text-muted-foreground">{loading ? "Loading sources…" : "Select a source in the workspace to preview it here."}</p>
-      )}
+      sources={preview}
     >
       <div className="space-y-5">
         <h1 className="text-3xl font-semibold tracking-tight">{notebook.title}</h1>
-        <h2 className="text-lg font-semibold">Notebook sources</h2>
+        <WorkspaceTextSources notebookId={notebook.notebook_id} selectedId={selectedText?.source_id} onSelect={openSource} onExpired={onExpired} />
+        <h2 className="text-base font-semibold">Videos</h2>
         {sources.length ? (
           <ul className="divide-y border-y">
             {sources.map(source => (
               <li key={source.video_id}>
-                <Button variant="ghost" type="button" aria-pressed={source.video_id === selected?.video_id} className="min-h-12 w-full justify-between gap-3 px-2 text-left" onClick={() => { setSelected(source); setPane("sources") }}>
+                <Button variant="ghost" type="button" aria-pressed={source.video_id === selectedVideo?.video_id} className="min-h-12 w-full justify-between gap-3 px-2 text-left" onClick={() => openSource(source)}>
                   <span className="truncate">{source.title}</span>
                   <span className="font-mono text-xs text-muted-foreground">{timestamp(source.duration_ms)}</span>
                 </Button>
               </li>
             ))}
           </ul>
-        ) : !loading && !error ? <p className="text-muted-foreground">This notebook has no assigned sources yet.</p> : null}
+        ) : !loading && !error ? <p className="text-sm text-muted-foreground">No videos assigned.</p> : null}
         {loading ? <p role="status" className="text-sm text-muted-foreground">Loading sources…</p> : null}
         {error ? (
           <div className="text-sm">

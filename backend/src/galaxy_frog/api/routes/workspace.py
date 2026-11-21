@@ -5,7 +5,9 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response
+from pydantic import ValidationError
 
 from galaxy_frog.adapters.workspace_previews import (
     PreviewStorageUnavailable,
@@ -28,6 +30,7 @@ from galaxy_frog.api.workspace_schemas import (
     WorkspaceSessionResponse,
     WorkspaceSourceListResponse,
     WorkspaceStatusResponse,
+    WorkspaceTextSourceListResponse,
     WorkspaceTranscriptResponse,
     WorkspaceVideoSourceResponse,
 )
@@ -37,12 +40,19 @@ from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.db.workspace import WorkspaceRepository
 from galaxy_frog.db.workspace_sources import WorkspaceSourceRepository
+from galaxy_frog.db.workspace_text import WorkspaceTextRepository
 from galaxy_frog.domain.videos.models import VideoSourceKind
 from galaxy_frog.domain.workspace import (
     Notebook,
     NotebookDraft,
     NotebookNotFound,
     VerifiedWorkspaceIdentity,
+)
+from galaxy_frog.domain.workspace_text import (
+    WorkspaceTextDraft,
+    WorkspaceTextNotFound,
+    WorkspaceTextRejected,
+    WorkspaceTextVersion,
 )
 
 router = APIRouter(
@@ -53,6 +63,7 @@ router = APIRouter(
 )
 Creator = Annotated[VerifiedWorkspaceIdentity, Depends(get_verified_workspace_creator)]
 Repository = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
+_MAX_PASTE_REQUEST_BYTES = 512 * 1024
 
 
 def _notebook_not_found() -> ApiError:
@@ -123,6 +134,95 @@ async def rename_notebook(
         raise _notebook_not_found() from None
     await repository.session.commit()
     return notebook
+
+
+@router.post(
+    "/notebooks/{notebook_id}/text-sources",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": WorkspaceTextDraft.model_json_schema()}},
+        }
+    },
+    responses={code: {"model": ErrorResponse} for code in (413, 415, 422)},
+)
+async def paste_notebook_text(
+    notebook_id: UUID, request: Request, identity: Creator, repository: Repository
+) -> WorkspaceTextVersion:
+    media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if media_type != "application/json":
+        raise ApiError(
+            status_code=415,
+            code="WORKSPACE_TEXT_MEDIA_TYPE",
+            message="Send the pasted text as a JSON document.",
+            retryable=False,
+        )
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > _MAX_PASTE_REQUEST_BYTES:
+            raise ApiError(
+                status_code=413,
+                code="WORKSPACE_TEXT_REQUEST_TOO_LARGE",
+                message="The paste request exceeds the supported size.",
+                retryable=False,
+            )
+        body.extend(chunk)
+    try:
+        draft = WorkspaceTextDraft.model_validate_json(body)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors(include_input=False, include_url=False)) from None
+
+    try:
+        version = await WorkspaceTextRepository(repository.session).save(
+            identity.account_id, notebook_id, draft
+        )
+    except NotebookNotFound:
+        raise _notebook_not_found() from None
+    except WorkspaceTextRejected as exc:
+        raise ApiError(
+            status_code=422,
+            code="WORKSPACE_TEXT_REJECTED",
+            message=str(exc),
+            retryable=False,
+        ) from None
+    await repository.session.commit()
+    return version
+
+
+@router.get("/notebooks/{notebook_id}/text-sources")
+async def list_notebook_text(
+    notebook_id: UUID,
+    identity: Creator,
+    repository: Repository,
+    after: UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+) -> WorkspaceTextSourceListResponse:
+    try:
+        sources = await WorkspaceTextRepository(repository.session).list_sources(
+            identity.account_id, notebook_id, after=after, limit=limit + 1
+        )
+    except NotebookNotFound:
+        raise _notebook_not_found() from None
+    return WorkspaceTextSourceListResponse(
+        sources=sources[:limit],
+        next_after=sources[limit - 1].source_id if len(sources) > limit else None,
+    )
+
+
+@router.get("/notebooks/{notebook_id}/text-sources/{source_id}/versions/{version_id}")
+async def get_notebook_text_version(
+    notebook_id: UUID,
+    source_id: UUID,
+    version_id: UUID,
+    identity: Creator,
+    repository: Repository,
+) -> WorkspaceTextVersion:
+    try:
+        return await WorkspaceTextRepository(repository.session).get_version(
+            identity.account_id, notebook_id, source_id, version_id
+        )
+    except WorkspaceTextNotFound:
+        raise _source_not_found() from None
 
 
 def _source_response(video: VideoRow) -> WorkspaceVideoSourceResponse:

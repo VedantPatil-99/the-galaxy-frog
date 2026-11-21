@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from galaxy_frog.api.video_schemas import TranscriptEvidenceResponse
 from galaxy_frog.domain.videos.models import VideoSourceKind
 from galaxy_frog.domain.workspace import Notebook, WorkspaceAccount
+from galaxy_frog.domain.workspace_text import WorkspaceTextSource
 
 
 class WorkspaceStatusResponse(BaseModel):
@@ -37,6 +38,11 @@ class WorkspaceVideoSourceResponse(BaseModel):
 
 class WorkspaceSourceListResponse(BaseModel):
     sources: tuple[WorkspaceVideoSourceResponse, ...]
+    next_after: UUID | None
+
+
+class WorkspaceTextSourceListResponse(BaseModel):
+    sources: tuple[WorkspaceTextSource, ...]
     next_after: UUID | None
 
 

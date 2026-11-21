@@ -174,6 +174,13 @@ SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-project-key
 
 Add the exact `http://localhost:3000/auth/callback` under Supabase **Authentication → URL Configuration → Redirect URLs**, then restart the web process. Open Galaxy Frog at the configured origin, request an email link with an existing allowlisted account, and open the link in the same browser profile. Verify the notebook list across a refresh, sign out, and confirm the workspace returns to sign-in. Use the deployed HTTPS origin and its matching callback URL if testing a hosted instance. [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls)
 
+## W3.1 private text sources
+
+Apply the additive Alembic migration to the intended local database with `bun run db:migrate`.
+In a private notebook, open **Text sources → Paste text** and choose plain text or Markdown.
+Pastes are limited to 65,536 characters, 128 KiB of UTF-8 text, and 2,048 blocks.
+The paste flow uses the existing database and web dependencies.
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.

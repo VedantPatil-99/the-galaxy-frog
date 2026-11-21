@@ -831,11 +831,36 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   - [x] Verify that ordinary signed-in users have no direct Storage read policy.
 - [ ] W2 — Both workspace layouts and typography implemented and checked locally.
   Live browser acceptance of the Supabase email callback and sign-out remains open.
+- [ ] W3 — Mixed-source pipeline.
+  - [x] W3.1 — Private notebook paste import for plain text and Markdown, immutable source
+    versions, stable block citations, and ownership and retry checks.
+  - [ ] Remaining W3 — File imports and bounded extraction, PDF/DOCX citation and preview
+    support, OCR coverage, and mixed-source retrieval and indexing with explicit profiles.
+- [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
+- [ ] W5 — Frog Memory with provenance, retention, and deletion.
+- [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
+- [ ] W7 — Gallery, visual pins, and cited web research.
+- [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
+- [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the mixed-source pipeline. W2 browser email-link acceptance remains the outstanding
-checkpoint check. The separate Supabase project passed live Auth and private preview Storage
-through FastAPI in W1. Hosted application deployment, CI, and merge remain separate gates.
+W3 is the active checkpoint. W3.1 passed locally. The next work packet is bounded document file
+imports and source previews. W2 browser email-link acceptance still needs an allowed localhost
+callback and an end-to-end browser session. The separate Supabase project passed live Auth and
+private preview Storage through FastAPI in W1. Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.1 local verification — 2026-11-22
+
+- Private notebooks can paste plain text or Markdown and reopen the saved version from Sources.
+  Immutable text and block spans live in local PostgreSQL. Repeating the same title, format, and
+  normalized body in a notebook reuses the same source and version, including concurrent requests.
+- Blocks identify their source version and exact half-open Unicode character ranges. They carry
+  the text slice from those coordinates. Existing video IDs and millisecond intervals are separate
+  and remain supported by the notebook video endpoints.
+- The additive local migration and 18 focused backend checks passed, including owner isolation,
+  pagination, and oversized and invalid pastes. The local browser fixture passed save, refresh,
+  and preview checks on desktop and mobile. The 57 frontend tests, lint, type checks, generated
+  contracts, and production build passed. The browser fixture uses synthetic sign-in.
 
 ### W2 local verification — 2026-11-22
 
