@@ -75,16 +75,9 @@ export function pausedPlayheadMs(
 
 export type { YouTubePlayer }
 
-export function seekCommands(milliseconds: number): string[] {
+export function seekToMs(player: Pick<YouTubePlayer, "seekTo">, milliseconds: number) {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) {
     throw new RangeError("seek timestamp must be a non-negative finite number")
   }
-  return [
-    JSON.stringify({
-      event: "command",
-      func: "seekTo",
-      args: [milliseconds / 1000, true],
-    }),
-    JSON.stringify({ event: "command", func: "playVideo", args: [] }),
-  ]
+  player.seekTo(milliseconds / 1000, true)
 }

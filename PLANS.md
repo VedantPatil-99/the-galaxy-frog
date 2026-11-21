@@ -829,12 +829,25 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   - [x] Implement the optional private Supabase preview reader with simulated Storage checks.
   - [x] Provision the private preview bucket and verify live reads through FastAPI.
   - [x] Verify that ordinary signed-in users have no direct Storage read policy.
-- [ ] W2 — Implement both workspace layouts and the selected typography system after W1.
+- [ ] W2 — Both workspace layouts and typography implemented and checked locally.
+  Live browser acceptance of the Supabase email callback and sign-out remains open.
 
-The next checkpoint is W2. The separate Supabase project passed live Auth and private
-preview Storage acceptance from the local application. Browser sign-in, hosted application
-deployment/CI, and merge remain separate gates.
+W3 is the mixed-source pipeline. W2 browser email-link acceptance remains the outstanding
+checkpoint check. The separate Supabase project passed live Auth and private preview Storage
+through FastAPI in W1. Hosted application deployment, CI, and merge remain separate gates.
 Do not access Notion for this program.
+
+### W2 local verification — 2026-11-22
+
+- Notebook is the default layout. Focus, Sources, and Frog Lab reuse the same local work state.
+  Timestamp citations open the source preview and seek while the transcript stays collapsed by
+  default. Temporal anchor selection remains visible. Doto and Commissioner are served locally.
+- The signed-in shell lists and creates notebooks, reads assigned sources, and supports
+  server-side PKCE email sign-in and sign-out. The FastAPI verification and ownership fence
+  remains in force. The browser run used a synthetic answer and did not send a hosted email.
+- Browser checks covered two layouts, both themes, six viewport widths, a retained draft,
+  persisted layout choice, and keyboard access to the transcript. See
+  [workspace design verification](docs/WORKSPACE_DESIGN.md#implementation-and-verification-contract).
 
 ### W1.1 local verification — 2026-11-19
 

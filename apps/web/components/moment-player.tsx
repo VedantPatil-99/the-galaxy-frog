@@ -1,19 +1,21 @@
 "use client"
 
-import { useEffect, useRef, useState, type RefObject } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { ApiClientError, explainVideoMoment } from "@/lib/api/client"
 import { ProviderRun } from "@/components/provider-run"
 import { ProviderSelectionFields, useProviderSelection } from "@/components/provider-selection"
+import { Button } from "@/components/ui/button"
+import { Disclosure } from "@/components/ui/disclosure"
 import type { ExplainMomentResponse, VideoResponse } from "@/lib/api/contracts"
 import { timestamp } from "@/lib/timestamp"
-import { loadYouTubeApi, pausedPlayheadMs, YOUTUBE_PLAYER_ORIGIN, type YouTubePlayer } from "@/lib/youtube-player"
+import { loadYouTubeApi, pausedPlayheadMs, seekToMs, YOUTUBE_PLAYER_ORIGIN, type YouTubePlayer } from "@/lib/youtube-player"
 
 const citationLabels = { transcript: "Transcript", ocr: "On-screen text", frame: "Frame" }
 
-export function MomentPlayer({ video, iframeRef }: {
+export function MomentPlayer({ video, seekRequest }: {
   video: VideoResponse
-  iframeRef: RefObject<HTMLIFrameElement | null>
+  seekRequest: { milliseconds: number } | null
 }) {
   const container = useRef<HTMLDivElement>(null)
   const player = useRef<YouTubePlayer | null>(null)
@@ -41,7 +43,6 @@ export function MomentPlayer({ video, iframeRef }: {
     iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
     iframe.allowFullscreen = true
     wrapper.append(iframe)
-    iframeRef.current = iframe
 
     loadYouTubeApi().then(api => {
       if (disposed) return
@@ -63,10 +64,15 @@ export function MomentPlayer({ video, iframeRef }: {
       window.clearTimeout(readyTimeout)
       instance?.destroy()
       iframe.remove()
-      if (iframeRef.current === iframe) iframeRef.current = null
       player.current = null
     }
-  }, [externalId, iframeRef, title])
+  }, [externalId, title])
+
+  useEffect(() => {
+    if (seekRequest && status === "ready" && player.current) {
+      seekToMs(player.current, seekRequest.milliseconds)
+    }
+  }, [seekRequest, status])
 
   async function explain() {
     if (!player.current || pending.current) return
@@ -100,28 +106,25 @@ export function MomentPlayer({ video, iframeRef }: {
   }
 
   function seek(milliseconds: number) {
-    player.current?.seekTo(milliseconds / 1000, true)
+    if (player.current) seekToMs(player.current, milliseconds)
   }
 
   return (
     <>
-      <div ref={container} className="aspect-video bg-black" />
-      <div className="space-y-3 border-b p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={explain} disabled={status !== "ready" || busy} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+      <div ref={container} className="mb-3 aspect-video overflow-hidden rounded-lg bg-black" />
+      <Disclosure label="Explain this moment">
+        <div className="space-y-3 px-2 pt-2">
+          <Button type="button" onClick={explain} disabled={status !== "ready" || busy} className="min-h-11">
             {busy ? "Examining this moment…" : "Explain this moment"}
-          </button>
-          <p aria-live="polite" className="text-sm text-muted-foreground">
-            {status === "unavailable" ? "YouTube player controls are unavailable. Reload to try again." : "Pause the video to explain the current playhead."}
-          </p>
+          </Button>
+          <ProviderSelectionFields control={policy} busy={busy} />
+          {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+          <div aria-live="polite" aria-busy={busy}>
+            {result ? <MomentEvidence result={result} onSeek={seek} /> : null}
+            {result || failedTrace ? <ProviderRun operation="moment" runId={result?.trace_id ?? failedTrace ?? ""} /> : null}
+          </div>
         </div>
-        <ProviderSelectionFields control={policy} busy={busy} />
-        {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-        <div aria-live="polite" aria-busy={busy}>
-          {result ? <MomentEvidence result={result} onSeek={seek} /> : null}
-          {result || failedTrace ? <ProviderRun operation="moment" runId={result?.trace_id ?? failedTrace ?? ""} /> : null}
-        </div>
-      </div>
+      </Disclosure>
     </>
   )
 }

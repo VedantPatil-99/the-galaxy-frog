@@ -1,0 +1,228 @@
+.workspace {
+  --background: #f4f7f8;
+  --card: #fff;
+  --card-foreground: #172e38;
+  --foreground: #172e38;
+  --muted: #e9eff1;
+  --muted-foreground: #50636c;
+  --secondary: #e0eeec;
+  --secondary-foreground: #144e48;
+  --accent: #e0eeec;
+  --accent-foreground: #144e48;
+  --primary: #186d65;
+  --primary-foreground: #fff;
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --border: #ccd7db;
+  --input: #bac9ce;
+  --ring: #186d65;
+  --radius: 0.5rem;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.dark .workspace {
+  --background: #12252b;
+  --card: #19323a;
+  --card-foreground: #ebf3f4;
+  --foreground: #ebf3f4;
+  --muted: #253f47;
+  --muted-foreground: #a8bec4;
+  --secondary: #2c4b51;
+  --secondary-foreground: #c4eee4;
+  --accent: #2c4b51;
+  --accent-foreground: #c4eee4;
+  --primary: #8fd1c1;
+  --primary-foreground: #12252b;
+  --border: #3b565f;
+  --input: #58747c;
+  --ring: #8fd1c1;
+}
+
+.workspace-header,
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.workspace-header {
+  min-height: 3.875rem;
+}
+
+.workspace-toolbar {
+  min-height: 3.125rem;
+}
+
+.workspace-wordmark {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 3vw, 1.625rem);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.workspace-layout-switch,
+.workspace-panel-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.workspace-mobile-galaxy {
+  display: none;
+}
+
+.workspace-panes {
+  display: grid;
+  flex: 1;
+  grid-template-columns: clamp(9rem, 15vw, 13rem) minmax(0, 1fr);
+  grid-template-areas: "galaxy work";
+  align-items: stretch;
+}
+
+.workspace-galaxy,
+.workspace-work,
+.workspace-sources,
+.workspace-lab {
+  min-width: 0;
+}
+
+.workspace-galaxy {
+  grid-area: galaxy;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--background);
+  border-inline-end: 1px solid var(--border);
+  padding: 1.125rem 0.875rem;
+}
+
+.workspace-work {
+  grid-area: work;
+  background: var(--card);
+}
+
+.workspace-reading {
+  width: 100%;
+  max-width: 53rem;
+  margin-inline: auto;
+  padding: clamp(1rem, 4vw, 3.5rem);
+  overflow-wrap: anywhere;
+}
+
+.workspace-sources,
+.workspace-lab {
+  display: none;
+  background: var(--background);
+  border-inline-start: 1px solid var(--border);
+  padding: 1.125rem 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.workspace-sources {
+  grid-area: sources;
+}
+
+.workspace-lab {
+  grid-area: lab;
+}
+
+@media (min-width: 52rem) {
+  .workspace[data-layout="focus"][data-pane="sources"] .workspace-panes,
+  .workspace[data-pane="lab"] .workspace-panes {
+    grid-template-columns: clamp(9rem, 15vw, 13rem) minmax(0, 1fr) clamp(16rem, 28vw, 23rem);
+  }
+
+  .workspace[data-layout="focus"][data-pane="sources"] .workspace-panes {
+    grid-template-areas: "galaxy work sources";
+  }
+
+  .workspace[data-pane="lab"] .workspace-panes {
+    grid-template-areas: "galaxy work lab";
+  }
+
+  .workspace[data-layout="notebook"][data-has-sources="true"]:not([data-pane="lab"]) .workspace-panes {
+    grid-template-columns: clamp(9rem, 15vw, 13rem) clamp(16rem, 28vw, 23rem) minmax(0, 1fr);
+    grid-template-areas: "galaxy sources work";
+  }
+
+  .workspace[data-layout="notebook"]:not([data-pane="lab"]) .workspace-sources,
+  .workspace[data-pane="sources"] .workspace-sources,
+  .workspace[data-pane="lab"] .workspace-lab {
+    display: block;
+  }
+
+  .workspace[data-layout="notebook"] .workspace-sources {
+    border-inline-start: 0;
+    border-inline-end: 1px solid var(--border);
+  }
+
+  .workspace[data-layout="notebook"] .workspace-empty-import {
+    display: none;
+  }
+}
+
+@media (min-width: 82rem) {
+  .workspace[data-layout="notebook"][data-pane="lab"] .workspace-panes {
+    grid-template-columns: clamp(9rem, 13vw, 13rem) clamp(16rem, 21vw, 21rem) minmax(0, 1fr) clamp(16rem, 23vw, 21rem);
+    grid-template-areas: "galaxy sources work lab";
+  }
+
+  .workspace[data-layout="notebook"][data-pane="lab"] .workspace-sources {
+    display: block;
+  }
+}
+
+@media (max-width: 51.99rem) {
+  .workspace-layout-switch,
+  .workspace-location,
+  .workspace-panes > * {
+    display: none;
+  }
+
+  .workspace-mobile-galaxy {
+    display: block;
+  }
+
+  .workspace-header,
+  .workspace-toolbar {
+    padding: 0.375rem 0.75rem;
+  }
+
+  .workspace-panel-buttons {
+    width: 100%;
+  }
+
+  .workspace-panel-buttons > button {
+    flex: 1;
+    min-height: 2.75rem;
+    padding-inline: 0.375rem;
+  }
+
+  .workspace-panes {
+    display: block;
+  }
+
+  .workspace[data-pane="galaxy"] .workspace-galaxy {
+    display: flex;
+  }
+
+  .workspace[data-pane="work"] .workspace-work,
+  .workspace[data-pane="sources"] .workspace-sources,
+  .workspace[data-pane="lab"] .workspace-lab {
+    display: block;
+    min-height: calc(100dvh - 7rem);
+    border: 0;
+  }
+}
+
+@media (max-width: 22.5rem) {
+  .workspace-wordmark {
+    font-size: 1.125rem;
+  }
+}

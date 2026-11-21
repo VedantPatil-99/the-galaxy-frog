@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
-const spaceGroteskHeading = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
+const commissioner = localFont({
+  src: "./fonts/commissioner-latin.woff2",
+  variable: "--font-commissioner",
+  weight: "100 900",
+  display: "swap",
 });
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const doto = localFont({
+  src: "./fonts/doto-latin-800.woff2",
+  variable: "--font-doto",
+  weight: "800",
+  display: "swap",
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {
@@ -43,9 +43,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={cn(
         "h-full antialiased",
-        geistSans.variable,
-        geistMono.variable,
-        spaceGroteskHeading.variable,
+        commissioner.variable,
+        doto.variable,
       )}
     >
       <body className="flex min-h-full flex-col">

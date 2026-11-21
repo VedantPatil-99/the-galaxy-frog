@@ -1,6 +1,6 @@
 # Workspace setup and installation stages
 
-Updated 2026-11-21. Live Supabase email sign-in and private preview Storage through FastAPI passed. W1.3 adds explicit local assignments and private source reads. Browser sign-in is part of W2.
+Updated 2026-11-22. Live Supabase email sign-in and private preview Storage through FastAPI passed. W2 adds the browser sign-in routes and notebook shell. Live validation of the browser callback remains open.
 
 ## Needed for the first packet
 
@@ -160,13 +160,26 @@ The local adapter requires no additional dependencies. See [private buckets](htt
 [Storage access control](https://supabase.com/docs/guides/storage/security/access-control), and
 [Supabase secret keys](https://supabase.com/docs/guides/getting-started/api-keys).
 
+## W2 browser sign-in
+
+Local mode needs no account or new machine installation. Use the normal `bun run dev` command from the repository root. The web package now includes `@supabase/ssr` and `@supabase/supabase-js`. On a fresh checkout, `bun install --frozen-lockfile` installs the locked dependencies.
+
+For a separate private-mode browser check, configure W1.2 on FastAPI and put these server settings in `apps/web/.env.local`. Use the same project for both processes.
+
+```dotenv
+WORKSPACE_WEB_ORIGIN=http://localhost:3000
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-project-key
+```
+
+Add the exact `http://localhost:3000/auth/callback` under Supabase **Authentication → URL Configuration → Redirect URLs**, then restart the web process. Open Galaxy Frog at the configured origin, request an email link with an existing allowlisted account, and open the link in the same browser profile. Verify the notebook list across a refresh, sign out, and confirm the workspace returns to sign-in. Use the deployed HTTPS origin and its matching callback URL if testing a hosted instance. [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.
 
-- **Browser authentication:** `@supabase/ssr` and `@supabase/supabase-js` for Next.js session handling when the sign-in UI is built. The W1.2 server verification boundary uses the already installed HTTPX client; it does not need these frontend packages yet. Verify supported APIs against current official docs when integrating.
-- **Remote and transient state:** `@tanstack/react-query` and `zustand` when the authenticated workspace shell first consumes the generated API contracts.
-- **Shell:** existing shadcn Base UI components; add the Resizable/Command/Toast supporting packages only if the selected components need them. Doto uses `next/font/google`, without a separate npm or system font installation.
+- **Remote and transient state:** consider `@tanstack/react-query` and `zustand` when shared caching or durable chat state requires them.
+- **Shell:** existing shadcn Base UI components; add Resizable/Command/Toast packages only when the relevant controls need them. Doto and Commissioner use `next/font/local` with bundled WOFF2 files and OFL notices.
 - **Answers and documents:** `react-markdown`, `remark-gfm`, math/KaTeX and Shiki support, followed by Tiptap's open-source editor packages when their renderers are implemented.
 - **Maps, previews, and motion:** `@xyflow/react`, `pdfjs-dist`, and `motion` in the corresponding feature packets.
 - **Document ingestion/export:** Python `pypdf` and `python-docx` when document adapters are introduced. External OCR providers and cloud storage remain explicit optional adapters.

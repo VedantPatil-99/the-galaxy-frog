@@ -316,7 +316,12 @@ author and committer overrides are unnecessary.
 
 Keep commits focused and preserve the installed skills/MCP configuration. Do not access Notion. Phase 8 documentation timing remains unchanged.
 
-**Next checkpoint is W2.** W1.3 added private storage authorization and explicit legacy
+**W2 is implemented locally.** The workspace defaults to Notebook with sources beside the
+question area. Focus is available, and the transcript and evidence details open on demand.
+Doto appears in the wordmark and Commissioner handles reading and controls. Hosted browser
+email-link acceptance remains open. W3 starts the mixed-source pipeline.
+
+W1.3 added private storage authorization and explicit legacy
 video ownership. The operator migration and notebook-scoped API preserve existing
 citation and frame provenance. The Supabase preview reader passed live acceptance with
 a private bucket. See [ADR 0011](adr/0011-private-legacy-source-reads.md) and
