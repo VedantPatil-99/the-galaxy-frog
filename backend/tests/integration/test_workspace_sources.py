@@ -61,6 +61,8 @@ async def workspace(
     settings = auth_settings(
         database_url=Settings().database_url,
         workspace_creator_emails=[OWNER_EMAIL, OTHER_EMAIL],
+        workspace_preview_storage="local",
+        supabase_storage_secret_key=None,
         vision_workspace_root=tmp_path / "vision",
     )
     app = create_app(settings)
@@ -256,7 +258,11 @@ async def test_migrated_sources_preserve_evidence_and_never_cross_notebook_bound
     monkeypatch.setattr(
         workspace_routes,
         "workspace_settings",
-        Mock(return_value=auth_settings(workspace_preview_storage="supabase")),
+        Mock(
+            return_value=auth_settings(
+                workspace_preview_storage="supabase", supabase_storage_secret_key=None
+            )
+        ),
     )
     unavailable = await client.get(preview, headers=OWN)
     assert unavailable.status_code == 503

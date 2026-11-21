@@ -1,6 +1,6 @@
 # Workspace setup and installation stages
 
-Updated: 2026-11-20. Live Supabase email sign-in through FastAPI passed. W1.3 adds explicit local assignments and private source reads. Hosted preview storage and browser sign-in remain pending live acceptance.
+Updated 2026-11-21. Live Supabase email sign-in and private preview Storage through FastAPI passed. W1.3 adds explicit local assignments and private source reads. Browser sign-in is part of W2.
 
 ## Needed for the first packet
 
@@ -139,11 +139,24 @@ Local previews use the existing `VISION_WORKSPACE_ROOT`. To activate the optiona
    `SUPABASE_STORAGE_SECRET_KEY`, and set `WORKSPACE_PREVIEW_STORAGE=supabase`. The existing
    `SUPABASE_URL` selects the project. The secret key is elevated and belongs only to this server.
 4. Verify the owning creator can fetch the preview through FastAPI. Check that anonymous
-   requests receive 401, another creator receives 404, and neither browser role can fetch the
-   object directly from Storage. Confirm the served response uses `Cache-Control: no-store`.
+   requests receive 401, another creator receives 404, and a publishable key alone cannot
+   fetch the object directly from Storage. Inspect bucket-specific and schema-wide Storage
+   policies for direct browser read grants. Confirm the served response uses
+   `Cache-Control: no-store`.
 
-Hosted provisioning and the live Storage check are pending. The local adapter requires no
-additional dependencies. See [private buckets](https://supabase.com/docs/guides/storage/buckets/fundamentals),
+The user provisioned the private bucket and configured the server key. The 2026-11-20
+live check used a disposable JPEG against real Supabase Storage, local PostgreSQL, and
+two synthetic FastAPI identities. It confirmed the owner receives the exact bytes with
+`no-store`, the other identity gets 404, and anonymous FastAPI callers get 401. Direct
+anonymous and publishable-key-only Storage requests were denied. The test removed its
+object and rolled back its local records. A separate read verified that a missing hosted
+preview is reported as 404 even when Supabase wraps the missing-object response in
+HTTP 400. On 2026-11-21 the Storage dashboard showed zero bucket policies, zero additional
+`storage.objects` policies, and zero `storage.buckets` policies. This confirmed the private
+bucket has no direct read grant for ordinary signed-in users. The live test used the hosted
+Storage reader only for the test process.
+
+The local adapter requires no additional dependencies. See [private buckets](https://supabase.com/docs/guides/storage/buckets/fundamentals),
 [Storage access control](https://supabase.com/docs/guides/storage/security/access-control), and
 [Supabase secret keys](https://supabase.com/docs/guides/getting-started/api-keys).
 

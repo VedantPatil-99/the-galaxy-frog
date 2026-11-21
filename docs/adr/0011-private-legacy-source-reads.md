@@ -28,7 +28,10 @@ calling Storage. The endpoint returns bytes with `no-store` and `nosniff`. Bucke
 server credentials, and download links stay inside FastAPI. A remote failure has an
 explicit error response and does not switch storage.
 
-Hosted activation requires a provisioned private bucket with no browser policies,
-a server-only secret, and a live test of authorized reads and direct-access denial.
-The adapter is tested with simulated Storage responses. Uploads, originals, exports,
-and public sharing follow in the packets that produce or share them.
+Hosted activation requires a provisioned private bucket with no browser policies and
+a server-only secret. In the live acceptance test, local FastAPI used two synthetic
+application identities. The owner received the exact hosted JPEG and the other
+identity and anonymous callers were denied. A publishable key could not read the
+object directly. On 2026-11-21, the Storage dashboard confirmed the private bucket
+had no bucket-specific or schema-wide read policies. The test fixture was removed.
+Uploads, originals, exports, and public sharing follow in their respective packets.

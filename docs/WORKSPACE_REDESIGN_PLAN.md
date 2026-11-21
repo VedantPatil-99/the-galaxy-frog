@@ -1,8 +1,8 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: Implementation started on `feat/workspace`. W0 through W1.2 are complete, including live Supabase email-session acceptance. W1.3 has local ownership and private source reads, with hosted preview Storage acceptance pending. The workspace shell follows in W2.
+Status: W0 through W1.3 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W2 is the workspace shell.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated: 2026-11-20 (Asia/Calcutta) — local Auth connection, live acceptance status, and numeric-code setup alternative.
+Updated 2026-11-21 (Asia/Calcutta) after private Storage acceptance.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
@@ -316,7 +316,11 @@ author and committer overrides are unnecessary.
 
 Keep commits focused and preserve the installed skills/MCP configuration. Do not access Notion. Phase 8 documentation timing remains unchanged.
 
-**Active checkpoint:** W1.3 adds private storage authorization and explicit legacy video ownership before the workspace shell in W2. The operator migration and notebook-scoped API preserve existing citation and frame provenance. The optional Supabase preview reader requires live acceptance with a private bucket. See [ADR 0011](adr/0011-private-legacy-source-reads.md) and track the gates in [PLANS.md](../PLANS.md#active-program--workspace-redesign).
+**Next checkpoint is W2.** W1.3 added private storage authorization and explicit legacy
+video ownership. The operator migration and notebook-scoped API preserve existing
+citation and frame provenance. The Supabase preview reader passed live acceptance with
+a private bucket. See [ADR 0011](adr/0011-private-legacy-source-reads.md) and
+[PLANS.md](../PLANS.md#active-program--workspace-redesign).
 
 Supabase plugin use requires the user's approval. Read-only organization/project discovery was approved on 2026-11-19; project creation, SQL, migrations, and authentication configuration require approval for the specific proposed action. Installation of a plugin alone does not authorize those changes.
 

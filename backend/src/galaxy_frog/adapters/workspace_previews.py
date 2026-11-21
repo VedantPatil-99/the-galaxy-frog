@@ -71,12 +71,31 @@ async def read_supabase_preview(
                 headers=headers,
                 follow_redirects=False,
             ) as response:
-                if response.status_code == 404:
+                if await _object_missing(response):
                     raise PreviewUnavailable
                 response.raise_for_status()
                 return _checked_jpeg(await _bounded_response(response, MAX_PREVIEW_BYTES))
     except httpx.HTTPError, TimeoutError:
         raise PreviewStorageUnavailable from None
+
+
+async def _object_missing(response: httpx.Response) -> bool:
+    if response.status_code == 404:
+        return True
+    if response.status_code != 400:
+        return False
+    # Hosted Storage can wrap a missing object in a legacy HTTP 400 response.
+    try:
+        body: object = json.loads(await _bounded_response(response, 16 * 1024))
+    except PreviewUnavailable, ValueError:
+        return False
+    if not isinstance(body, dict):
+        return False
+    fields = cast(dict[str, object], body)
+    return fields.get("statusCode") in (404, "404") or fields.get("code") in (
+        "NoSuchKey",
+        "not_found",
+    )
 
 
 async def _require_private_bucket(response: httpx.Response) -> None:

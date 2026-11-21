@@ -68,6 +68,11 @@ async def test_preview_disappearing_between_validation_and_open_has_safe_error(
     [
         (b'{"public":false}', 200, JPEG, None),
         (b'{"public":false}', 404, b"", PreviewUnavailable),
+        (b'{"public":false}', 400, b'{"statusCode":"404","error":"not_found"}', PreviewUnavailable),
+        (b'{"public":false}', 400, b'{"code":"NoSuchKey"}', PreviewUnavailable),
+        (b'{"public":false}', 400, b'{"statusCode":"403"}', PreviewStorageUnavailable),
+        (b'{"public":false}', 400, b"invalid json", PreviewStorageUnavailable),
+        (b'{"public":false}', 400, b"[]", PreviewStorageUnavailable),
         (b'{"public":false}', 503, b"", PreviewStorageUnavailable),
         (b'{"public":false}', 200, b"x" * (MAX_PREVIEW_BYTES + 1), PreviewUnavailable),
         (b'{"public":true}', 200, JPEG, PreviewStorageUnavailable),
@@ -75,7 +80,21 @@ async def test_preview_disappearing_between_validation_and_open_has_safe_error(
         (b"invalid json", 200, JPEG, PreviewStorageUnavailable),
         (b" " * (16 * 1024 + 1), 200, JPEG, PreviewStorageUnavailable),
     ],
-    ids=["private", "missing", "failure", "too-large", "public", "malformed", "invalid", "huge"],
+    ids=[
+        "private",
+        "missing",
+        "legacy-missing",
+        "code-missing",
+        "legacy-denied",
+        "legacy-invalid-json",
+        "legacy-non-object",
+        "failure",
+        "too-large",
+        "public",
+        "malformed",
+        "invalid",
+        "huge",
+    ],
 )
 async def test_remote_previews_use_private_bucket_and_fixed_object_identity(
     bucket_body: bytes, status: int, object_body: bytes, error: type[Exception] | None

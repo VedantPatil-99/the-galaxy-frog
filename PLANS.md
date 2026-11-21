@@ -824,15 +824,16 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   and authorization fences covering existing resource paths before workspace exposure.
   Implementation, local API checks, and both production build modes are verified.
   Real Supabase email-session acceptance through FastAPI passed on 2026-11-20.
-- [ ] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
+- [x] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
   - [x] Add the local assignment migration, operator command, and authenticated source reads.
   - [x] Implement the optional private Supabase preview reader with simulated Storage checks.
-  - [ ] Provision the private preview bucket and record live Storage acceptance.
+  - [x] Provision the private preview bucket and verify live reads through FastAPI.
+  - [x] Verify that ordinary signed-in users have no direct Storage read policy.
 - [ ] W2 — Implement both workspace layouts and the selected typography system after W1.
 
-The active checkpoint is W1.3. Later packets remain ordered by the workspace plan. A separate
-Supabase project and local Auth configuration are approved, connected, and live-verified.
-Live Storage acceptance, browser sign-in UI, hosted deployment/CI, and merge are separate gates.
+The next checkpoint is W2. The separate Supabase project passed live Auth and private
+preview Storage acceptance from the local application. Browser sign-in, hosted application
+deployment/CI, and merge remain separate gates.
 Do not access Notion for this program.
 
 ### W1.1 local verification — 2026-11-19
@@ -922,11 +923,28 @@ Supabase authentication/storage acceptance are pending.
   The bucket's privacy is checked before fetching a deterministic object, and failures
   return errors without switching backends. The proxy forwards the private response
   headers. No dependencies were added.
-- Application verification uses real PostgreSQL and synthetic Auth and Storage responses.
-  Hosted bucket provisioning, secret configuration, and a live two-identity test remain
-  open. No existing user videos were assigned or uploaded. See
+- Local application verification uses real PostgreSQL and synthetic Auth and Storage
+  responses. The user then provisioned the private bucket and configured the server
+  key. Live Supabase Storage and local PostgreSQL passed a disposable preview check
+  using two synthetic application identities. The owner received the exact JPEG with
+  private response headers. The other creator received 404 and an anonymous API
+  request received 401. Supabase denied direct reads without a user session, including
+  requests with only the publishable key.
+- The test removed the hosted JPEG and rolled back its local data. No existing user
+  videos were assigned or uploaded. Hosted Storage returned HTTP 400 wrapping a
+  missing-object response. The adapter now reports that specific case as a preview
+  404, verified against a vacant hosted path.
+- On 2026-11-21, read-only inspection of the Supabase dashboard confirmed zero policies for
+  `workspace-previews` and zero additional policies on `storage.objects` or `storage.buckets`.
+  The bucket is private, so ordinary signed-in callers have no direct read policy. This
+  closes the policy check. The live test used synthetic application identities for notebook
+  access and a publishable key for the direct Storage request. See
   [the setup steps](docs/WORKSPACE_SETUP.md#w13-legacy-video-assignments-and-private-previews)
   and [ADR 0011](docs/adr/0011-private-legacy-source-reads.md).
 - Local verification passed: 1,560 backend tests, four optional skips, and 100% statement
   and branch coverage with PostgreSQL integration enabled. All 52 frontend tests, lint,
   formatting, type checks, generated contracts, and the standard production build passed.
+- The Storage response follow-up passed 21 focused tests with 100% coverage of the preview
+  adapter, including PostgreSQL source isolation. Lint, formatting, types, and OpenAPI
+  freshness passed. The follow-up full rerun stalled in the existing Windows media
+  subprocess cleanup path. The 1,560-test result above is from before the follow-up.
