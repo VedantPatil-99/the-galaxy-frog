@@ -32,6 +32,8 @@ Galaxy Frog is a temporal multimodal retrieval product, not a generic video chat
 
 Once installed, use Impeccable for workspace UI/UX reasoning, critique, and design quality. Use the applicable installed Matt Pocock skills for software engineering. Follow the repository's architecture, evidence, and verification requirements.
 
+Read the relevant installed skill instructions and supporting references for each workspace packet. Use the [Gemini API skill](.agents/skills/gemini-api-dev/SKILL.md) for Gemini integration in Python/FastAPI. Preserve the installed skill and MCP configuration during workspace implementation.
+
 ## Working Method & Delivery Rules
 
 1. Inspect existing code, docs, and git status.

@@ -25,11 +25,7 @@ The redesigned product will provide:
 
 Retain the existing Python/FastAPI retrieval foundation and Next.js presentation boundary. Expand the modular monolith with workspace services rather than replacing it with microservices.
 
-### Required local skills and design process
-
-Follow the [workspace skill guidance](../AGENTS.md#workspace-redesign-skills). Before a workspace packet, read the relevant installed `SKILL.md` files and their supporting references. Apply that guidance during planning, implementation, and verification.
-
-Use the [gemini-api-dev](../.agents/skills/gemini-api-dev/SKILL.md) skill when implementing Gemini integration. Provider work remains in Python/FastAPI.
+### Workspace design process
 
 The user requirements, repository architecture, and workspace interaction contract govern implementation. Preserve evidence captions, citation labels, operational status information, and the existing application stack and Base UI accessibility primitives. Verify the work in the running app and record which checks were performed.
 
@@ -44,7 +40,7 @@ Before workspace shell implementation:
 
 ### What the design should refer to
 
-Use this plan's workflows and interaction contract, actual repository behavior, realistic source/evidence/artifact content, and the existing Galaxy Frog brand assets as the primary brief. The skills' references, examples, and assets provide methods and quality guidance rather than a finished Galaxy Frog design.
+Use this plan's workflows and interaction contract, actual repository behavior, realistic source/evidence/artifact content, and the existing Galaxy Frog brand assets as the primary brief.
 
 Use the plan's notebook-style and Codex-style interaction models as references for source organization, focused work, navigation, and inspectors. Any additional visual references must be explicitly identified with the specific principle being studied. Ground Galaxy Frog's visual system in its own workflows and brand assets.
 
@@ -322,7 +318,7 @@ Persist ordered events for progress, validated blocks, artifacts, usage, complet
 
 Deliver focused, atomic packets in this order:
 
-1. **Proposal and baseline:** save this document, reconcile the completed Phase 8 baseline, apply the required local skills, compare layout concepts, and record the reasoned design direction and approved layout/component/typography specifications, including Doto's role.
+1. **Proposal and baseline:** save this document, reconcile the completed Phase 8 baseline, compare layout concepts, and record the reasoned design direction and approved layout/component/typography specifications, including Doto's role.
 2. **Ownership foundation:** authentication, notebook ownership, source authorization, private storage, and explicit legacy-data migration.
 3. **Workspace shell:** implement the selected design direction across both layouts, responsive navigation, themes, tabs, empty/error states, keyboard behavior, and the chosen typography system including visible Doto usage.
 4. **Mixed-source pipeline:** document imports, stable citations, cloud embedding profiles, and indexing coverage.
@@ -378,7 +374,7 @@ Legacy records require an explicit ownership migration. Never assign existing pr
 Use the user's globally configured Git identity for commits on this laptop. Per-command
 author and committer overrides are unnecessary.
 
-Keep commits focused and preserve the installed skills/MCP configuration. Do not access Notion. Phase 8 documentation timing remains unchanged.
+Keep commits focused. Do not access Notion. Phase 8 documentation timing remains unchanged.
 
 **W2 is implemented locally.** The workspace defaults to Notebook with sources beside the
 question area. Focus is available, and the transcript and evidence details open on demand.
