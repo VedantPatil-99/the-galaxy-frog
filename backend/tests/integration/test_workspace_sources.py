@@ -1,5 +1,6 @@
 """Exercise explicit assignments and private reads through FastAPI and PostgreSQL."""
 
+import asyncio
 import json
 import os
 from collections.abc import AsyncGenerator
@@ -17,6 +18,7 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from tests.test_workspace_auth import auth_settings
 
+from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
 from galaxy_frog.api.app import create_app
 from galaxy_frog.api.routes import workspace as workspace_routes
 from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
@@ -36,6 +38,13 @@ from galaxy_frog.db.workspace_sources import (
     WorkspaceSourceRepository,
 )
 from galaxy_frog.db.workspace_text import WorkspaceTextSourceRow
+from galaxy_frog.domain.generation.models import GenerationProviderError
+from galaxy_frog.domain.generation.workspace_answer import (
+    WorkspaceAnswerDraft,
+    WorkspaceAnswerPassage,
+    WorkspaceGeneratedDraft,
+    WorkspaceModelMetrics,
+)
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
@@ -184,6 +193,180 @@ async def workspace(
                 await session.execute(
                     delete(WorkspaceAccountRow).where(WorkspaceAccountRow.id.in_([owner, outsider]))
                 )
+
+
+@pytest.mark.asyncio
+async def test_workspace_answer_validates_selected_passages_and_times_each_stage(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, engine, owner, _, videos, _ = workspace
+    created = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Answer fixture"}
+    )
+    notebook = UUID(created.json()["notebook_id"])
+    base = f"/v1/workspace/notebooks/{notebook}"
+    pasted = "Original evidence records an oak seedling."
+    paste = await client.post(
+        f"{base}/text-sources",
+        headers=OWN,
+        json={
+            "title": "Notebook observation",
+            "format": "plain",
+            "text": pasted,
+        },
+    )
+    pdf_text = "Original evidence calls the specimen an oak seedling."
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        await WorkspaceSourceRepository(session).assign_legacy_videos(owner, notebook, videos[:1])
+        docs = WorkspaceDocumentRepository(session)
+        pdf = await docs.save(
+            owner,
+            notebook,
+            DocumentImport(
+                "field.pdf",
+                "pdf",
+                "c" * 64,
+                200,
+                ParsedDocument(
+                    sections=(StoredDocumentSection(text=pdf_text, spans=((0, len(pdf_text)),)),)
+                ),
+            ),
+        )
+        await session.commit()
+    results = await client.post(f"{base}/search", headers=OWN, json={"query": "original evidence"})
+    hits = {hit["kind"]: hit for hit in results.json()["hits"]}
+    assert set(hits) == {"video", "text", "document"}
+    assert hits["document"]["source"]["source_id"] == str(pdf.source_id)
+    selected = [
+        UNIT_ID,
+        paste.json()["blocks"][0]["block_id"],
+        hits["document"]["block"]["block_id"],
+    ]
+    request = {
+        "query": "original evidence",
+        "question": "What was recorded?",
+        "evidence_ids": selected,
+    }
+    path = f"{base}/answers"
+
+    settings = auth_settings(generation_model="fixture:latest", generation_model_revision="pinned")
+    monkeypatch.setattr(workspace_routes, "workspace_settings", Mock(return_value=settings))
+    models = AsyncMock(return_value={"fixture:latest": "pinned"})
+    monkeypatch.setattr(workspace_routes, "probe_ollama_models", models)
+
+    valid_blocks = [
+        {
+            "text": "The field notes and notebook describe an oak seedling.",
+            "citations": [
+                {"reference": "E2", "quote": "oak seedling"},
+                {"reference": "E3", "quote": "oak seedling"},
+            ],
+        },
+        {
+            "text": "The transcript describes this as original evidence.",
+            "citations": [
+                {"reference": "E1", "quote": "Original evidence"},
+            ],
+        },
+    ]
+    draft_payload: dict[str, object] = {"blocks": valid_blocks}
+
+    async def generate(
+        question: str, passages: tuple[WorkspaceAnswerPassage, ...]
+    ) -> WorkspaceGeneratedDraft:
+        assert question == "What was recorded?"
+        assert [(item.reference, item.kind, item.text) for item in passages] == [
+            ("E1", "video", "Original evidence"),
+            ("E2", "text", pasted),
+            ("E3", "document", pdf_text),
+        ]
+        await asyncio.sleep(0.006)
+        return WorkspaceGeneratedDraft(
+            "fixture:latest",
+            WorkspaceAnswerDraft.model_validate(draft_payload),
+            WorkspaceModelMetrics(),
+        )
+
+    generator = AsyncMock(side_effect=generate)
+    monkeypatch.setattr(OllamaGenerationProvider, "generate_workspace_answer", generator)
+    assert (await client.post(path, json=request)).status_code == 401
+    assert (await client.post(path, headers=OTHER, json=request)).status_code == 404
+    assert (
+        await client.post(path, headers=OWN, json={**request, "evidence_ids": [UNIT_ID, UNIT_ID]})
+    ).status_code == 422
+    stale = await client.post(path, headers=OWN, json={**request, "evidence_ids": [str(uuid4())]})
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "WORKSPACE_EVIDENCE_SELECTION_STALE"
+    temporal = await client.post(
+        path, headers=OWN, json={**request, "question": "What happened after the harvest?"}
+    )
+    assert temporal.status_code == 422
+    assert temporal.json()["error"]["code"] == "WORKSPACE_TEMPORAL_SCOPE_REQUIRED"
+    models.assert_not_awaited()
+    generator.assert_not_awaited()
+
+    for available in ({}, {"fixture:latest": "other-digest"}):
+        models.return_value = available
+        missing = await client.post(path, headers=OWN, json=request)
+        assert missing.status_code == 503
+        assert missing.json()["error"]["code"] == "WORKSPACE_ANSWER_MODEL_NOT_READY"
+    generator.assert_not_awaited()
+    models.return_value = {"fixture:latest": "pinned"}
+
+    warm = await client.post(path, headers=OWN, json=request)
+    assert warm.status_code == 200, warm.text
+    assert warm.headers["cache-control"] == "no-store"
+    samples: list[dict[str, float]] = []
+    for _ in range(8):
+        started = perf_counter()
+        response = await client.post(path, headers=OWN, json=request)
+        api_ms = (perf_counter() - started) * 1_000
+        assert response.status_code == 200
+        body = response.json()
+        assert body["provider"] == "ollama" and body["model"] == "fixture:latest"
+        assert [
+            citation["evidence"] for block in body["blocks"] for citation in block["citations"]
+        ] == [
+            hits["text"],
+            hits["document"],
+            hits["video"],
+        ]
+        samples.append({"api_ms": api_ms, **body["timings"]})
+    assert len(samples) == 8
+    print(
+        json.dumps(
+            {
+                "requests": len(samples),
+                "validated_citations": len(samples) * 3,
+                "passage_characters": len(pasted) + len(pdf_text) + len("Original evidence"),
+                "stage_median_ms": {
+                    stage: round(median(item[stage] for item in samples), 3) for stage in samples[0]
+                },
+            }
+        )
+    )
+
+    for citation in (
+        {"reference": "E4", "quote": "oak seedling"},
+        {"reference": "E2", "quote": "Brazil nut"},
+    ):
+        draft_payload["blocks"] = [
+            *valid_blocks,
+            {"text": "Unverified statement.", "citations": [citation]},
+        ]
+        failure = await client.post(path, headers=OWN, json=request)
+        assert failure.status_code == 502
+        assert failure.json()["error"]["code"] == "WORKSPACE_ANSWER_UNVERIFIED"
+        assert "Unverified statement" not in failure.text
+    draft_payload["blocks"] = []
+    abstained = await client.post(path, headers=OWN, json=request)
+    assert abstained.status_code == 200 and abstained.json()["blocks"] == []
+    generator.side_effect = GenerationProviderError("private upstream content")
+    unavailable = await client.post(path, headers=OWN, json=request)
+    assert unavailable.status_code == 503
+    assert unavailable.json()["error"]["code"] == "WORKSPACE_ANSWER_UNAVAILABLE"
+    assert "private upstream content" not in unavailable.text
 
 
 @pytest.mark.asyncio

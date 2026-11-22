@@ -4639,6 +4639,164 @@
         "title": "WorkspaceAccount",
         "type": "object"
       },
+      "WorkspaceAnswerBlock": {
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceAnswerCitation"
+            },
+            "minItems": 1,
+            "title": "Citations",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "citations"
+        ],
+        "title": "WorkspaceAnswerBlock",
+        "type": "object"
+      },
+      "WorkspaceAnswerCitation": {
+        "properties": {
+          "evidence": {
+            "discriminator": {
+              "mapping": {
+                "document": "#/components/schemas/WorkspaceDocumentMatch",
+                "page_ocr": "#/components/schemas/WorkspaceDocumentMatch",
+                "text": "#/components/schemas/WorkspaceTextMatch",
+                "video": "#/components/schemas/WorkspaceVideoMatch"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceVideoMatch"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceTextMatch"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceDocumentMatch"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quote",
+          "evidence"
+        ],
+        "title": "WorkspaceAnswerCitation",
+        "type": "object"
+      },
+      "WorkspaceAnswerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_ids": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Evidence Ids",
+            "type": "array"
+          },
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "question",
+          "evidence_ids"
+        ],
+        "title": "WorkspaceAnswerRequest",
+        "type": "object"
+      },
+      "WorkspaceAnswerResponse": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceAnswerBlock"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/WorkspaceModelMetrics"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "const": "ollama",
+            "default": "ollama",
+            "title": "Provider",
+            "type": "string"
+          },
+          "timings": {
+            "$ref": "#/components/schemas/WorkspaceAnswerTimings"
+          }
+        },
+        "required": [
+          "model",
+          "blocks",
+          "timings",
+          "metrics"
+        ],
+        "title": "WorkspaceAnswerResponse",
+        "type": "object"
+      },
+      "WorkspaceAnswerTimings": {
+        "properties": {
+          "evidence_ms": {
+            "minimum": 0.0,
+            "title": "Evidence Ms",
+            "type": "number"
+          },
+          "generation_ms": {
+            "minimum": 0.0,
+            "title": "Generation Ms",
+            "type": "number"
+          },
+          "validation_ms": {
+            "minimum": 0.0,
+            "title": "Validation Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "evidence_ms",
+          "generation_ms",
+          "validation_ms"
+        ],
+        "title": "WorkspaceAnswerTimings",
+        "type": "object"
+      },
       "WorkspaceDocumentListResponse": {
         "properties": {
           "next_after": {
@@ -4864,6 +5022,72 @@
           "capture_ms"
         ],
         "title": "WorkspaceFrameResponse",
+        "type": "object"
+      },
+      "WorkspaceModelMetrics": {
+        "properties": {
+          "eval_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eval Count"
+          },
+          "eval_duration": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eval Duration"
+          },
+          "load_duration": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Duration"
+          },
+          "prompt_eval_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Eval Count"
+          },
+          "prompt_eval_duration": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Eval Duration"
+          }
+        },
+        "title": "WorkspaceModelMetrics",
         "type": "object"
       },
       "WorkspacePageOCR": {
@@ -7884,6 +8108,124 @@
           }
         ],
         "summary": "Rename Notebook",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/answers": {
+      "post": {
+        "operationId": "answer_notebook_question_v1_workspace_notebooks__notebook_id__answers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceAnswerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Answer Notebook Question",
         "tags": [
           "workspace"
         ]

@@ -1,8 +1,8 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.4 passed locally and cover private text, document import, opt-in PDF page OCR, and notebook keyword search.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.5 passed locally and cover private text, document import, opt-in PDF page OCR, notebook keyword search, and local answers from selected passages.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated 2026-11-22 (Asia/Calcutta) after notebook keyword search verification.
+Updated 2026-11-22 (Asia/Calcutta) after local cited-answer verification.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
@@ -214,8 +214,14 @@ W3.4 adds **Find words in sources** to private notebooks. The local `postgres-ke
 profile finds matching transcript units, document and pasted text blocks, and saved page OCR.
 Candidates are scoped to the notebook and ranked against the exact evidence returned.
 Each result opens its source preview at the matching location, and the results show the
-observed browser wait. The remaining W3 work covers mixed-source answers and semantic indexing.
-[Search architecture](adr/0012-notebook-keyword-search.md)
+observed browser wait. [Search architecture](adr/0012-notebook-keyword-search.md)
+
+W3.5 uses an explicit selection of search passages as the source scope for a one-shot local
+answer. FastAPI reloads the matches, sends bounded text to the configured Ollama model, and
+validates every returned reference and exact quote against the text it sent. Citations reopen
+their original page, text block, or video interval. The answer badge shows the browser request
+duration. Semantic indexing remains in W3.
+[Answer architecture](adr/0013-answers-from-selected-passages.md)
 
 ### Models and retrieval profiles
 

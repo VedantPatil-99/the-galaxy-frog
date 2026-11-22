@@ -15,6 +15,7 @@ export type WorkspaceDocumentSection = Schema["WorkspaceDocumentSection"]
 export type WorkspacePageOCR = Schema["WorkspacePageOCR"]
 export type WorkspaceSearchResult = Schema["WorkspaceSearchResponse"]
 export type WorkspaceSearchHit = WorkspaceSearchResult["hits"][number]
+export type WorkspaceAnswer = Schema["WorkspaceAnswerResponse"]
 
 const base = "/v1/workspace"
 
@@ -202,4 +203,16 @@ export function searchWorkspaceSources(notebookId: string, query: string, signal
       && Array.isArray(value.hits) && value.hits.every(searchHit), fetch, {
     method: "POST", body: JSON.stringify(input), signal,
   })
+}
+
+export function answerWorkspaceQuestion(
+  notebookId: string, query: string, question: string, evidenceIds: string[], signal: AbortSignal,
+) {
+  const input: Schema["WorkspaceAnswerRequest"] = { query, question, evidence_ids: evidenceIds }
+  return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/answers`, (value): value is WorkspaceAnswer =>
+    object(value) && value.provider === "ollama" && typeof value.model === "string" && Array.isArray(value.blocks)
+      && value.blocks.every(block => object(block) && typeof block.text === "string"
+        && Array.isArray(block.citations) && block.citations.length > 0
+        && block.citations.every(citation => object(citation) && typeof citation.quote === "string" && searchHit(citation.evidence))),
+  fetch, { method: "POST", body: JSON.stringify(input), signal })
 }

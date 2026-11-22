@@ -225,6 +225,18 @@ notebook, enter search words under **Find words in sources**. Select any match t
 source preview. The small duration beside the results measures the browser request.
 Search uses the local database and existing dependencies. [Measurement log](WORKSPACE_MEASUREMENTS.md)
 
+## W3.5 answers from selected passages
+
+Start the installed Ollama service. FastAPI uses the existing `OLLAMA_BASE_URL` and
+`GENERATION_MODEL` settings and checks the installed model against `GENERATION_MODEL_REVISION`
+when a revision is configured. This packet uses the current database schema.
+
+In a private notebook, use **Find words in sources**, check up to six matching passages,
+then open **Ask about selected passages**. Submit the question with **Ask with Ollama**.
+Select a citation to reopen its source. The badge beside the answer measures the browser
+request. Questions that need temporal resolution require the video-specific workflow.
+[Measurement log](WORKSPACE_MEASUREMENTS.md)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.

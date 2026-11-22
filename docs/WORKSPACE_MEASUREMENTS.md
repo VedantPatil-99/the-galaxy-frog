@@ -43,3 +43,43 @@ Reproduce the local API measurement with the current migrations applied.
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
   tests/integration/test_workspace_sources.py::test_keyword_search_opens_owned_evidence_and_measures_labeled_queries
 ```
+
+## 2026-11-22 · W3.5 answers from selected passages
+
+- **API fixture** — Eight warm serial requests through local FastAPI and PostgreSQL, with
+  simulated authentication and a simulated model. The three selected passages totaled
+  112 characters across a one-second video record, one pasted note, and a one-page PDF.
+- **Median elapsed time** — 27.04 ms for the API request, 3.64 ms for reloading and preparing
+  evidence, 11.71 ms for the simulated generation stage, and 0.08 ms for citation validation.
+  The API measured additional request, authorization, and response handling around those stages.
+- **Citation checks** — All 24 expected citations resolved to their selected original evidence.
+  The same fixture rejected drafts containing an unknown passage reference or a fabricated quote.
+- **Browser fixture** — The answer badge showed 277 ms with a deliberate 250 ms response delay.
+  Headless Chrome checked that passage selection was required, the citation opened its exact
+  PDF page, focus moved to the preview, and the layout reflowed at 390 px.
+
+### Installed model on the local Windows machine
+
+Three serial calls used Ollama 0.40.13 with `qwen3:4b`. Each repeated the same synthetic question
+and three passages totaling 116 characters from a three-second video record, one PDF page,
+and a pasted note. These timings cover the adapter's HTTP round trip and a separate citation
+check. The API fixture above measures the notebook database path.
+
+- **First call after process start** — 11.84 s round trip. Ollama reported 6.17 s for model load,
+  258 ms for prompt evaluation, and 5.37 s for generating 123 output tokens. Citation validation
+  took 1.83 ms.
+- **Two warm calls** — 5.46 s and 5.65 s round trips. Reported load took 5.4–6.6 ms,
+  prompt evaluation took 68–70 ms, and decoding took 5.36–5.54 s. That is 22.2–23.0
+  output tokens/s, calculated from 123 tokens and each call's decoding duration. Citation
+  validation took 0.034–0.042 ms.
+- **Fixture accuracy** — All three answers included both labeled facts and six citations
+  in total validated. The citations pointed to the original video unit and PDF page.
+  This sample measures one repeated question with known answers.
+  [Ollama timing fields](https://docs.ollama.com/api/generate)
+
+Reproduce the API fixture with the current local migrations applied.
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
+  tests/integration/test_workspace_sources.py::test_workspace_answer_validates_selected_passages_and_times_each_stage
+```

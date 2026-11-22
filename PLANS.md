@@ -840,8 +840,9 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     prevent duplicate cloud processing on refresh, retries, and concurrent requests.
   - [x] W3.4 — Notebook-wide keyword search over transcripts, documents, pasted text,
     and saved page OCR. Open each match at its source and measure the local search path.
-  - [ ] Remaining W3 — Validated mixed-source citations in answers and semantic indexing
-    with explicit profiles.
+  - [x] W3.5 — Answer questions from explicitly selected notebook passages using the
+    configured local model. Validate every citation and measure the answer stages.
+  - [ ] Remaining W3 — Semantic indexing with explicit embedding profiles.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
@@ -849,14 +850,22 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the active checkpoint. W3.1 through W3.4 passed locally. The remaining W3 work covers
-mixed-source answers and semantic indexing. Record measurements as each packet is implemented
-and tested in [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
+W3 is the active checkpoint. W3.1 through W3.5 passed locally. Semantic indexing remains
+in W3. Record measurements as each packet is implemented and tested in
+[Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
 The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
 also passed live Auth and private preview Storage
 through FastAPI in W1.
 Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.5 local verification — 2026-11-22
+
+- Questions use selected passages from the owned notebook. FastAPI rejects stale
+  selections, unresolved temporal queries, and drafts with unverifiable citations.
+- The browser verified passage selection, the elapsed-time badge, and reopening the
+  cited PDF page. The controlled API fixture and a separate three-call run on the
+  installed `qwen3:4b` model passed. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
 
 ### W3.4 local verification — 2026-11-22
 

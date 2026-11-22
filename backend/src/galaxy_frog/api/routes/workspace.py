@@ -28,6 +28,14 @@ from galaxy_frog.api.dependencies import get_workspace_repository
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.schemas import ErrorResponse
 from galaxy_frog.api.transcript_projection import transcript_evidence
+from galaxy_frog.api.workspace_answers import (
+    WorkspaceAnswerRequest,
+    WorkspaceAnswerResponse,
+    WorkspaceAnswerTimings,
+    validated_workspace_blocks,
+    workspace_answer_passages,
+    workspace_evidence_id,
+)
 from galaxy_frog.api.workspace_auth import (
     get_verified_workspace_creator,
     prevent_workspace_caching,
@@ -47,6 +55,7 @@ from galaxy_frog.api.workspace_schemas import (
     WorkspaceVideoSourceResponse,
     workspace_search_hit,
 )
+from galaxy_frog.application.provider_registry import probe_ollama_models
 from galaxy_frog.config import Settings
 from galaxy_frog.db.models import VideoFrameRow, VideoRow
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
@@ -57,6 +66,13 @@ from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRepository
 from galaxy_frog.db.workspace_search import search_workspace_sources
 from galaxy_frog.db.workspace_sources import WorkspaceSourceRepository
 from galaxy_frog.db.workspace_text import WorkspaceTextRepository
+from galaxy_frog.domain.generation.models import GenerationProviderError
+from galaxy_frog.domain.generation.workspace_answer import (
+    WorkspaceAnswerDraftInvalid,
+    WorkspaceAnswerProvider,
+)
+from galaxy_frog.domain.retrieval.pipeline import QueryKind
+from galaxy_frog.domain.retrieval.query import analyze_query
 from galaxy_frog.domain.videos.models import VideoSourceKind
 from galaxy_frog.domain.workspace import (
     Notebook,
@@ -124,6 +140,90 @@ async def search_notebook_sources(
     query_ms = (perf_counter() - started) * 1_000
     return WorkspaceSearchResponse(
         query_ms=round(query_ms, 3), hits=tuple(workspace_search_hit(row) for row in rows)
+    )
+
+
+@router.post(
+    "/notebooks/{notebook_id}/answers",
+    responses={code: {"model": ErrorResponse} for code in (409, 422, 502)},
+)
+async def answer_notebook_question(
+    notebook_id: UUID,
+    body: WorkspaceAnswerRequest,
+    request: Request,
+    identity: Creator,
+    repository: Repository,
+) -> WorkspaceAnswerResponse:
+    try:
+        await repository.get_notebook(identity.account_id, notebook_id)
+    except NotebookNotFound:
+        raise _notebook_not_found() from None
+    if analyze_query(body.question).kind == QueryKind.TEMPORAL:
+        raise ApiError(
+            status_code=422,
+            code="WORKSPACE_TEMPORAL_SCOPE_REQUIRED",
+            message="This question needs a resolved video time or event. Choose a time-specific video workflow.",
+            retryable=False,
+        )
+
+    started = perf_counter()
+    rows = await search_workspace_sources(
+        repository.session, identity.account_id, notebook_id, body.query
+    )
+    hits = {workspace_evidence_id(hit): hit for hit in map(workspace_search_hit, rows)}
+    if any(key not in hits for key in body.evidence_ids):
+        raise ApiError(
+            status_code=409,
+            code="WORKSPACE_EVIDENCE_SELECTION_STALE",
+            message="Search again and select passages from the current results.",
+            retryable=False,
+        )
+    evidence = tuple(hits[key] for key in body.evidence_ids)
+    passages = workspace_answer_passages(evidence)
+    await repository.session.rollback()
+    evidence_ms = (perf_counter() - started) * 1_000
+
+    started = perf_counter()
+    settings = workspace_settings(request)
+    models = await probe_ollama_models(settings.ollama_base_url)
+    configured = settings.generation_model
+    revision = models.get(configured) or models.get(f"{configured}:latest")
+    if not revision or settings.generation_model_revision not in {None, revision}:
+        raise ApiError(
+            status_code=503,
+            code="WORKSPACE_ANSWER_MODEL_NOT_READY",
+            message="Start your configured local Ollama model and verify its revision.",
+            retryable=False,
+        )
+    provider = cast("WorkspaceAnswerProvider", request.app.state.generation_provider_factory())
+    try:
+        generated = await provider.generate_workspace_answer(body.question, passages)
+        generation_ms = (perf_counter() - started) * 1_000
+        started = perf_counter()
+        blocks = validated_workspace_blocks(generated, passages, evidence)
+    except GenerationProviderError:
+        raise ApiError(
+            status_code=503,
+            code="WORKSPACE_ANSWER_UNAVAILABLE",
+            message="The local Ollama model could not complete the answer.",
+            retryable=True,
+        ) from None
+    except WorkspaceAnswerDraftInvalid:
+        raise ApiError(
+            status_code=502,
+            code="WORKSPACE_ANSWER_UNVERIFIED",
+            message="The model returned an answer with evidence that could not be verified.",
+            retryable=False,
+        ) from None
+    return WorkspaceAnswerResponse(
+        model=generated.model,
+        blocks=blocks,
+        metrics=generated.metrics,
+        timings=WorkspaceAnswerTimings(
+            evidence_ms=round(evidence_ms, 3),
+            generation_ms=round(generation_ms, 3),
+            validation_ms=round((perf_counter() - started) * 1_000, 3),
+        ),
     )
 
 

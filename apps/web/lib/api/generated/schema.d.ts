@@ -567,6 +567,23 @@ export interface paths {
         patch: operations["rename_notebook_v1_workspace_notebooks__notebook_id__patch"];
         trace?: never;
     };
+    "/v1/workspace/notebooks/{notebook_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer Notebook Question */
+        post: operations["answer_notebook_question_v1_workspace_notebooks__notebook_id__answers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/notebooks/{notebook_id}/documents": {
         parameters: {
             query?: never;
@@ -2484,6 +2501,53 @@ export interface components {
              */
             created_at: string;
         };
+        /** WorkspaceAnswerBlock */
+        WorkspaceAnswerBlock: {
+            /** Citations */
+            citations: components["schemas"]["WorkspaceAnswerCitation"][];
+            /** Text */
+            text: string;
+        };
+        /** WorkspaceAnswerCitation */
+        WorkspaceAnswerCitation: {
+            /** Evidence */
+            evidence: components["schemas"]["WorkspaceVideoMatch"] | components["schemas"]["WorkspaceTextMatch"] | components["schemas"]["WorkspaceDocumentMatch"];
+            /** Quote */
+            quote: string;
+        };
+        /** WorkspaceAnswerRequest */
+        WorkspaceAnswerRequest: {
+            /** Evidence Ids */
+            evidence_ids: string[];
+            /** Query */
+            query: string;
+            /** Question */
+            question: string;
+        };
+        /** WorkspaceAnswerResponse */
+        WorkspaceAnswerResponse: {
+            /** Blocks */
+            blocks: components["schemas"]["WorkspaceAnswerBlock"][];
+            metrics: components["schemas"]["WorkspaceModelMetrics"];
+            /** Model */
+            model: string;
+            /**
+             * Provider
+             * @default ollama
+             * @constant
+             */
+            provider: "ollama";
+            timings: components["schemas"]["WorkspaceAnswerTimings"];
+        };
+        /** WorkspaceAnswerTimings */
+        WorkspaceAnswerTimings: {
+            /** Evidence Ms */
+            evidence_ms: number;
+            /** Generation Ms */
+            generation_ms: number;
+            /** Validation Ms */
+            validation_ms: number;
+        };
         /** WorkspaceDocumentListResponse */
         WorkspaceDocumentListResponse: {
             /** Next After */
@@ -2572,6 +2636,19 @@ export interface components {
             sequence: number;
             /** Start Ms */
             start_ms: number;
+        };
+        /** WorkspaceModelMetrics */
+        WorkspaceModelMetrics: {
+            /** Eval Count */
+            eval_count?: number | null;
+            /** Eval Duration */
+            eval_duration?: number | null;
+            /** Load Duration */
+            load_duration?: number | null;
+            /** Prompt Eval Count */
+            prompt_eval_count?: number | null;
+            /** Prompt Eval Duration */
+            prompt_eval_duration?: number | null;
         };
         /** WorkspacePageOCR */
         WorkspacePageOCR: {
@@ -4542,6 +4619,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    answer_notebook_question_v1_workspace_notebooks__notebook_id__answers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceAnswerResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */
