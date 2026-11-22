@@ -10,7 +10,7 @@ Galaxy Frog is a workspace for reading, questioning, and producing study materia
 
 The current application provides behavior to preserve: imports, durable progress, transcript search, the player, citation seeking, moment explanations, Study materials, and explicit provider/consent controls. Existing layout and typography are open to replacement. The existing frog logo remains a brand asset.
 
-Apply `.agents/skills/frontend-design/SKILL.md` for product reasoning and critique, and `.agents/skills/design-taste-frontend/SKILL.md` for applicable composition, copy, consistency, accessibility, and performance guidance. The workspace plan's application-specific overrides apply. Marketing heroes, random palette/font deals, forced screen-height sections, stock photos, shaders, static export, and limits on evidence captions do not apply. Their marketing-page gates cannot establish that a private application works.
+For future workspace work, follow the [repository skill guidance](../AGENTS.md#workspace-redesign-skills) and use this specification for Galaxy Frog's layout, evidence presentation, typography, and verification.
 
 ## Journeys and the information they need
 
@@ -69,7 +69,7 @@ The palette is a starting specification, not a verified accessibility result. Me
 
 Use existing shadcn Base UI primitives, Phosphor icons, theme foundations, and the FastAPI proxy. Introduce Sidebar, Resizable, Tabs, Sheets, and document controls only where they serve a journey. Do not replace the application with a static mock or make an unfinished control look functional.
 
-W2 used the repository's frontend-design and design-taste-frontend guidance for visual hierarchy, aligned panels, concise copy, and readable controls. The product layout and interaction requirements take priority over marketing hero, stock photography, and static landing-page gates.
+**W2 design record.** W2 used the repository's frontend-design and design-taste-frontend guidance for visual hierarchy, aligned panels, concise copy, and readable controls. The workspace layout and interaction requirements governed that work.
 
 In W3.3, a PDF page without extractable text shows its own OCR disclosure beneath the preview. The owner approves processing for that page. Saved OCR text opens on demand from the same page.
 

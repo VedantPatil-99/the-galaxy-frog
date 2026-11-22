@@ -28,6 +28,10 @@ Galaxy Frog is a temporal multimodal retrieval product, not a generic video chat
 - Phase 7 may read existing transcripts, embeddings, scenes, and OCR to build chapters and evidence-backed study artifacts. Separate slide/PDF association is deferred.
 - Non-goals for Phase 7: ingestion redesign, new OCR/frame/scene/embedding/VLM processing, LangGraph, cloud deployment, provider-selection UI, and the later evaluation platform.
 
+## Workspace redesign skills
+
+Once installed, use Impeccable for workspace UI/UX reasoning, critique, and design quality. Use the applicable installed Matt Pocock skills for software engineering. Follow the repository's architecture, evidence, and verification requirements.
+
 ## Working Method & Delivery Rules
 
 1. Inspect existing code, docs, and git status.

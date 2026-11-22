@@ -27,13 +27,11 @@ Retain the existing Python/FastAPI retrieval foundation and Next.js presentation
 
 ### Required local skills and design process
 
-Before designing or implementing any workspace work packet, inspect `.agents/skills/` and read the relevant `SKILL.md` files and their required supporting references. Apply the skills during planning, implementation, and verification; merely mentioning them does not satisfy this requirement.
+Follow the [workspace skill guidance](../AGENTS.md#workspace-redesign-skills). Before a workspace packet, read the relevant installed `SKILL.md` files and their supporting references. Apply that guidance during planning, implementation, and verification.
 
-- Use [frontend-design](../.agents/skills/frontend-design/SKILL.md) for every UI design or implementation packet: product-specific reasoning, layout alternatives, typography, a coherent token system, and critique before and after building.
-- Use [design-taste-frontend](../.agents/skills/design-taste-frontend/SKILL.md) alongside it for visual quality, composition, plain interface copy, responsive behavior, restrained motion, and applicable assets and verification scripts.
-- Use other relevant installed skills for their actual scope, including [gemini-api-dev](../.agents/skills/gemini-api-dev/SKILL.md) when implementing Gemini integration. Provider work remains in Python/FastAPI.
+Use the [gemini-api-dev](../.agents/skills/gemini-api-dev/SKILL.md) skill when implementing Gemini integration. Provider work remains in Python/FastAPI.
 
-The user requirements, repository architecture, and workspace interaction contract take precedence over conflicting skill recipes. This is a working application: do not impose marketing-page heroes, one-section-per-screen layouts, decorative effects, randomized font/palette choices, or static-export requirements on its workspace. Preserve evidence captions, citation labels, and operational status information. Keep the existing application stack and Base UI accessibility primitives. Record which skill checks apply and explain any exclusions; do not claim an inapplicable or unrun checker passed.
+The user requirements, repository architecture, and workspace interaction contract govern implementation. Preserve evidence captions, citation labels, operational status information, and the existing application stack and Base UI accessibility primitives. Verify the work in the running app and record which checks were performed.
 
 **Rebuild the workspace UI through product reasoning.** Rethink information architecture, navigation, panel composition, hierarchy, interaction patterns, and visual identity across the planned workspace. The existing UI is evidence of current behavior and usability problems, not a layout to reproduce with new colors. Reuse sound components and preserve working behavior, provenance, and API boundaries while rebuilding the presentation in the approved delivery order.
 
@@ -48,7 +46,7 @@ Before workspace shell implementation:
 
 Use this plan's workflows and interaction contract, actual repository behavior, realistic source/evidence/artifact content, and the existing Galaxy Frog brand assets as the primary brief. The skills' references, examples, and assets provide methods and quality guidance rather than a finished Galaxy Frog design.
 
-Use the plan's notebook-style and Codex-style interaction models as references for source organization, focused work, navigation, and inspectors. Any additional visual references must be explicitly identified with the specific principle being studied. The taste skill names Figma and x.ai as craft benchmarks; they are not workspace templates. Derive Galaxy Frog's own visual system instead of copying another product's screen, branding, or signature effects.
+Use the plan's notebook-style and Codex-style interaction models as references for source organization, focused work, navigation, and inspectors. Any additional visual references must be explicitly identified with the specific principle being studied. Ground Galaxy Frog's visual system in its own workflows and brand assets.
 
 ### Typography requirements
 
