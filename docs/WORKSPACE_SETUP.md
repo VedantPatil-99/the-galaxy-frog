@@ -288,6 +288,21 @@ to update the index. **Preview Cohere search** shows the exact query for a separ
 If a call has an uncertain outcome, inspect Cohere usage before approving another request.
 [Cohere data use](https://cohere.com/enterprise-data-commitments) · [Measurement log](WORKSPACE_MEASUREMENTS.md)
 
+## W4.1 Private chats and prompt drafts
+
+Apply `bun run db:migrate` to the configured local database and restart FastAPI. The
+migration adds the private chat table using the existing dependencies.
+
+Open an owned notebook and select **New chat**. Use **Rename** to change its name. The
+question saves as you type. Once **Draft saved** appears, switching chats or refreshing
+restores the saved text. If another tab saved a revision, use **Review saved draft**
+to choose which text to keep.
+
+To use the draft with the existing local Ollama workflow, find words in the notebook
+and select supporting passages before choosing **Ask with Ollama**. The answer is a
+session result in this packet. Saved answer history and recoverable runs follow in W4.2.
+[Measurement log](WORKSPACE_MEASUREMENTS.md)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.

@@ -27,6 +27,7 @@ from galaxy_frog.api.routes.retrieval import router as retrieval_router
 from galaxy_frog.api.routes.study import router as study_router
 from galaxy_frog.api.routes.videos import router as videos_router
 from galaxy_frog.api.routes.workspace import router as workspace_router
+from galaxy_frog.api.routes.workspace_chats import router as workspace_chats_router
 from galaxy_frog.api.routes.workspace_semantic import router as workspace_semantic_router
 from galaxy_frog.api.routes.workspace_semantic_cloud import (
     router as workspace_semantic_cloud_router,
@@ -162,6 +163,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         else None
     )
     application.include_router(workspace_router)
+    application.include_router(workspace_chats_router)
     application.include_router(workspace_semantic_router)
     application.include_router(workspace_semantic_cloud_router)
     return application

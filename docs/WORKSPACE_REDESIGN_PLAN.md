@@ -1,8 +1,8 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3 passed locally with controlled fixtures for both cloud embedding providers. W4 is next.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3 passed locally with controlled fixtures for both cloud embedding providers. W4.1 passed locally. W4.2 is next.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated 2026-11-22 (Asia/Calcutta) after Cohere embedding confirmation verification.
+Updated 2026-11-22 (Asia/Calcutta) after private chat and prompt draft verification.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
@@ -240,6 +240,15 @@ passage excerpts with its document input role and embeds queries with its query 
 The preview uses the configured production rate or indicates local trial mode. Changing
 profiles requires a confirmed rebuild because each provider has its own collection identity.
 [Cohere confirmation architecture](adr/0016-cohere-notebook-embedding-confirmation.md)
+
+### Persistent notebook chats
+
+W4.1 adds a private chat picker and an autosaved question draft for each chat. Reopening a
+chat restores its prompt. A conflicting revision keeps the local editor text and allows
+the user to compare it with the saved draft. The existing selected-passage workflow
+uses the current draft and opens its citations in the source preview. Saved answer
+history and recoverable generation runs follow in W4.2.
+[Chat and draft architecture](adr/0017-workspace-chats-and-drafts.md)
 
 ### Models and retrieval profiles
 

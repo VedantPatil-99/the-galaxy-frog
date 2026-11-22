@@ -211,6 +211,113 @@ async def workspace(
 
 
 @pytest.mark.asyncio
+async def test_workspace_chats_scope_and_compare_prompt_draft_revisions(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+) -> None:
+    client, _, _, _, _, _ = workspace
+
+    async def notebook(headers: dict[str, str], title: str) -> str:
+        response = await client.post(
+            "/v1/workspace/notebooks", headers=headers, json={"title": title}
+        )
+        assert response.status_code == 201
+        return str(response.json()["notebook_id"])
+
+    owned = await notebook(OWN, "Chat fixture")
+    sibling = await notebook(OWN, "Other owned notebook")
+    foreign = await notebook(OTHER, "Other account notebook")
+    path = f"/v1/workspace/notebooks/{owned}/chats"
+    first_body = {"chat_id": str(uuid4()), "title": "  First chat  "}
+    second_body = {"chat_id": str(uuid4()), "title": "Second chat"}
+    first_path = f"{path}/{first_body['chat_id']}"
+    draft_path = f"{first_path}/draft"
+    assert (await client.get(path)).status_code == 401
+    assert (await client.get(path, headers=OTHER)).status_code == 404
+    assert (await client.post(path, headers=OTHER, json=first_body)).status_code == 404
+    assert (await client.get(first_path, headers=OWN)).status_code == 404
+    assert (
+        await client.patch(first_path, headers=OWN, json={"title": "Missing"})
+    ).status_code == 404
+    for body in (first_body, first_body, second_body):
+        response = await client.post(path, headers=OWN, json=body)
+        assert response.status_code == 201
+        assert response.json()["draft"] == {"text": "", "revision": 0}
+    assert (await client.get(f"{path}?after={uuid4()}", headers=OWN)).status_code == 404
+    page = await client.get(f"{path}?limit=1", headers=OWN)
+    assert page.status_code == 200 and page.headers["cache-control"] == "no-store"
+    assert len(page.json()["chats"]) == 1
+    after = page.json()["next_after"]
+    assert after == second_body["chat_id"]
+    page = await client.get(f"{path}?limit=1&after={after}", headers=OWN)
+    assert page.json()["next_after"] is None
+    assert page.json()["chats"][0]["chat_id"] == first_body["chat_id"]
+    assert "draft" not in page.json()["chats"][0]
+    for notebook_id, headers in ((sibling, OWN), (foreign, OTHER), (owned, OTHER)):
+        inaccessible = f"/v1/workspace/notebooks/{notebook_id}/chats/{first_body['chat_id']}"
+        assert (await client.get(inaccessible, headers=headers)).status_code == 404
+        assert (
+            await client.put(
+                f"{inaccessible}/draft", headers=headers, json={"text": "Other", "revision": 0}
+            )
+        ).status_code == 404
+    assert (
+        await client.post(f"/v1/workspace/notebooks/{sibling}/chats", headers=OWN, json=first_body)
+    ).status_code == 404
+    renamed = await client.patch(first_path, headers=OWN, json={"title": "Water and minerals"})
+    assert renamed.status_code == 200 and renamed.json()["title"] == "Water and minerals"
+
+    sample = ("  Café water and minerals\n" * 30)[:1000]
+    write_ms: list[float] = []
+    read_ms: list[float] = []
+    for revision in range(8):
+        prompt = f"{sample}{revision}"
+        started = perf_counter()
+        saved = await client.put(
+            draft_path, headers=OWN, json={"text": prompt, "revision": revision}
+        )
+        write_ms.append((perf_counter() - started) * 1_000)
+        assert saved.status_code == 200 and saved.headers["cache-control"] == "no-store"
+        assert saved.json() == {"text": prompt, "revision": revision + 1}
+        started = perf_counter()
+        reopened = await client.get(first_path, headers=OWN)
+        read_ms.append((perf_counter() - started) * 1_000)
+        assert reopened.status_code == 200 and reopened.json()["draft"] == saved.json()
+    saved_prompt = f"{sample}7"
+    identical = await client.put(
+        draft_path, headers=OWN, json={"text": saved_prompt, "revision": 7}
+    )
+    assert identical.json() == {"text": saved_prompt, "revision": 8}
+    raced = await asyncio.gather(
+        *(
+            client.put(draft_path, headers=OWN, json={"text": text_value, "revision": 8})
+            for text_value in ("Revision from tab one", "Revision from tab two")
+        )
+    )
+    assert sorted(result.status_code for result in raced) == [200, 409]
+    winner = next(result.json() for result in raced if result.status_code == 200)
+    conflict = next(result.json() for result in raced if result.status_code == 409)
+    assert conflict["error"]["code"] == "WORKSPACE_DRAFT_CONFLICT"
+    assert (await client.get(first_path, headers=OWN)).json()["draft"] == winner
+    assert (
+        await client.put(draft_path, headers=OWN, json={"text": "long" * 251, "revision": 9})
+    ).status_code == 422
+    cleared = await client.put(draft_path, headers=OWN, json={"text": "", "revision": 9})
+    assert cleared.json() == {"text": "", "revision": 10}
+    print(
+        json.dumps(
+            {
+                "chat_draft_samples": len(write_ms),
+                "chat_draft_utf8_bytes": len(saved_prompt.encode()),
+                "chat_draft_write_api_median_ms": round(median(write_ms), 3),
+                "chat_detail_read_api_median_ms": round(median(read_ms), 3),
+                "chat_draft_exact_restores": len(read_ms),
+                "chat_draft_concurrent_writes_accepted": 1,
+            }
+        )
+    )
+
+
+@pytest.mark.asyncio
 async def test_gemini_embeddings_require_current_once_only_cloud_confirmation(
     workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
     monkeypatch: pytest.MonkeyPatch,

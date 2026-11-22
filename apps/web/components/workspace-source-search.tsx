@@ -5,14 +5,17 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
+import { WorkspaceChatPicker } from "@/components/workspace-chat-picker"
 import { ElapsedBadge, EvidenceMatchButton, evidenceId, location, sourceTitle } from "@/components/workspace-evidence-display"
 import { ApiClientError } from "@/lib/api/client"
-import { answerWorkspaceQuestion, searchWorkspaceSources, type WorkspaceAnswer, type WorkspaceSearchHit } from "@/lib/api/workspace"
+import { answerWorkspaceQuestion, searchWorkspaceSources, type WorkspaceAnswer, type WorkspaceChat, type WorkspaceSearchHit } from "@/lib/api/workspace"
+import { useWorkspaceDraft } from "@/lib/use-workspace-draft"
 
 const maxPassages = 6
 
-function WorkspacePassageAnswer({ notebookId, query, selected, onOpen, onExpired }: {
+function WorkspacePassageAnswer({ notebookId, chat, query, selected, onOpen, onExpired }: {
   notebookId: string
+  chat: WorkspaceChat | null
   query: string
   selected: string[]
   onOpen: (hit: WorkspaceSearchHit) => void
@@ -20,7 +23,7 @@ function WorkspacePassageAnswer({ notebookId, query, selected, onOpen, onExpired
 }) {
   const field = useId()
   const request = useRef<AbortController | null>(null)
-  const [question, setQuestion] = useState("")
+  const draft = useWorkspaceDraft(notebookId, chat?.chat_id, chat?.draft, onExpired)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState<{ question: string; answer: WorkspaceAnswer; elapsed: number } | null>(null)
@@ -29,7 +32,7 @@ function WorkspacePassageAnswer({ notebookId, query, selected, onOpen, onExpired
 
   async function answer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const submitted = question.trim()
+    const submitted = draft.text.trim()
     if (!submitted || !selected.length || request.current) return
     const controller = new AbortController()
     request.current = controller
@@ -52,21 +55,53 @@ function WorkspacePassageAnswer({ notebookId, query, selected, onOpen, onExpired
     }
   }
 
-  return (
-    <Disclosure label="Ask about selected passages" details={`${selected.length} selected`}>
+  const canSend = !pending && selected.length > 0 && Boolean(draft.text.trim())
+  const body = (
+    <>
       <form onSubmit={answer} className="space-y-2 px-2 pt-2">
-        <label htmlFor={field} className="block text-sm font-medium">Question</label>
-        <textarea id={field} rows={2} required maxLength={1_000} value={question} onChange={event => setQuestion(event.target.value)} className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <label htmlFor={field} className="text-sm font-medium">Question</label>
+          {chat ? <span role="status" className="text-xs text-muted-foreground">
+            {{ saved: draft.text ? "Draft saved" : "", saving: "Saving draft…", offline: "Draft offline", conflict: "Draft conflict", error: "Draft save failed" }[draft.status]}
+          </span> : null}
+        </div>
+        <textarea id={field} rows={3} required maxLength={1_000} value={draft.text} onChange={event => draft.edit(event.target.value)}
+          onBlur={() => { void draft.flush() }} onKeyDown={event => {
+            if (canSend && event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
+              && !event.nativeEvent.isComposing && window.matchMedia("(pointer: fine)").matches) {
+              event.preventDefault()
+              event.currentTarget.form?.requestSubmit()
+            }
+          }}
+          className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
+        {draft.status === "offline" || draft.status === "error" ? (
+          <Button type="button" variant="outline" className="min-h-11" onClick={() => { void draft.flush() }}>Retry draft save</Button>
+        ) : null}
+        {draft.status === "conflict" ? <div className="space-y-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
+          {draft.remote ? <>
+            <p className="font-medium">Draft saved elsewhere</p>
+            <p className="max-h-32 overflow-auto whitespace-pre-wrap wrap-anywhere text-muted-foreground">{draft.remote.text || "Empty draft"}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" className="min-h-11" onClick={() => draft.resolve(true)}>Use saved draft</Button>
+              <Button type="button" variant="outline" className="min-h-11" onClick={() => draft.resolve(false)}>Save my draft</Button>
+            </div>
+          </> : <>
+            <p>Another tab or device saved a draft. Your text is still in the editor.</p>
+            <Button type="button" variant="outline" className="min-h-11" disabled={draft.reviewing} onClick={() => { void draft.compare() }}>Review saved draft</Button>
+            {draft.reviewError ? <p role="alert" className="text-destructive">{draft.reviewError}</p> : null}
+          </>}
+        </div> : null}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Button type="submit" className="min-h-11" disabled={pending || !selected.length || !question.trim()}>Ask with Ollama</Button>
+          <Button type="submit" className="min-h-11" disabled={!canSend}>Ask with Ollama</Button>
           {pending ? <p role="status" className="text-sm text-muted-foreground">Reading the selected passages…</p> : null}
+          {!selected.length && chat ? <p className="text-sm text-muted-foreground">Search for passages and select evidence to ask.</p> : null}
         </div>
         {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       </form>
       {result ? (
         <div className="space-y-3 px-2 pt-4">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <p role="status" className="min-w-0 wrap-anywhere">{result.answer.blocks.length ? `Answer · ${result.answer.model}` : "The selected passages could not establish an answer."}</p>
+            <p role="status" className="min-w-0 wrap-anywhere">{result.answer.blocks.length ? `${chat ? "Session answer" : "Answer"} · ${result.answer.model}` : "The selected passages could not establish an answer."}</p>
             <ElapsedBadge elapsed={result.elapsed} operation="Answer" />
           </div>
           {result.answer.blocks.length ? <p className="text-sm font-medium wrap-anywhere">{result.question}</p> : null}
@@ -87,7 +122,12 @@ function WorkspacePassageAnswer({ notebookId, query, selected, onOpen, onExpired
           ))}
         </div>
       ) : null}
-    </Disclosure>
+    </>
+  )
+  return chat ? (
+    <section aria-label="Chat question" className="space-y-2 border-t pb-2">{body}</section>
+  ) : (
+    <Disclosure label="Ask about selected passages" details={`${selected.length} selected`}>{body}</Disclosure>
   )
 }
 
@@ -101,6 +141,7 @@ export function WorkspaceSourceSearch({ notebookId, onOpen, onExpired }: {
   const [query, setQuery] = useState("")
   const [result, setResult] = useState<{ query: string; hits: WorkspaceSearchHit[]; elapsed: number } | null>(null)
   const [selected, setSelected] = useState<string[]>([])
+  const [chat, setChat] = useState<WorkspaceChat | null>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
 
@@ -134,6 +175,7 @@ export function WorkspaceSourceSearch({ notebookId, onOpen, onExpired }: {
 
   return (
     <section className="space-y-2.5" aria-labelledby={`${field}-label`}>
+      <WorkspaceChatPicker notebookId={notebookId} onSelect={setChat} onExpired={onExpired} />
       <label htmlFor={field} id={`${field}-label`} className="block text-base font-semibold">Find words in sources</label>
       <form onSubmit={search} className="flex flex-wrap items-center gap-2">
         <input id={field} type="search" maxLength={160} required value={query} onChange={event => setQuery(event.target.value)} className="min-h-11 min-w-32 flex-1 rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
@@ -142,32 +184,30 @@ export function WorkspaceSourceSearch({ notebookId, onOpen, onExpired }: {
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       {pending ? <p role="status" className="text-sm text-muted-foreground">Searching sources…</p> : null}
       {result ? (
-        <>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <p role="status" className="min-w-0 wrap-anywhere">{result.hits.length ? `${result.hits.length} shown` : "No matches"} for “{result.query}”</p>
-            <ElapsedBadge elapsed={result.elapsed} operation="Search" />
-          </div>
-          {result.hits.length ? (
-            <>
-              <WorkspacePassageAnswer notebookId={notebookId} query={result.query} selected={selected} onOpen={onOpen} onExpired={onExpired} />
-              <ul className="divide-y border-y">
-              {result.hits.map(hit => (
-                <li key={evidenceId(hit)} className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start">
-                  <label className="flex min-h-11 items-center justify-center">
-                    <span className="sr-only">Use {sourceTitle(hit)} · {location(hit)} in answer</span>
-                    <input type="checkbox" className="size-4 accent-primary" checked={selected.includes(evidenceId(hit))} disabled={selected.length >= maxPassages && !selected.includes(evidenceId(hit))} onChange={event => {
-                      const id = evidenceId(hit)
-                      const checked = event.target.checked
-                      setSelected(current => checked ? [...current, id] : current.filter(value => value !== id))
-                    }} />
-                  </label>
-                  <EvidenceMatchButton hit={hit} onOpen={onOpen} />
-                </li>
-              ))}
-              </ul>
-            </>
-          ) : null}
-        </>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <p role="status" className="min-w-0 wrap-anywhere">{result.hits.length ? `${result.hits.length} shown` : "No matches"} for “{result.query}”</p>
+          <ElapsedBadge elapsed={result.elapsed} operation="Search" />
+        </div>
+      ) : null}
+      {chat || result?.hits.length ? (
+        <WorkspacePassageAnswer key={chat?.chat_id ?? "one-shot"} notebookId={notebookId} chat={chat} query={result?.query ?? ""} selected={selected} onOpen={onOpen} onExpired={onExpired} />
+      ) : null}
+      {result?.hits.length ? (
+        <ul className="divide-y border-y">
+          {result.hits.map(hit => (
+            <li key={evidenceId(hit)} className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start">
+              <label className="flex min-h-11 items-center justify-center">
+                <span className="sr-only">Use {sourceTitle(hit)} · {location(hit)} in answer</span>
+                <input type="checkbox" className="size-4 accent-primary" checked={selected.includes(evidenceId(hit))} disabled={selected.length >= maxPassages && !selected.includes(evidenceId(hit))} onChange={event => {
+                  const id = evidenceId(hit)
+                  const checked = event.target.checked
+                  setSelected(current => checked ? [...current, id] : current.filter(value => value !== id))
+                }} />
+              </label>
+              <EvidenceMatchButton hit={hit} onOpen={onOpen} />
+            </li>
+          ))}
+        </ul>
       ) : null}
     </section>
   )

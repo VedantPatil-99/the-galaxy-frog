@@ -16,6 +16,9 @@ export type WorkspacePageOCR = Schema["WorkspacePageOCR"]
 export type WorkspaceSearchResult = Schema["WorkspaceSearchResponse"]
 export type WorkspaceSearchHit = WorkspaceSearchResult["hits"][number]
 export type WorkspaceAnswer = Schema["WorkspaceAnswerResponse"]
+export type WorkspaceChat = Schema["WorkspaceChat"]
+export type WorkspaceChatSummary = Schema["WorkspaceChatSummary"]
+export type WorkspacePromptDraft = Schema["WorkspacePromptDraft"]
 export type WorkspaceSemanticStatus = Schema["WorkspaceSemanticStatus"]
 export type CloudEmbeddingAction = Schema["CloudEmbeddingIndex"] | Schema["CloudEmbeddingSearch"]
 export type CloudEmbeddingPreview = Schema["CloudEmbeddingPreview"]
@@ -59,6 +62,51 @@ export async function getNotebooks(signal: AbortSignal) {
 export function createNotebook(title: string) {
   const draft: Schema["NotebookDraft"] = { title }
   return requestApi(`${base}/notebooks`, notebook, fetch, { method: "POST", body: JSON.stringify(draft) })
+}
+
+function chatSummary(value: unknown): value is WorkspaceChatSummary {
+  return object(value) && typeof value.chat_id === "string" && typeof value.title === "string"
+    && typeof value.created_at === "string" && typeof value.updated_at === "string"
+}
+
+function promptDraft(value: unknown): value is WorkspacePromptDraft {
+  return object(value) && typeof value.text === "string" && typeof value.revision === "number"
+    && Number.isSafeInteger(value.revision) && value.revision >= 0
+}
+
+function chatDetails(value: unknown): value is WorkspaceChat {
+  return object(value) && promptDraft(value.draft) && chatSummary(value)
+}
+
+function chatPath(notebookId: string, chatId?: string) {
+  return `${base}/notebooks/${encodeURIComponent(notebookId)}/chats${chatId ? `/${encodeURIComponent(chatId)}` : ""}`
+}
+
+export function listWorkspaceChats(notebookId: string, after: string | null, signal: AbortSignal) {
+  const search = after ? `?after=${encodeURIComponent(after)}` : ""
+  return requestApi(chatPath(notebookId) + search, (value): value is Schema["WorkspaceChatList"] =>
+    object(value) && Array.isArray(value.chats) && value.chats.every(chatSummary)
+      && (value.next_after === null || typeof value.next_after === "string"), fetch, { signal })
+}
+
+export function getWorkspaceChat(notebookId: string, chatId: string, signal?: AbortSignal) {
+  return requestApi(chatPath(notebookId, chatId), chatDetails, fetch, { signal })
+}
+
+export function createWorkspaceChat(notebookId: string, body: Schema["WorkspaceChatCreate"], signal: AbortSignal) {
+  return requestApi(chatPath(notebookId), chatDetails, fetch, { method: "POST", body: JSON.stringify(body), signal })
+}
+
+export function renameWorkspaceChat(notebookId: string, chatId: string, title: string, signal: AbortSignal) {
+  const body: Schema["WorkspaceChatName"] = { title }
+  return requestApi(chatPath(notebookId, chatId), chatSummary, fetch, { method: "PATCH", body: JSON.stringify(body), signal })
+}
+
+export function saveWorkspaceDraft(notebookId: string, chatId: string, draft: WorkspacePromptDraft) {
+  return requestApi(`${chatPath(notebookId, chatId)}/draft`, (value): value is WorkspacePromptDraft =>
+    promptDraft(value) && value.text === draft.text && value.revision >= draft.revision, fetch, {
+    method: "PUT", body: JSON.stringify(draft), keepalive: true,
+  })
 }
 
 export function listSources(notebookId: string, after: string | null, signal: AbortSignal) {

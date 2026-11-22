@@ -166,3 +166,29 @@ Reproduce the local fixture with the current migrations applied.
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
   tests/integration/test_workspace_sources.py::test_cohere_rebuild_and_search_bind_consent_to_profile_and_rate
 ```
+
+## 2026-11-22 · W4.1 Chat drafts
+
+- **Workload** — Windows, FastAPI, and local PostgreSQL 17 with simulated authentication.
+  One chat received eight sequential saves of 811 UTF-8 bytes each. The prompts contained
+  Unicode, line breaks, and leading whitespace. Each save was followed by a chat detail read.
+- **API timing** — Median draft save was 27.42 ms. Median chat detail read was 23.15 ms.
+  These measurements include the HTTP handler, authorization, and database work through
+  the ASGI test client. The save also includes transaction commit.
+- **Correctness** — All eight reads matched the saved text and revision exactly. Two
+  concurrent writes of different text against the same revision resulted in one save
+  and one conflict. The fixture also verified replay, clearing, private response caching
+  headers, and account and notebook isolation.
+- **Browser fixture** — Headless Chrome observed the saved status 512 ms after one edit.
+  This includes the 350 ms debounce, a deliberate 50 ms fixture response delay, and DOM
+  sampling at 250 ms intervals. Chrome verified both conflict resolution choices, independent
+  drafts across chats, layout switches, restoration after refresh, and reflow at 390, 768,
+  and 1,024 px. The existing answer badge showed 261 ms with a deliberate 250 ms fixture
+  delay, and its citation reopened the original PDF page.
+
+Reproduce the local fixture with the current migrations applied.
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
+  tests/integration/test_workspace_sources.py::test_workspace_chats_scope_and_compare_prompt_draft_revisions
+```

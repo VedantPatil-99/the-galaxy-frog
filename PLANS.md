@@ -848,13 +848,19 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     for index batches and semantic queries. Preserve local indexing and source citations.
   - [x] W3.8 — Cohere Embed v4 using the same cloud confirmation and cost flow.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
+  - [x] W4.1 — Private chat library, chat names, and revisioned prompt drafts that feed
+    the existing selected-passage composer.
+  - [ ] W4.2 — Saved grounded turns and idempotent generation runs with recovery and
+    replay of validated blocks and their source versions.
+  - [ ] W4.3 — Chat groups and organization, branching, and answer revisions.
+  - [ ] W4.4 — Bounded context summaries and chat workflow acceptance.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
 - [ ] W7 — Gallery, visual pins, and cited web research.
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 passed locally. W4 is the next checkpoint.
+W3 and W4.1 passed locally. W4.2 is next.
 Record measurements as each packet is implemented and tested in
 [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
 The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
@@ -862,6 +868,14 @@ also passed live Auth and private preview Storage
 through FastAPI in W1.
 Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W4.1 local verification — 2026-11-22
+
+- Owners can create, rename, and reopen notebook chats. The existing selected-passage
+  composer restores the selected chat's autosaved question after switching or refreshing.
+- PostgreSQL verified revision conflicts, exact prompt restoration, and private notebook
+  scope. The browser checked both conflict resolution choices and opening a cited PDF page.
+- Saved answer history and recoverable runs are part of W4.2. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
 
 ### W3.8 local verification — 2026-11-22
 

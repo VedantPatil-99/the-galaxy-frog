@@ -224,6 +224,7 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
 
   function chooseNotebook(id: string) {
     const url = new URL(window.location.href)
+    if (notebook?.notebook_id !== id) url.searchParams.delete("chat")
     url.searchParams.set("notebook", id)
     window.history.replaceState(window.history.state, "", url)
     setSelected(id)
