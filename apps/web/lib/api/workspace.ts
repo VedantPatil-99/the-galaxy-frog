@@ -13,6 +13,8 @@ export type WorkspaceTextDraft = paths["/v1/workspace/notebooks/{notebook_id}/te
 export type WorkspaceDocument = Schema["WorkspaceDocumentSource"]
 export type WorkspaceDocumentSection = Schema["WorkspaceDocumentSection"]
 export type WorkspacePageOCR = Schema["WorkspacePageOCR"]
+export type WorkspaceSearchResult = Schema["WorkspaceSearchResponse"]
+export type WorkspaceSearchHit = WorkspaceSearchResult["hits"][number]
 
 const base = "/v1/workspace"
 
@@ -172,4 +174,32 @@ function requestPageOCR(notebookId: string, source: WorkspaceDocument, page: num
       && value.provider === "llamaparse" && value.profile === "parse-v2-fast"
       && (value.text === null || typeof value.text === "string")
       && Array.isArray(value.blocks) && value.blocks.every(textBlock), fetch, init)
+}
+
+function searchHit(value: unknown): value is WorkspaceSearchHit {
+  if (!object(value)) return false
+  if (value.kind === "video") {
+    return source(value.source) && typeof value.unit_id === "string" && typeof value.text === "string"
+      && typeof value.start_ms === "number" && Number.isSafeInteger(value.start_ms) && value.start_ms >= 0
+      && typeof value.end_ms === "number" && Number.isSafeInteger(value.end_ms) && value.end_ms > value.start_ms
+      && Array.isArray(value.cues) && value.cues.length > 0
+      && value.cues.every(cue => object(cue) && typeof cue.cue_id === "string" && ["caption", "asr"].includes(String(cue.origin)))
+  }
+  if (!textBlock(value.block)) return false
+  if (value.kind === "text") return textSource(value.source)
+  return (value.kind === "document" || value.kind === "page_ocr") && documentSource(value.source)
+    && typeof value.section_number === "number" && Number.isInteger(value.section_number)
+    && value.section_number >= 1 && value.section_number <= value.source.section_count
+    && (value.kind !== "page_ocr" || value.source.format === "pdf")
+    && value.page_number === (value.source.format === "pdf" ? value.section_number : null)
+}
+
+export function searchWorkspaceSources(notebookId: string, query: string, signal: AbortSignal) {
+  const input: Schema["WorkspaceSearchQuery"] = { query }
+  return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/search`, (value): value is WorkspaceSearchResult =>
+    object(value) && value.profile === "postgres-keywords-v1"
+      && typeof value.query_ms === "number" && Number.isFinite(value.query_ms) && value.query_ms >= 0
+      && Array.isArray(value.hits) && value.hits.every(searchHit), fetch, {
+    method: "POST", body: JSON.stringify(input), signal,
+  })
 }

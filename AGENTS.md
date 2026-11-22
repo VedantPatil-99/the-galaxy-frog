@@ -39,6 +39,9 @@ Galaxy Frog is a temporal multimodal retrieval product, not a generic video chat
 7. Make small, atomic Conventional Commits and push completed work regularly. Do not create PRs. Provide ready-to-copy PR base, title, and description directly in chat when appropriate. Distinguish local completion from hosted CI and merge status.
 8. Use Git Bash syntax in commands given to the user.
 9. Ask a short questionnaire when a genuine product or implementation decision is unclear, but continue independent work while waiting for an answer.
+10. Record relevant measurements as each feature is implemented or tested in [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md). Include the workload and input sizes or media duration, environment, sample count, and measurement boundaries. Split latency by observable stage and record throughput, accuracy, and other useful metrics when the test supports them. Label unknowns and simulated results. Add entries incrementally and keep private inputs out of the log.
+
+Show measured user-facing durations where they help people understand a wait or result, using a quiet, readable badge. Use Doto where it remains legible at the intended size, or the workspace reading typeface for small numbers.
 
 ## Engineering Rules
 

@@ -131,13 +131,14 @@ export function WorkspaceDocuments({ notebookId, selectedId, onSelect, onExpired
   )
 }
 
-export function WorkspaceDocumentPreview({ notebookId, source, onExpired }: {
+export function WorkspaceDocumentPreview({ notebookId, source, match, onExpired }: {
   notebookId: string
   source: WorkspaceDocument
+  match?: { section_number: number; block: { text: string }; kind: "document" | "page_ocr" }
   onExpired: () => void
 }) {
   const heading = useRef<HTMLHeadingElement>(null)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(match?.section_number ?? 1)
   const [section, setSection] = useState<WorkspaceDocumentSection | null>(null)
   const [loadError, setLoadError] = useState("")
   const [imageError, setImageError] = useState(false)
@@ -179,6 +180,10 @@ export function WorkspaceDocumentPreview({ notebookId, source, onExpired }: {
         {formatLabel[source.format]}
         {source.pages_without_text ? ` · ${source.pages_without_text} ${source.pages_without_text === 1 ? "page" : "pages"} without extractable text` : ""}
       </p>
+      {match && page === match.section_number ? <div className="border-s-2 border-primary ps-3">
+        <p className="text-xs text-muted-foreground">{match.kind === "page_ocr" ? `Matching OCR text on page ${page}` : pdf ? `Match on page ${page}` : "Matching passage"}</p>
+        <p className="text-sm leading-6 whitespace-pre-wrap wrap-anywhere">{match.block.text}</p>
+      </div> : null}
       {pdf ? (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">

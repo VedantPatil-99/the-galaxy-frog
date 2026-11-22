@@ -118,6 +118,7 @@ async def test_docs_and_openapi_are_available() -> None:
         "/v1/workspace/session",
         "/v1/workspace/notebooks",
         "/v1/workspace/notebooks/{notebook_id}",
+        "/v1/workspace/notebooks/{notebook_id}/search",
         "/v1/workspace/notebooks/{notebook_id}/text-sources",
         "/v1/workspace/notebooks/{notebook_id}/text-sources/{source_id}/versions/{version_id}",
         "/v1/workspace/notebooks/{notebook_id}/documents",

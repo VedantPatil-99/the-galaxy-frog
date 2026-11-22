@@ -4668,6 +4668,49 @@
         "title": "WorkspaceDocumentListResponse",
         "type": "object"
       },
+      "WorkspaceDocumentMatch": {
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/WorkspaceTextBlock"
+          },
+          "kind": {
+            "enum": [
+              "document",
+              "page_ocr"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "section_number": {
+            "minimum": 1.0,
+            "title": "Section Number",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceDocumentSource"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "section_number",
+          "page_number",
+          "block"
+        ],
+        "title": "WorkspaceDocumentMatch",
+        "type": "object"
+      },
       "WorkspaceDocumentSection": {
         "properties": {
           "blocks": {
@@ -4942,6 +4985,111 @@
         "title": "WorkspacePageOCRConsent",
         "type": "object"
       },
+      "WorkspaceSearchCue": {
+        "properties": {
+          "cue_id": {
+            "title": "Cue Id",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/TranscriptOrigin"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "transcription_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcription Run Id"
+          }
+        },
+        "required": [
+          "cue_id",
+          "origin",
+          "track_id",
+          "transcription_run_id"
+        ],
+        "title": "WorkspaceSearchCue",
+        "type": "object"
+      },
+      "WorkspaceSearchQuery": {
+        "properties": {
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "WorkspaceSearchQuery",
+        "type": "object"
+      },
+      "WorkspaceSearchResponse": {
+        "properties": {
+          "hits": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "document": "#/components/schemas/WorkspaceDocumentMatch",
+                  "page_ocr": "#/components/schemas/WorkspaceDocumentMatch",
+                  "text": "#/components/schemas/WorkspaceTextMatch",
+                  "video": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceTextMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceDocumentMatch"
+                }
+              ]
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "profile": {
+            "const": "postgres-keywords-v1",
+            "default": "postgres-keywords-v1",
+            "title": "Profile",
+            "type": "string"
+          },
+          "query_ms": {
+            "minimum": 0.0,
+            "title": "Query Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "query_ms",
+          "hits"
+        ],
+        "title": "WorkspaceSearchResponse",
+        "type": "object"
+      },
       "WorkspaceSessionResponse": {
         "properties": {
           "account": {
@@ -5053,6 +5201,28 @@
           "text"
         ],
         "title": "WorkspaceTextBlock",
+        "type": "object"
+      },
+      "WorkspaceTextMatch": {
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/WorkspaceTextBlock"
+          },
+          "kind": {
+            "const": "text",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceTextSource"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "block"
+        ],
+        "title": "WorkspaceTextMatch",
         "type": "object"
       },
       "WorkspaceTextSource": {
@@ -5228,6 +5398,55 @@
           "source"
         ],
         "title": "WorkspaceTranscriptResponse",
+        "type": "object"
+      },
+      "WorkspaceVideoMatch": {
+        "properties": {
+          "cues": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSearchCue"
+            },
+            "minItems": 1,
+            "title": "Cues",
+            "type": "array"
+          },
+          "end_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "video",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceVideoSourceResponse"
+          },
+          "start_ms": {
+            "minimum": 0.0,
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "unit_id": {
+            "title": "Unit Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "text",
+          "unit_id",
+          "start_ms",
+          "end_ms",
+          "cues"
+        ],
+        "title": "WorkspaceVideoMatch",
         "type": "object"
       },
       "WorkspaceVideoSourceResponse": {
@@ -8425,6 +8644,104 @@
           }
         ],
         "summary": "Get Document Section",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/search": {
+      "post": {
+        "operationId": "search_notebook_sources_v1_workspace_notebooks__notebook_id__search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSearchQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Search Notebook Sources",
         "tags": [
           "workspace"
         ]

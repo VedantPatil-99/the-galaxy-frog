@@ -1,16 +1,19 @@
 """Exercise explicit assignments and private reads through FastAPI and PostgreSQL."""
 
+import json
 import os
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
+from statistics import median
+from time import perf_counter
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from tests.test_workspace_auth import auth_settings
 
@@ -21,11 +24,18 @@ from galaxy_frog.config import Settings
 from galaxy_frog.db.models import VideoFrameRow, VideoRow
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.workspace import WorkspaceAccountRow, WorkspaceNotebookRow, WorkspaceRepository
+from galaxy_frog.db.workspace_documents import (
+    DocumentImport,
+    WorkspaceDocumentRepository,
+    WorkspaceDocumentRow,
+)
+from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRepository, WorkspacePageOCRRow
 from galaxy_frog.db.workspace_sources import (
     LegacySourceAssignmentError,
     WorkspaceLegacySourceRow,
     WorkspaceSourceRepository,
 )
+from galaxy_frog.db.workspace_text import WorkspaceTextSourceRow
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
@@ -34,6 +44,8 @@ from galaxy_frog.domain.videos.models import (
     VideoSourceKind,
 )
 from galaxy_frog.domain.workspace import NotebookDraft, NotebookNotFound, VerifiedWorkspaceIdentity
+from galaxy_frog.domain.workspace_documents import ParsedDocument, StoredDocumentSection
+from galaxy_frog.domain.workspace_text import prepare_workspace_text
 from galaxy_frog.entrypoints.workspace_assign_legacy import assign
 
 pytestmark = pytest.mark.skipif(
@@ -136,6 +148,28 @@ async def workspace(
                 yield client, engine, owner, outsider, tuple(video_ids), frame_id
         finally:
             async with sessions.begin() as session:
+                notebooks = select(WorkspaceNotebookRow.id).where(
+                    WorkspaceNotebookRow.owner_id.in_([owner, outsider])
+                )
+                await session.execute(
+                    delete(WorkspacePageOCRRow).where(
+                        WorkspacePageOCRRow.version_id.in_(
+                            select(WorkspaceDocumentRow.version_id).where(
+                                WorkspaceDocumentRow.notebook_id.in_(notebooks)
+                            )
+                        )
+                    )
+                )
+                await session.execute(
+                    delete(WorkspaceDocumentRow).where(
+                        WorkspaceDocumentRow.notebook_id.in_(notebooks)
+                    )
+                )
+                await session.execute(
+                    delete(WorkspaceTextSourceRow).where(
+                        WorkspaceTextSourceRow.notebook_id.in_(notebooks)
+                    )
+                )
                 await session.execute(
                     delete(WorkspaceLegacySourceRow).where(
                         WorkspaceLegacySourceRow.video_id.in_(video_ids)
@@ -282,3 +316,170 @@ async def test_migrated_sources_preserve_evidence_and_never_cross_notebook_bound
     remote.assert_not_awaited()
     assert (await client.get(preview, headers=OWN)).content == JPEG
     remote.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_keyword_search_opens_owned_evidence_and_measures_labeled_queries(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+) -> None:
+    client, engine, owner, _, videos, _ = workspace
+    created = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Search fixture"}
+    )
+    notebook = UUID(created.json()["notebook_id"])
+    base = f"/v1/workspace/notebooks/{notebook}"
+    pasted = "🌱 Archive language.\n\nOriginal evidence is preserved.\n\nAlpha\n\nBeta"
+    paste = await client.post(
+        f"{base}/text-sources",
+        headers=OWN,
+        json={
+            "title": "Notes",
+            "format": "plain",
+            "text": pasted,
+        },
+    )
+    assert paste.status_code == 200
+    pdf_text = "Original evidence from a winter sample."
+    docx_text = "An independent original evidence record."
+    ocr_text = "Original evidence from an optical scan."
+    async with async_sessionmaker(engine)() as session:
+        await WorkspaceSourceRepository(session).assign_legacy_videos(owner, notebook, videos[:2])
+        docs = WorkspaceDocumentRepository(session)
+        pdf = await docs.save(
+            owner,
+            notebook,
+            DocumentImport(
+                "field-notes.pdf",
+                "pdf",
+                "a" * 64,
+                200,
+                ParsedDocument(
+                    sections=(
+                        StoredDocumentSection(text=pdf_text, spans=((0, len(pdf_text)),)),
+                        StoredDocumentSection(text="", spans=()),
+                    )
+                ),
+            ),
+        )
+        docx = await docs.save(
+            owner,
+            notebook,
+            DocumentImport(
+                "field-notes.docx",
+                "docx",
+                "b" * 64,
+                200,
+                ParsedDocument(
+                    sections=(StoredDocumentSection(text=docx_text, spans=((0, len(docx_text)),)),)
+                ),
+            ),
+        )
+        ocr_page = await docs.section(owner, notebook, pdf.source_id, pdf.version_id, 2)
+        ocr = WorkspacePageOCRRepository(session, ocr_page)
+        assert await ocr.reserve(owner)
+        completed = await ocr.finish("succeeded", prepare_workspace_text(ocr_text))
+
+    other = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Other notebook"}
+    )
+    other_base = f"/v1/workspace/notebooks/{other.json()['notebook_id']}"
+    assert (
+        await client.post(
+            f"{other_base}/text-sources",
+            headers=OWN,
+            json={
+                "title": "Other notes",
+                "format": "plain",
+                "text": "Original evidence excluded.",
+            },
+        )
+    ).status_code == 200
+    path = f"{base}/search"
+    assert (await client.post(path, json={"query": "evidence"})).status_code == 401
+    assert (await client.post(path, headers=OTHER, json={"query": "evidence"})).status_code == 404
+    for invalid in ("  ", "x" * 161, "hidden\0text"):
+        assert (await client.post(path, headers=OWN, json={"query": invalid})).status_code == 422
+
+    expected: dict[str, set[tuple[str, str, int | None]]] = {
+        "Original evidence": {
+            ("video", str(videos[0]), None),
+            ("text", paste.json()["source_id"], None),
+            ("document", str(pdf.source_id), 1),
+            ("document", str(docx.source_id), 1),
+            ("page_ocr", str(pdf.source_id), 2),
+        },
+        "archive language": {("text", paste.json()["source_id"], None)},
+        "winter sample": {("document", str(pdf.source_id), 1)},
+        "optical scan": {("page_ocr", str(pdf.source_id), 2)},
+        "alpha beta": set(),
+        "quartz": set(),
+    }
+    warm = await client.post(path, headers=OWN, json={"query": "original evidence"})
+    assert warm.status_code == 200, warm.text
+    assert warm.headers["cache-control"] == "no-store"
+    results = warm.json()["hits"]
+    by_kind = {hit["kind"]: hit for hit in results}
+    hit = by_kind["video"]
+    assert (hit["unit_id"], hit["start_ms"], hit["end_ms"]) == (UNIT_ID, 123, 456)
+    assert hit["source"]["canonical_url"] is None
+    assert hit["cues"] == [
+        {
+            "cue_id": CUE_ID,
+            "origin": "caption",
+            "track_id": "original-track",
+            "transcription_run_id": None,
+        }
+    ]
+    assert by_kind["text"]["block"] == paste.json()["blocks"][1]
+    assert by_kind["page_ocr"]["block"] == completed.blocks[0].model_dump(mode="json")
+    for hit in results:
+        if hit["kind"] == "document":
+            source = hit["source"]
+            assert hit["page_number"] == (1 if source["format"] == "pdf" else None)
+            reopened = await client.get(
+                f"{base}/documents/{source['source_id']}/versions/{source['version_id']}/sections/1",
+                headers=OWN,
+            )
+            assert hit["block"] == reopened.json()["blocks"][0]
+
+    api_ms: list[float] = []
+    query_ms: list[float] = []
+    retrieved = 0
+    window = perf_counter()
+    for _ in range(5):
+        for query, labels in expected.items():
+            started = perf_counter()
+            response = await client.post(path, headers=OWN, json={"query": query})
+            api_ms.append((perf_counter() - started) * 1_000)
+            assert response.status_code == 200
+            body = response.json()
+            query_ms.append(body["query_ms"])
+            assert body["profile"] == "postgres-keywords-v1"
+            observed = {
+                (
+                    entry["kind"],
+                    entry["source"].get("source_id", entry["source"].get("video_id")),
+                    entry.get("section_number"),
+                )
+                for entry in body["hits"]
+            }
+            assert observed == labels and len(body["hits"]) == len(labels)
+            retrieved += len(observed)
+    window = perf_counter() - window
+    print(
+        json.dumps(
+            {
+                "requests": len(api_ms),
+                "hits": retrieved,
+                "fixture_chars": sum(
+                    map(len, (pasted, pdf_text, docx_text, ocr_text, "Original evidence"))
+                ),
+                "api_median_ms": round(median(api_ms), 3),
+                "api_p95_ms": round(sorted(api_ms)[28], 3),
+                "query_median_ms": round(median(query_ms), 3),
+                "query_p95_ms": round(sorted(query_ms)[28], 3),
+                "window_seconds": round(window, 4),
+                "requests_per_second": round(len(api_ms) / window, 2),
+            }
+        )
+    )

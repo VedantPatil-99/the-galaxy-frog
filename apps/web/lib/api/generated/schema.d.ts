@@ -637,6 +637,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspace/notebooks/{notebook_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search Notebook Sources */
+        post: operations["search_notebook_sources_v1_workspace_notebooks__notebook_id__search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/notebooks/{notebook_id}/sources": {
         parameters: {
             query?: never;
@@ -2474,6 +2491,20 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["WorkspaceDocumentSource"][];
         };
+        /** WorkspaceDocumentMatch */
+        WorkspaceDocumentMatch: {
+            block: components["schemas"]["WorkspaceTextBlock"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "document" | "page_ocr";
+            /** Page Number */
+            page_number: number | null;
+            /** Section Number */
+            section_number: number;
+            source: components["schemas"]["WorkspaceDocumentSource"];
+        };
         /** WorkspaceDocumentSection */
         WorkspaceDocumentSection: {
             /** Blocks */
@@ -2590,6 +2621,34 @@ export interface components {
              */
             allow_external_page_image: true;
         };
+        /** WorkspaceSearchCue */
+        WorkspaceSearchCue: {
+            /** Cue Id */
+            cue_id: string;
+            origin: components["schemas"]["TranscriptOrigin"];
+            /** Track Id */
+            track_id: string | null;
+            /** Transcription Run Id */
+            transcription_run_id: string | null;
+        };
+        /** WorkspaceSearchQuery */
+        WorkspaceSearchQuery: {
+            /** Query */
+            query: string;
+        };
+        /** WorkspaceSearchResponse */
+        WorkspaceSearchResponse: {
+            /** Hits */
+            hits: (components["schemas"]["WorkspaceVideoMatch"] | components["schemas"]["WorkspaceTextMatch"] | components["schemas"]["WorkspaceDocumentMatch"])[];
+            /**
+             * Profile
+             * @default postgres-keywords-v1
+             * @constant
+             */
+            profile: "postgres-keywords-v1";
+            /** Query Ms */
+            query_ms: number;
+        };
         /** WorkspaceSessionResponse */
         WorkspaceSessionResponse: {
             account: components["schemas"]["WorkspaceAccount"];
@@ -2636,6 +2695,16 @@ export interface components {
             start_char: number;
             /** Text */
             text: string;
+        };
+        /** WorkspaceTextMatch */
+        WorkspaceTextMatch: {
+            block: components["schemas"]["WorkspaceTextBlock"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "text";
+            source: components["schemas"]["WorkspaceTextSource"];
         };
         /** WorkspaceTextSource */
         WorkspaceTextSource: {
@@ -2710,6 +2779,25 @@ export interface components {
             retrieval_units: components["schemas"]["RetrievalUnitResponse"][];
             source: components["schemas"]["WorkspaceVideoSourceResponse"];
             transcription: components["schemas"]["TranscriptionRunResponse"] | null;
+        };
+        /** WorkspaceVideoMatch */
+        WorkspaceVideoMatch: {
+            /** Cues */
+            cues: components["schemas"]["WorkspaceSearchCue"][];
+            /** End Ms */
+            end_ms: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "video";
+            source: components["schemas"]["WorkspaceVideoSourceResponse"];
+            /** Start Ms */
+            start_ms: number;
+            /** Text */
+            text: string;
+            /** Unit Id */
+            unit_id: string;
         };
         /** WorkspaceVideoSourceResponse */
         WorkspaceVideoSourceResponse: {
@@ -4890,6 +4978,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDocumentSection"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_notebook_sources_v1_workspace_notebooks__notebook_id__search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceSearchQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSearchResponse"];
                 };
             };
             /** @description Unauthorized */

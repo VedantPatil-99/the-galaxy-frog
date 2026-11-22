@@ -2,16 +2,17 @@
 
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
-import { useEffect, useState, type FormEvent, type ReactNode } from "react"
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { WorkspaceShell, type WorkspacePane } from "@/components/workspace-shell"
 import { workspaceAuthAction } from "@/components/workspace-sign-in"
 import { WorkspaceDocumentPreview, WorkspaceDocuments } from "@/components/workspace-documents"
+import { WorkspaceSourceSearch } from "@/components/workspace-source-search"
 import { WorkspaceTextPreview, WorkspaceTextSources } from "@/components/workspace-text-sources"
 import { ApiClientError } from "@/lib/api/client"
-import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceDocument, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
+import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceDocument, type WorkspaceSearchHit, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
 import { timestamp } from "@/lib/timestamp"
 import { YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 
@@ -33,16 +34,22 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Try again."
 }
 
-function SourcePreview({ notebookId, source, onExpired }: {
+function SourcePreview({ notebookId, source, match, onExpired }: {
   notebookId: string
   source: WorkspaceSource
+  match: Extract<WorkspaceSearchHit, { kind: "video" }> | null
   onExpired: () => void
 }) {
+  const heading = useRef<HTMLHeadingElement>(null)
   const [transcript, setTranscript] = useState<WorkspaceTranscript | null>(null)
-  const [seek, setSeek] = useState(0)
+  const [seek, setSeek] = useState(match?.start_ms ?? 0)
   const [error, setError] = useState("")
   const [attempt, setAttempt] = useState(0)
   const src = youtubePreview(source, seek)
+
+  useEffect(() => {
+    if (match) heading.current?.focus({ preventScroll: true })
+  }, [match])
 
   useEffect(() => {
     const request = new AbortController()
@@ -59,10 +66,14 @@ function SourcePreview({ notebookId, source, onExpired }: {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold">{source.title}</h2>
+        <h2 ref={heading} tabIndex={-1} className="text-xl font-semibold">{source.title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{timestamp(source.duration_ms)} · {source.source_kind === "youtube" ? "YouTube" : "Video"}</p>
       </div>
       {src ? <iframe className="aspect-video w-full rounded-lg bg-black" title={`Preview of ${source.title}`} src={src} allowFullScreen /> : null}
+      {match ? <div className="border-s-2 border-primary ps-3">
+        <p className="text-xs tabular-nums text-muted-foreground">{timestamp(match.start_ms)}–{timestamp(match.end_ms)}</p>
+        <p className="text-sm leading-6 whitespace-pre-wrap wrap-anywhere">{match.text}</p>
+      </div> : null}
       <Disclosure label="Full transcript" details={transcript ? `${transcript.cues.length} cues` : undefined} keepMounted={false}>
         {error ? (
           <div className="px-2 text-sm">
@@ -101,6 +112,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
   const [after, setAfter] = useState<string | null>(null)
   const [nextAfter, setNextAfter] = useState<string | null>(null)
   const [selected, setSelected] = useState<SelectedSource | null>(null)
+  const [match, setMatch] = useState<WorkspaceSearchHit | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [attempt, setAttempt] = useState(0)
@@ -127,16 +139,23 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
   const selectedDocument = selected && "filename" in selected ? selected : null
 
   function openSource(source: SelectedSource) {
+    setMatch(null)
     setSelected(source)
     setPane("sources")
   }
 
+  function openMatch(hit: WorkspaceSearchHit) {
+    setMatch(hit)
+    setSelected(hit.source)
+    setPane("sources")
+  }
+
   const preview = selectedVideo
-    ? <SourcePreview key={selectedVideo.video_id} notebookId={notebook.notebook_id} source={selectedVideo} onExpired={onExpired} />
+    ? <SourcePreview key={match?.kind === "video" ? match.unit_id : selectedVideo.video_id} notebookId={notebook.notebook_id} source={selectedVideo} match={match?.kind === "video" ? match : null} onExpired={onExpired} />
     : selectedText
-      ? <WorkspaceTextPreview key={selectedText.version_id} notebookId={notebook.notebook_id} source={selectedText} onExpired={onExpired} />
+      ? <WorkspaceTextPreview key={match?.kind === "text" ? match.block.block_id : selectedText.version_id} notebookId={notebook.notebook_id} source={selectedText} matchBlockId={match?.kind === "text" ? match.block.block_id : undefined} onExpired={onExpired} />
       : selectedDocument
-        ? <WorkspaceDocumentPreview key={selectedDocument.version_id} notebookId={notebook.notebook_id} source={selectedDocument} onExpired={onExpired} />
+        ? <WorkspaceDocumentPreview key={match?.kind === "document" || match?.kind === "page_ocr" ? match.block.block_id : selectedDocument.version_id} notebookId={notebook.notebook_id} source={selectedDocument} match={match?.kind === "document" || match?.kind === "page_ocr" ? match : undefined} onExpired={onExpired} />
         : <p className="text-sm text-muted-foreground">{loading ? "Loading sources…" : "Select a source in the workspace to preview it here."}</p>
 
   return (
@@ -150,6 +169,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
     >
       <div className="space-y-5">
         <h1 className="text-3xl font-semibold tracking-tight">{notebook.title}</h1>
+        <WorkspaceSourceSearch notebookId={notebook.notebook_id} onOpen={openMatch} onExpired={onExpired} />
         <WorkspaceDocuments notebookId={notebook.notebook_id} selectedId={selectedDocument?.source_id} onSelect={openSource} onExpired={onExpired} />
         <WorkspaceTextSources notebookId={notebook.notebook_id} selectedId={selectedText?.source_id} onSelect={openSource} onExpired={onExpired} />
         <h2 className="text-base font-semibold">Videos</h2>

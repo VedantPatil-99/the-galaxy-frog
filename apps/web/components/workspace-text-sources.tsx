@@ -125,15 +125,18 @@ export function WorkspaceTextSources({ notebookId, selectedId, onSelect, onExpir
   )
 }
 
-export function WorkspaceTextPreview({ notebookId, source, onExpired }: {
+export function WorkspaceTextPreview({ notebookId, source, matchBlockId, onExpired }: {
   notebookId: string
   source: WorkspaceTextSource
+  matchBlockId?: string
   onExpired: () => void
 }) {
   const heading = useRef<HTMLHeadingElement>(null)
   const [version, setVersion] = useState<WorkspaceTextVersion | null>(null)
   const [error, setError] = useState("")
   const [attempt, setAttempt] = useState(0)
+  const match = version?.blocks.find(block => block.block_id === matchBlockId)
+  const characters = version && match ? Array.from(version.text) : null
 
   useEffect(() => {
     heading.current?.focus({ preventScroll: true })
@@ -159,7 +162,9 @@ export function WorkspaceTextPreview({ notebookId, source, onExpired }: {
           <Button variant="outline" className="min-h-11" onClick={() => { setError(""); setAttempt(attempt + 1) }}>Retry preview</Button>
         </>
       ) : version ? (
-        <p className="border-t pt-3 text-sm leading-6 whitespace-pre-wrap">{version.text}</p>
+        <p className="border-t pt-3 text-sm leading-6 whitespace-pre-wrap wrap-anywhere">{
+          match && characters ? <>{characters.slice(0, match.start_char).join("")}<mark className="rounded bg-accent text-accent-foreground">{match.text}</mark>{characters.slice(match.end_char).join("")}</> : version.text
+        }</p>
       ) : <p role="status" className="text-sm text-muted-foreground">Loading preview…</p>}
     </div>
   )

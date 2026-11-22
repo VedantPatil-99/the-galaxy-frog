@@ -838,8 +838,10 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     private and preserve PDF pages and immutable text blocks in source previews.
   - [x] W3.3 — Opt-in OCR for one selected PDF page. Save immutable OCR evidence and
     prevent duplicate cloud processing on refresh, retries, and concurrent requests.
-  - [ ] Remaining W3 — Mixed-source retrieval, validated citations in answers, and
-    indexing with explicit profiles.
+  - [x] W3.4 — Notebook-wide keyword search over transcripts, documents, pasted text,
+    and saved page OCR. Open each match at its source and measure the local search path.
+  - [ ] Remaining W3 — Validated mixed-source citations in answers and semantic indexing
+    with explicit profiles.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
@@ -847,13 +849,24 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the active checkpoint. W3.1 through W3.3 passed locally. Mixed-source retrieval,
-validated citations in answers, and explicit indexing profiles remain in W3. The user
-confirmed W2 live browser acceptance on
-2026-11-22. The separate Supabase project also passed live Auth and private preview Storage
+W3 is the active checkpoint. W3.1 through W3.4 passed locally. The remaining W3 work covers
+mixed-source answers and semantic indexing. Record measurements as each packet is implemented
+and tested in [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
+The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
+also passed live Auth and private preview Storage
 through FastAPI in W1.
 Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.4 local verification — 2026-11-22
+
+- The local keyword profile searches the owned notebook's saved transcripts, pasted text,
+  document extractions, and successful page OCR. Results retain exact citation coordinates.
+- Local PostgreSQL tests verified owner and notebook isolation, match accuracy on labeled
+  queries, and stable references across source previews. The browser showed the measured
+  request duration and opened the PDF match on its cited page.
+- The new indexes are additive and use installed PostgreSQL functionality. The first
+  latency, throughput, and match accuracy sample is in [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
 
 ### W3.3 local verification — 2026-11-22
 

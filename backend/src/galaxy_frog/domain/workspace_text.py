@@ -51,11 +51,15 @@ class WorkspaceTextBlock(BaseModel):
         cls, version_id: UUID, text: str, start_char: int, end_char: int
     ) -> WorkspaceTextBlock:
         return cls(
-            block_id=uuid5(version_id, f"{start_char}:{end_char}"),
+            block_id=workspace_block_id(version_id, start_char, end_char),
             start_char=start_char,
             end_char=end_char,
             text=text[start_char:end_char],
         )
+
+
+def workspace_block_id(namespace: UUID, start_char: int, end_char: int) -> UUID:
+    return uuid5(namespace, f"{start_char}:{end_char}")
 
 
 class WorkspaceTextVersion(WorkspaceTextSource):

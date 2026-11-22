@@ -1,8 +1,8 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.3 passed locally and cover private text, document import, and opt-in OCR for individual PDF pages.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.4 passed locally and cover private text, document import, opt-in PDF page OCR, and notebook keyword search.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated 2026-11-22 (Asia/Calcutta) after selected-page OCR verification.
+Updated 2026-11-22 (Asia/Calcutta) after notebook keyword search verification.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
@@ -208,10 +208,18 @@ W3.3 adds opt-in OCR to an individual PDF page with no extractable text. The own
 **Read this page with OCR** below the image and approve sending that page's rasterized image to LlamaParse
 Fast. Saved results retain the source version, PDF page, provider profile, and stable text
 blocks. A recorded attempt prevents repeat submissions for the same page and version,
-including when the provider's outcome is unknown. Mixed-source retrieval, citation validation
-in answers, and indexing remain in W3. [LlamaParse OCR guide](https://developers.llamaindex.ai/llamaparse/parse/features/ocr-and-languages/)
+including when the provider's outcome is unknown. [LlamaParse OCR guide](https://developers.llamaindex.ai/llamaparse/parse/features/ocr-and-languages/)
+
+W3.4 adds **Find words in sources** to private notebooks. The local `postgres-keywords-v1`
+profile finds matching transcript units, document and pasted text blocks, and saved page OCR.
+Candidates are scoped to the notebook and ranked against the exact evidence returned.
+Each result opens its source preview at the matching location, and the results show the
+observed browser wait. The remaining W3 work covers mixed-source answers and semantic indexing.
+[Search architecture](adr/0012-notebook-keyword-search.md)
 
 ### Models and retrieval profiles
+
+Record measured latency, throughput, and accuracy incrementally in [Workspace measurements](WORKSPACE_MEASUREMENTS.md). Include the workload and environment, input sizes or media durations, sample count, and stage boundaries when observed. Small timing badges may show an actual wait near its result. Use Doto only at sizes where the digits stay readable.
 
 Support both explicit cloud embedding profiles:
 

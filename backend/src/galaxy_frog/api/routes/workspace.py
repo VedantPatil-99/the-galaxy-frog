@@ -1,6 +1,7 @@
 """Private notebook endpoints with verified ownership on every operation."""
 
 from hashlib import sha256
+from time import perf_counter
 from typing import Annotated, cast
 from uuid import UUID
 
@@ -36,12 +37,15 @@ from galaxy_frog.api.workspace_schemas import (
     NotebookListResponse,
     WorkspaceDocumentListResponse,
     WorkspaceFrameResponse,
+    WorkspaceSearchQuery,
+    WorkspaceSearchResponse,
     WorkspaceSessionResponse,
     WorkspaceSourceListResponse,
     WorkspaceStatusResponse,
     WorkspaceTextSourceListResponse,
     WorkspaceTranscriptResponse,
     WorkspaceVideoSourceResponse,
+    workspace_search_hit,
 )
 from galaxy_frog.config import Settings
 from galaxy_frog.db.models import VideoFrameRow, VideoRow
@@ -50,6 +54,7 @@ from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.db.workspace import WorkspaceRepository
 from galaxy_frog.db.workspace_documents import DocumentImport, WorkspaceDocumentRepository
 from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRepository
+from galaxy_frog.db.workspace_search import search_workspace_sources
 from galaxy_frog.db.workspace_sources import WorkspaceSourceRepository
 from galaxy_frog.db.workspace_text import WorkspaceTextRepository
 from galaxy_frog.domain.videos.models import VideoSourceKind
@@ -101,6 +106,24 @@ def _notebook_not_found() -> ApiError:
         code="NOTEBOOK_NOT_FOUND",
         message="The requested notebook is unavailable.",
         retryable=False,
+    )
+
+
+@router.post("/notebooks/{notebook_id}/search")
+async def search_notebook_sources(
+    notebook_id: UUID, query: WorkspaceSearchQuery, identity: Creator, repository: Repository
+) -> WorkspaceSearchResponse:
+    try:
+        await repository.get_notebook(identity.account_id, notebook_id)
+    except NotebookNotFound:
+        raise _notebook_not_found() from None
+    started = perf_counter()
+    rows = await search_workspace_sources(
+        repository.session, identity.account_id, notebook_id, query.query
+    )
+    query_ms = (perf_counter() - started) * 1_000
+    return WorkspaceSearchResponse(
+        query_ms=round(query_ms, 3), hits=tuple(workspace_search_hit(row) for row in rows)
     )
 
 

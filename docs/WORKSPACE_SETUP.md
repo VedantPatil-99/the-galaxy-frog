@@ -217,6 +217,14 @@ when a connection failure leaves the outcome unknown.
 [LlamaParse pricing](https://developers.llamaindex.ai/llamaparse/general/pricing/)
 [LlamaParse data retention](https://developers.llamaindex.ai/llamaparse/general/data_retention/)
 
+## W3.4 notebook keyword search
+
+Run `bun run db:migrate` to index saved text, document extractions, and page OCR in the
+intended local database. The existing video transcript index is reused. In a private
+notebook, enter search words under **Find words in sources**. Select any match to open its
+source preview. The small duration beside the results measures the browser request.
+Search uses the local database and existing dependencies. [Measurement log](WORKSPACE_MEASUREMENTS.md)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.
