@@ -842,7 +842,10 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     and saved page OCR. Open each match at its source and measure the local search path.
   - [x] W3.5 — Answer questions from explicitly selected notebook passages using the
     configured local model. Validate every citation and measure the answer stages.
-  - [ ] Remaining W3 — Semantic indexing with explicit embedding profiles.
+  - [x] W3.6 — Local semantic indexing and search with an explicit, revision-bound BGE-M3
+    embedding profile. Preserve the original evidence and measure coverage and latency.
+  - [ ] Remaining W3 — Optional Gemini and Cohere embedding profiles with explicit cloud
+    consent and reindex cost previews.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
@@ -850,14 +853,24 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the active checkpoint. W3.1 through W3.5 passed locally. Semantic indexing remains
-in W3. Record measurements as each packet is implemented and tested in
+W3 is the active checkpoint. W3.1 through W3.6 passed locally. Optional cloud embedding
+profiles remain in W3. Record measurements as each packet is implemented and tested in
 [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
 The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
 also passed live Auth and private preview Storage
 through FastAPI in W1.
 Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.6 local verification — 2026-11-22
+
+- An owner can build an explicit local BGE-M3 index in batches, inspect coverage, and
+  open semantically ranked results at their original pages, blocks, or video intervals.
+- PostgreSQL tests verified notebook isolation, no mixing of model revisions, and one
+  successful activation when two rebuilds race. The browser verified indexing and
+  search timing badges and reopening the cited OCR page.
+- The controlled database fixture and a separate run with the installed model recorded
+  latency, throughput, and ranking results. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
 
 ### W3.5 local verification — 2026-11-22
 

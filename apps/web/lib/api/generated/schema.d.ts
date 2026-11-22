@@ -671,6 +671,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspace/notebooks/{notebook_id}/semantic-index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Semantic Index Status */
+        get: operations["semantic_index_status_v1_workspace_notebooks__notebook_id__semantic_index_get"];
+        put?: never;
+        /** Build Semantic Index */
+        post: operations["build_semantic_index_v1_workspace_notebooks__notebook_id__semantic_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/notebooks/{notebook_id}/semantic-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Semantic Search */
+        post: operations["semantic_search_v1_workspace_notebooks__notebook_id__semantic_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/notebooks/{notebook_id}/sources": {
         parameters: {
             query?: never;
@@ -2725,6 +2760,77 @@ export interface components {
             profile: "postgres-keywords-v1";
             /** Query Ms */
             query_ms: number;
+        };
+        /** WorkspaceSemanticBatchResponse */
+        WorkspaceSemanticBatchResponse: {
+            /** Active Collection */
+            active_collection: string | null;
+            active_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            /** Added */
+            added: number;
+            available_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            /** Embedding Ms */
+            embedding_ms: number;
+            /** Indexed */
+            indexed: number;
+            /** Prepare Ms */
+            prepare_ms: number;
+            /** Save Ms */
+            save_ms: number;
+            /** Total */
+            total: number;
+        };
+        /** WorkspaceSemanticBuild */
+        WorkspaceSemanticBuild: {
+            /** Expected Collection */
+            expected_collection: string | null;
+            /**
+             * Profile
+             * @constant
+             */
+            profile: "local-bge-m3";
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
+            /** Revision */
+            revision: string;
+        };
+        /** WorkspaceSemanticQuery */
+        WorkspaceSemanticQuery: {
+            /**
+             * Collection Id
+             * Format: uuid
+             */
+            collection_id: string;
+            /** Query */
+            query: string;
+        };
+        /** WorkspaceSemanticResults */
+        WorkspaceSemanticResults: {
+            /**
+             * Collection Id
+             * Format: uuid
+             */
+            collection_id: string;
+            /** Embedding Ms */
+            embedding_ms: number;
+            /** Hits */
+            hits: (components["schemas"]["WorkspaceVideoMatch"] | components["schemas"]["WorkspaceTextMatch"] | components["schemas"]["WorkspaceDocumentMatch"])[];
+            /** Query Ms */
+            query_ms: number;
+        };
+        /** WorkspaceSemanticStatus */
+        WorkspaceSemanticStatus: {
+            /** Active Collection */
+            active_collection: string | null;
+            active_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            available_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            /** Indexed */
+            indexed: number;
+            /** Total */
+            total: number;
         };
         /** WorkspaceSessionResponse */
         WorkspaceSessionResponse: {
@@ -5251,6 +5357,242 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    semantic_index_status_v1_workspace_notebooks__notebook_id__semantic_index_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSemanticStatus"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    build_semantic_index_v1_workspace_notebooks__notebook_id__semantic_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceSemanticBuild"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSemanticBatchResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    semantic_search_v1_workspace_notebooks__notebook_id__semantic_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceSemanticQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSemanticResults"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */

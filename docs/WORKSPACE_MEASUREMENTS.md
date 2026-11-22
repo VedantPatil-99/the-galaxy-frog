@@ -83,3 +83,33 @@ Reproduce the API fixture with the current local migrations applied.
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
   tests/integration/test_workspace_sources.py::test_workspace_answer_validates_selected_passages_and_times_each_stage
 ```
+
+## 2026-11-22 · W3.6 local semantic indexing and search
+
+- **Database and API fixture** — Real local PostgreSQL 17 with simulated authentication and
+  deterministic vectors. The notebook held 18 passages across a one-second video, a two-page
+  PDF with one saved OCR page, and a pasted note. Two index batches saved 16 and 2 passages.
+- **Index stages** — The two API calls took 99.08 ms and 58.19 ms. Preparation took 11.15 ms
+  and 13.41 ms, the simulated embedding stage took 21.19 ms and 11.52 ms, and database writes
+  took 48.61 ms and 14.22 ms. Remaining elapsed time includes request handling and coverage.
+- **Retrieval** — Twelve warm API queries had a 31.77 ms median request time, with 10.33 ms
+  in the simulated embedding stage and 9.63 ms for the database query and collection check.
+  All 12 labeled targets ranked first. Each returned page or video link retained its original
+  evidence. This fixture measures the database path with controlled vectors.
+- **Installed model** — A separate local Ollama run used 1,024-dimensional `bge-m3:latest`
+  (digest prefix `790764642607`). Two batches reused the same eight synthetic passages,
+  totaling 377 characters. Embedding took 3.87 s on the first call and 154 ms on the warm call,
+  or 2.1 and 51.8 passages/s respectively. Eight warm query embeddings took a median 42.04 ms.
+  Each of the four labeled paraphrases ran twice. The expected passage ranked first in all
+  eight trials, with mean reciprocal rank 1.0. This model sample measures embedding and ranking
+  on a small labeled corpus.
+- **Browser fixture** — The indexing and search badges showed 204 ms and 188 ms against
+  a local fixture with 180 ms of deliberate wait in each response. The browser checked
+  coverage before enabling search and opened the returned OCR passage on its original page.
+
+Reproduce the database fixture with the current local migrations applied.
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
+  tests/integration/test_workspace_sources.py::test_local_semantic_index_preserves_sources_and_model_revision
+```

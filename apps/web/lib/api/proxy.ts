@@ -187,8 +187,10 @@ export async function proxyRequest(
   const isPageOcr = isDocumentProcessing && request.method === "POST" && path[10] === "ocr"
   const isWorkspaceAnswer = request.method === "POST" && path[0] === "v1" && path[1] === "workspace"
     && path[2] === "notebooks" && path[4] === "answers" && path.length === 5
+  const isWorkspaceSemantic = request.method === "POST" && path[0] === "v1" && path[1] === "workspace"
+    && path[2] === "notebooks" && path.length === 5 && (path[4] === "semantic-index" || path[4] === "semantic-search")
   const timeoutMs = isRetrievalRequest ? 300_000 :
-    isVideoPost && path[2] === "import" ? 120_000 : isWorkspaceAnswer ? 100_000 : isPageOcr ? 95_000 :
+    isVideoPost && path[2] === "import" ? 120_000 : isWorkspaceAnswer ? 100_000 : isPageOcr ? 95_000 : isWorkspaceSemantic ? 75_000 :
     isDocumentProcessing ? 60_000 : 10_000
   const headers = forwardedRequestHeaders(request)
   if (workspaceToken) headers.set("Authorization", `Bearer ${workspaceToken}`)

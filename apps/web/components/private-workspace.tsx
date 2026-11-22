@@ -10,6 +10,7 @@ import { WorkspaceShell, type WorkspacePane } from "@/components/workspace-shell
 import { workspaceAuthAction } from "@/components/workspace-sign-in"
 import { WorkspaceDocumentPreview, WorkspaceDocuments } from "@/components/workspace-documents"
 import { WorkspaceSourceSearch } from "@/components/workspace-source-search"
+import { WorkspaceSemanticSearch } from "@/components/workspace-semantic-search"
 import { WorkspaceTextPreview, WorkspaceTextSources } from "@/components/workspace-text-sources"
 import { ApiClientError } from "@/lib/api/client"
 import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceDocument, type WorkspaceSearchHit, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
@@ -170,6 +171,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
       <div className="space-y-5">
         <h1 className="text-3xl font-semibold tracking-tight">{notebook.title}</h1>
         <WorkspaceSourceSearch notebookId={notebook.notebook_id} onOpen={openMatch} onExpired={onExpired} />
+        <WorkspaceSemanticSearch notebookId={notebook.notebook_id} onOpen={openMatch} onExpired={onExpired} />
         <WorkspaceDocuments notebookId={notebook.notebook_id} selectedId={selectedDocument?.source_id} onSelect={openSource} onExpired={onExpired} />
         <WorkspaceTextSources notebookId={notebook.notebook_id} selectedId={selectedText?.source_id} onSelect={openSource} onExpired={onExpired} />
         <h2 className="text-base font-semibold">Videos</h2>

@@ -5314,6 +5314,256 @@
         "title": "WorkspaceSearchResponse",
         "type": "object"
       },
+      "WorkspaceSemanticBatchResponse": {
+        "properties": {
+          "active_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Collection"
+          },
+          "active_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "added": {
+            "minimum": 0.0,
+            "title": "Added",
+            "type": "integer"
+          },
+          "available_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "embedding_ms": {
+            "minimum": 0.0,
+            "title": "Embedding Ms",
+            "type": "number"
+          },
+          "indexed": {
+            "minimum": 0.0,
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "prepare_ms": {
+            "minimum": 0.0,
+            "title": "Prepare Ms",
+            "type": "number"
+          },
+          "save_ms": {
+            "minimum": 0.0,
+            "title": "Save Ms",
+            "type": "number"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_collection",
+          "active_profile",
+          "available_profile",
+          "indexed",
+          "total",
+          "added",
+          "prepare_ms",
+          "embedding_ms",
+          "save_ms"
+        ],
+        "title": "WorkspaceSemanticBatchResponse",
+        "type": "object"
+      },
+      "WorkspaceSemanticBuild": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Collection"
+          },
+          "profile": {
+            "const": "local-bge-m3",
+            "title": "Profile",
+            "type": "string"
+          },
+          "replace": {
+            "default": false,
+            "title": "Replace",
+            "type": "boolean"
+          },
+          "revision": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "revision",
+          "expected_collection"
+        ],
+        "title": "WorkspaceSemanticBuild",
+        "type": "object"
+      },
+      "WorkspaceSemanticQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "collection_id"
+        ],
+        "title": "WorkspaceSemanticQuery",
+        "type": "object"
+      },
+      "WorkspaceSemanticResults": {
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "embedding_ms": {
+            "minimum": 0.0,
+            "title": "Embedding Ms",
+            "type": "number"
+          },
+          "hits": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "document": "#/components/schemas/WorkspaceDocumentMatch",
+                  "page_ocr": "#/components/schemas/WorkspaceDocumentMatch",
+                  "text": "#/components/schemas/WorkspaceTextMatch",
+                  "video": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceTextMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceDocumentMatch"
+                }
+              ]
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "query_ms": {
+            "minimum": 0.0,
+            "title": "Query Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "collection_id",
+          "embedding_ms",
+          "query_ms",
+          "hits"
+        ],
+        "title": "WorkspaceSemanticResults",
+        "type": "object"
+      },
+      "WorkspaceSemanticStatus": {
+        "properties": {
+          "active_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Collection"
+          },
+          "active_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "indexed": {
+            "minimum": 0.0,
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_collection",
+          "active_profile",
+          "available_profile",
+          "indexed",
+          "total"
+        ],
+        "title": "WorkspaceSemanticStatus",
+        "type": "object"
+      },
       "WorkspaceSessionResponse": {
         "properties": {
           "account": {
@@ -9084,6 +9334,318 @@
           }
         ],
         "summary": "Search Notebook Sources",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-index": {
+      "get": {
+        "operationId": "semantic_index_status_v1_workspace_notebooks__notebook_id__semantic_index_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSemanticStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Semantic Index Status",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "build_semantic_index_v1_workspace_notebooks__notebook_id__semantic_index_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSemanticBuild"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSemanticBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Build Semantic Index",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-search": {
+      "post": {
+        "operationId": "semantic_search_v1_workspace_notebooks__notebook_id__semantic_search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSemanticQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSemanticResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Semantic Search",
         "tags": [
           "workspace"
         ]

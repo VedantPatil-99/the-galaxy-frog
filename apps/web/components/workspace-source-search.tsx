@@ -5,33 +5,9 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
+import { ElapsedBadge, EvidenceMatchButton, evidenceId, location, sourceTitle } from "@/components/workspace-evidence-display"
 import { ApiClientError } from "@/lib/api/client"
 import { answerWorkspaceQuestion, searchWorkspaceSources, type WorkspaceAnswer, type WorkspaceSearchHit } from "@/lib/api/workspace"
-import { timestamp } from "@/lib/timestamp"
-
-function location(hit: WorkspaceSearchHit) {
-  if (hit.kind === "video") return `${timestamp(hit.start_ms)}–${timestamp(hit.end_ms)}`
-  if (hit.kind === "text") return "Pasted text"
-  if (hit.page_number === null) return `${hit.source.format === "docx" ? "DOCX" : "Text file"}`
-  return hit.kind === "page_ocr" ? `Page ${hit.page_number} · OCR` : `Page ${hit.page_number}`
-}
-
-function duration(milliseconds: number) {
-  if (milliseconds < 1) return "<1 ms"
-  return milliseconds < 1_000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1_000).toFixed(1)} s`
-}
-
-function sourceTitle(hit: WorkspaceSearchHit) {
-  return "filename" in hit.source ? hit.source.filename : hit.source.title
-}
-
-function evidenceId(hit: WorkspaceSearchHit) {
-  return hit.kind === "video" ? hit.unit_id : hit.block.block_id
-}
-
-function ElapsedBadge({ elapsed, operation }: { elapsed: number; operation: "Search" | "Answer" }) {
-  return <span className="rounded border border-border px-1.5 py-0.5 font-sans text-xs tabular-nums" aria-label={`${operation} took ${duration(elapsed)}`} title={`Time to receive the ${operation.toLowerCase()} response`}>{duration(elapsed)}</span>
-}
 
 const maxPassages = 6
 
@@ -185,13 +161,7 @@ export function WorkspaceSourceSearch({ notebookId, onOpen, onExpired }: {
                       setSelected(current => checked ? [...current, id] : current.filter(value => value !== id))
                     }} />
                   </label>
-                  <button type="button" className="block w-full rounded-md px-2 py-2.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring" onClick={() => onOpen(hit)}>
-                    <span className="flex flex-wrap items-baseline justify-between gap-x-2">
-                      <span className="min-w-0 text-sm font-semibold wrap-anywhere">{sourceTitle(hit)}</span>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{location(hit)}</span>
-                    </span>
-                    <span className="mt-1 line-clamp-2 text-sm text-muted-foreground wrap-anywhere">{hit.kind === "video" ? hit.text : hit.block.text}</span>
-                  </button>
+                  <EvidenceMatchButton hit={hit} onOpen={onOpen} />
                 </li>
               ))}
               </ul>

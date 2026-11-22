@@ -16,6 +16,7 @@ export type WorkspacePageOCR = Schema["WorkspacePageOCR"]
 export type WorkspaceSearchResult = Schema["WorkspaceSearchResponse"]
 export type WorkspaceSearchHit = WorkspaceSearchResult["hits"][number]
 export type WorkspaceAnswer = Schema["WorkspaceAnswerResponse"]
+export type WorkspaceSemanticStatus = Schema["WorkspaceSemanticStatus"]
 
 const base = "/v1/workspace"
 
@@ -214,5 +215,33 @@ export function answerWorkspaceQuestion(
       && value.blocks.every(block => object(block) && typeof block.text === "string"
         && Array.isArray(block.citations) && block.citations.length > 0
         && block.citations.every(citation => object(citation) && typeof citation.quote === "string" && searchHit(citation.evidence))),
+  fetch, { method: "POST", body: JSON.stringify(input), signal })
+}
+
+function embeddingProfile(value: unknown) {
+  return value === null || object(value) && typeof value.provider === "string" && typeof value.model === "string"
+    && typeof value.revision === "string" && typeof value.dimension === "number" && typeof value.normalization === "string"
+}
+
+function semanticStatus(value: unknown): value is WorkspaceSemanticStatus {
+  return object(value) && (value.active_collection === null || typeof value.active_collection === "string")
+    && embeddingProfile(value.active_profile) && embeddingProfile(value.available_profile)
+    && typeof value.indexed === "number" && typeof value.total === "number"
+    && Number.isInteger(value.indexed) && Number.isInteger(value.total) && value.indexed >= 0 && value.indexed <= value.total
+}
+
+export function getWorkspaceSemanticIndex(notebookId: string, signal: AbortSignal) {
+  return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/semantic-index`, semanticStatus, fetch, { signal })
+}
+
+export function buildWorkspaceSemanticIndex(notebookId: string, input: Schema["WorkspaceSemanticBuild"], signal: AbortSignal) {
+  return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/semantic-index`, semanticStatus, fetch, {
+    method: "POST", body: JSON.stringify(input), signal,
+  })
+}
+
+export function searchWorkspaceMeaning(notebookId: string, input: Schema["WorkspaceSemanticQuery"], signal: AbortSignal) {
+  return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/semantic-search`, (value): value is Schema["WorkspaceSemanticResults"] =>
+    object(value) && value.collection_id === input.collection_id && Array.isArray(value.hits) && value.hits.every(searchHit),
   fetch, { method: "POST", body: JSON.stringify(input), signal })
 }

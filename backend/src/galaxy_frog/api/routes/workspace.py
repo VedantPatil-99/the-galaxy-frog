@@ -116,7 +116,7 @@ Repository = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
 _MAX_PASTE_REQUEST_BYTES = 512 * 1024
 
 
-def _notebook_not_found() -> ApiError:
+def notebook_not_found() -> ApiError:
     return ApiError(
         status_code=404,
         code="NOTEBOOK_NOT_FOUND",
@@ -132,7 +132,7 @@ async def search_notebook_sources(
     try:
         await repository.get_notebook(identity.account_id, notebook_id)
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     started = perf_counter()
     rows = await search_workspace_sources(
         repository.session, identity.account_id, notebook_id, query.query
@@ -157,7 +157,7 @@ async def answer_notebook_question(
     try:
         await repository.get_notebook(identity.account_id, notebook_id)
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     if analyze_query(body.question).kind == QueryKind.TEMPORAL:
         raise ApiError(
             status_code=422,
@@ -273,7 +273,7 @@ async def get_notebook(notebook_id: UUID, identity: Creator, repository: Reposit
     try:
         return await repository.get_notebook(identity.account_id, notebook_id)
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
 
 
 @router.patch("/notebooks/{notebook_id}")
@@ -283,7 +283,7 @@ async def rename_notebook(
     try:
         notebook = await repository.rename_notebook(identity.account_id, notebook_id, draft)
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     await repository.session.commit()
     return notebook
 
@@ -329,7 +329,7 @@ async def paste_notebook_text(
             identity.account_id, notebook_id, draft
         )
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     except WorkspaceTextRejected as exc:
         raise ApiError(
             status_code=422,
@@ -354,7 +354,7 @@ async def list_notebook_text(
             identity.account_id, notebook_id, after=after, limit=limit + 1
         )
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     return WorkspaceTextSourceListResponse(
         sources=sources[:limit],
         next_after=sources[limit - 1].source_id if len(sources) > limit else None,
@@ -430,7 +430,7 @@ async def import_notebook_document(
         await repository.session.rollback()
         name, format = document_filename(filename)
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     except DocumentRejected as exc:
         raise _document_error(exc) from None
     media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -467,7 +467,7 @@ async def import_notebook_document(
         )
         await repository.session.commit()
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     except (
         DocumentRejected,
         DocumentProcessingTimeout,
@@ -491,7 +491,7 @@ async def list_notebook_documents(
             identity.account_id, notebook_id, after=after, limit=limit + 1
         )
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     return WorkspaceDocumentListResponse(
         sources=sources[:limit],
         next_after=sources[limit - 1].source_id if len(sources) > limit else None,
@@ -691,7 +691,7 @@ async def list_notebook_sources(
             identity.account_id, notebook_id, after=after, limit=limit + 1
         )
     except NotebookNotFound:
-        raise _notebook_not_found() from None
+        raise notebook_not_found() from None
     return WorkspaceSourceListResponse(
         sources=tuple(_source_response(video) for video in videos[:limit]),
         next_after=videos[limit - 1].id if len(videos) > limit else None,

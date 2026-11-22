@@ -1,8 +1,8 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.5 passed locally and cover private text, document import, opt-in PDF page OCR, notebook keyword search, and local answers from selected passages.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.6 passed locally, including selected-passage answers and revision-bound local semantic search. Gemini and Cohere embedding profiles remain in W3.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated 2026-11-22 (Asia/Calcutta) after local cited-answer verification.
+Updated 2026-11-22 (Asia/Calcutta) after local semantic index verification.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
@@ -220,8 +220,14 @@ W3.5 uses an explicit selection of search passages as the source scope for a one
 answer. FastAPI reloads the matches, sends bounded text to the configured Ollama model, and
 validates every returned reference and exact quote against the text it sent. Citations reopen
 their original page, text block, or video interval. The answer badge shows the browser request
-duration. Semantic indexing remains in W3.
+duration.
 [Answer architecture](adr/0013-answers-from-selected-passages.md)
+
+W3.6 adds a local BGE-M3 semantic index for notebook transcripts, document blocks, pasted
+text, and saved PDF OCR. **Search by meaning** shows coverage and binds the index to the
+installed model digest. Select a related passage to open the original evidence. The next W3
+packet covers the optional cloud profiles and their consent and cost previews.
+[Semantic index architecture](adr/0014-notebook-semantic-index.md)
 
 ### Models and retrieval profiles
 

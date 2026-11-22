@@ -237,6 +237,18 @@ Select a citation to reopen its source. The badge beside the answer measures the
 request. Questions that need temporal resolution require the video-specific workflow.
 [Measurement log](WORKSPACE_MEASUREMENTS.md)
 
+## W3.6 local semantic search
+
+Run `bun run db:migrate` against the intended local database. Start the installed Ollama
+service with BGE-M3 available through the existing `OLLAMA_BASE_URL` and `EMBEDDING_MODEL`
+settings. The app checks `EMBEDDING_MODEL_REVISION` when a digest is pinned there.
+
+In a private notebook, open **Search by meaning**. Choose **Build local index**, then use
+**Index next batch** until the coverage count includes all passages you want to search.
+Enter a topic under **Topic or phrase** and open a result to inspect the source evidence.
+If the installed model revision changes, **Rebuild for this revision** explicitly replaces
+the notebook's derived semantic vectors after a batch succeeds. [Measurement log](WORKSPACE_MEASUREMENTS.md)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.

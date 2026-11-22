@@ -27,6 +27,7 @@ from galaxy_frog.api.routes.retrieval import router as retrieval_router
 from galaxy_frog.api.routes.study import router as study_router
 from galaxy_frog.api.routes.videos import router as videos_router
 from galaxy_frog.api.routes.workspace import router as workspace_router
+from galaxy_frog.api.routes.workspace_semantic import router as workspace_semantic_router
 from galaxy_frog.api.workspace_auth import require_legacy_resource_access
 from galaxy_frog.application.provider_registry import local_ollama_origin
 from galaxy_frog.config import Settings
@@ -158,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         else None
     )
     application.include_router(workspace_router)
+    application.include_router(workspace_semantic_router)
     return application
 
 

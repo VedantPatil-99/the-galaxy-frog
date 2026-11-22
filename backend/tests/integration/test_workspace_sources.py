@@ -18,9 +18,11 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from tests.test_workspace_auth import auth_settings
 
+from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
 from galaxy_frog.api.app import create_app
 from galaxy_frog.api.routes import workspace as workspace_routes
+from galaxy_frog.api.routes import workspace_semantic
 from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
 from galaxy_frog.config import Settings
 from galaxy_frog.db.models import VideoFrameRow, VideoRow
@@ -32,6 +34,7 @@ from galaxy_frog.db.workspace_documents import (
     WorkspaceDocumentRow,
 )
 from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRepository, WorkspacePageOCRRow
+from galaxy_frog.db.workspace_semantic import WorkspaceSemanticRepository
 from galaxy_frog.db.workspace_sources import (
     LegacySourceAssignmentError,
     WorkspaceLegacySourceRow,
@@ -45,6 +48,7 @@ from galaxy_frog.domain.generation.workspace_answer import (
     WorkspaceGeneratedDraft,
     WorkspaceModelMetrics,
 )
+from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
@@ -193,6 +197,304 @@ async def workspace(
                 await session.execute(
                     delete(WorkspaceAccountRow).where(WorkspaceAccountRow.id.in_([owner, outsider]))
                 )
+
+
+@pytest.mark.asyncio
+async def test_local_semantic_index_preserves_sources_and_model_revision(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, engine, owner, outsider, videos, _ = workspace
+    created = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Semantic fixture"}
+    )
+    notebook = UUID(created.json()["notebook_id"])
+    base = f"/v1/workspace/notebooks/{notebook}"
+    index = f"{base}/semantic-index"
+    search = f"{base}/semantic-search"
+    pdf_text = "Sodium chloride dissolves in the ocean."
+    ocr_text = "The eyepiece magnifies the specimen."
+    notes = "\n\n".join(
+        ["A flame provides heat.", *(f"An unrelated astronomy note {i}." for i in range(14))]
+    )
+    paste = await client.post(
+        f"{base}/text-sources",
+        headers=OWN,
+        json={"title": "Notes", "format": "plain", "text": notes},
+    )
+    assert paste.status_code == 200
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        await WorkspaceSourceRepository(session).assign_legacy_videos(owner, notebook, videos[:1])
+        docs = WorkspaceDocumentRepository(session)
+        pdf = await docs.save(
+            owner,
+            notebook,
+            DocumentImport(
+                "field.pdf",
+                "pdf",
+                "e" * 64,
+                200,
+                ParsedDocument(
+                    sections=(
+                        StoredDocumentSection(text=pdf_text, spans=((0, len(pdf_text)),)),
+                        StoredDocumentSection(text="", spans=()),
+                    )
+                ),
+            ),
+        )
+        page = await docs.section(owner, notebook, pdf.source_id, pdf.version_id, 2)
+        ocr = WorkspacePageOCRRepository(session, page)
+        assert await ocr.reserve(owner)
+        completed = await ocr.finish("succeeded", prepare_workspace_text(ocr_text))
+        await session.commit()
+
+    other = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Other semantic notebook"}
+    )
+    other_base = f"/v1/workspace/notebooks/{other.json()['notebook_id']}"
+    assert (
+        await client.post(
+            f"{other_base}/text-sources",
+            headers=OWN,
+            json={"title": "Private distractor", "format": "plain", "text": "salty seawater"},
+        )
+    ).status_code == 200
+
+    configured = Mock(
+        return_value=auth_settings(embedding_model="bge-m3", embedding_model_revision="ollama")
+    )
+    monkeypatch.setattr(workspace_semantic, "workspace_settings", configured)
+    catalog = AsyncMock(return_value={"bge-m3:latest": "revision-a"})
+    monkeypatch.setattr(workspace_semantic, "probe_ollama_models", catalog)
+
+    async def vectorize(contents: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        await asyncio.sleep(0.005)
+        categories = {
+            pdf_text: 0,
+            "salty seawater": 0,
+            ocr_text: 1,
+            "look through a microscope": 1,
+            "A flame provides heat.": 2,
+            "fire is warm": 2,
+            "Original evidence": 3,
+        }
+        return tuple(
+            tuple(float(i == categories.get(content, 4)) for i in range(1024))
+            for content in contents
+        )
+
+    embed = AsyncMock(side_effect=vectorize)
+    monkeypatch.setattr(OllamaBgeM3EmbeddingProvider, "embed", embed)
+    assert (await client.get(index)).status_code == 401
+    assert (await client.get(index, headers=OTHER)).status_code == 404
+    assert (
+        await client.post(
+            search, headers=OWN, json={"query": "after the event", "collection_id": str(uuid4())}
+        )
+    ).status_code == 422
+    assert (
+        await client.post(
+            search, headers=OWN, json={"query": "salty seawater", "collection_id": str(uuid4())}
+        )
+    ).status_code == 409
+    embed.assert_not_awaited()
+
+    status = (await client.get(index, headers=OWN)).json()
+    assert status["indexed"] == 0 and status["total"] == 18 and status["active_collection"] is None
+    assert status["available_profile"]["revision"] == "revision-a"
+    body: dict[str, object] = {
+        "profile": "local-bge-m3",
+        "revision": "revision-a",
+        "expected_collection": None,
+    }
+    measurements: list[dict[str, float]] = []
+    started = perf_counter()
+    first = await client.post(index, headers=OWN, json=body)
+    measurements.append(
+        {
+            "api_ms": (perf_counter() - started) * 1_000,
+            **{key: first.json().get(key, 0) for key in ("prepare_ms", "embedding_ms", "save_ms")},
+        }
+    )
+    assert first.status_code == 200, first.text
+    assert first.headers["cache-control"] == "no-store"
+    assert first.json()["added"] == 16 and first.json()["indexed"] == 16
+    collection = first.json()["active_collection"]
+    assert (await client.post(index, headers=OWN, json=body)).status_code == 409
+    body["expected_collection"] = collection
+    started = perf_counter()
+    second = await client.post(index, headers=OWN, json=body)
+    measurements.append(
+        {
+            "api_ms": (perf_counter() - started) * 1_000,
+            **{key: second.json()[key] for key in ("prepare_ms", "embedding_ms", "save_ms")},
+        }
+    )
+    assert (
+        second.status_code == 200 and second.json()["added"] == 2 and second.json()["indexed"] == 18
+    )
+    assert (await client.post(index, headers=OWN, json=body)).json()["added"] == 0
+    assert (await client.get(f"{other_base}/semantic-index", headers=OWN)).json()["indexed"] == 0
+
+    baseline = await client.post(f"{base}/search", headers=OWN, json={"query": "salty seawater"})
+    assert baseline.status_code == 200 and baseline.json()["hits"] == []
+    samples: list[dict[str, float]] = []
+    for _ in range(4):
+        for query, kind, page_number in (
+            ("salty seawater", "document", 1),
+            ("look through a microscope", "page_ocr", 2),
+            ("fire is warm", "text", None),
+        ):
+            started = perf_counter()
+            response = await client.post(
+                search, headers=OWN, json={"query": query, "collection_id": collection}
+            )
+            result = response.json()
+            samples.append(
+                {
+                    "api_ms": (perf_counter() - started) * 1_000,
+                    "embedding_ms": result["embedding_ms"],
+                    "query_ms": result["query_ms"],
+                }
+            )
+            assert response.status_code == 200
+            top = result["hits"][0]
+            assert top["kind"] == kind and top.get("page_number") == page_number
+            if kind == "page_ocr":
+                assert top["block"] == completed.blocks[0].model_dump(mode="json")
+            video = next(hit for hit in result["hits"] if hit["kind"] == "video")
+            assert (
+                video["unit_id"],
+                video["start_ms"],
+                video["end_ms"],
+                video["cues"][0]["cue_id"],
+            ) == (UNIT_ID, 123, 456, CUE_ID)
+            assert len(result["hits"]) == 18
+    print(
+        json.dumps(
+            {
+                "initial_batches": measurements,
+                "passages_indexed": 18,
+                "queries": len(samples),
+                "top1_correct": len(samples),
+                "search_median_ms": {
+                    stage: round(median(row[stage] for row in samples), 3) for stage in samples[0]
+                },
+            }
+        )
+    )
+
+    catalog.return_value = {"bge-m3": "revision-b"}
+    assert (
+        await client.post(
+            search, headers=OWN, json={"query": "salty seawater", "collection_id": collection}
+        )
+    ).status_code == 409
+    assert (await client.post(index, headers=OWN, json={**body, "revision": "revision-b"})).json()[
+        "error"
+    ]["code"] == "WORKSPACE_SEMANTIC_REBUILD_REQUIRED"
+    embed.side_effect = EmbeddingProviderError("simulated Ollama interruption")
+    rebuild = {**body, "revision": "revision-b", "replace": True}
+    assert (await client.post(index, headers=OWN, json=rebuild)).json()["error"][
+        "code"
+    ] == "WORKSPACE_EMBEDDING_UNAVAILABLE"
+    assert (await client.get(index, headers=OWN)).json()["active_collection"] == collection
+    embed.side_effect = vectorize
+    replaced = await client.post(index, headers=OWN, json=rebuild)
+    assert replaced.status_code == 200, replaced.text
+    assert replaced.json()["active_collection"] != collection and replaced.json()["indexed"] == 16
+    assert replaced.json()["active_profile"]["revision"] == "revision-b"
+    current_id = replaced.json()["active_collection"]
+    assert (
+        await client.post(
+            search, headers=OWN, json={"query": "salty seawater", "collection_id": collection}
+        )
+    ).status_code == 409
+
+    configured.return_value = auth_settings(embedding_model="other-model")
+    assert (await client.get(index, headers=OWN)).json()["available_profile"] is None
+    assert (
+        await client.post(
+            search,
+            headers=OWN,
+            json={"query": "salty seawater", "collection_id": replaced.json()["active_collection"]},
+        )
+    ).status_code == 503
+    configured.return_value = auth_settings(embedding_model_revision="incorrect-pin")
+    assert (await client.get(index, headers=OWN)).json()["available_profile"] is None
+    configured.return_value = auth_settings()
+    catalog.return_value = {}
+    assert (await client.get(index, headers=OWN)).json()["available_profile"] is None
+    catalog.return_value = {"bge-m3": "revision-b"}
+    assert (
+        await client.post(
+            index,
+            headers=OWN,
+            json={**rebuild, "expected_collection": current_id, "revision": "wrong"},
+        )
+    ).status_code == 409
+
+    catalog.side_effect = [{"bge-m3": "revision-b"}, {"bge-m3": "revision-c"}]
+    drift = await client.post(
+        search, headers=OWN, json={"query": "salty seawater", "collection_id": current_id}
+    )
+    assert drift.status_code == 409
+    catalog.side_effect = None
+    catalog.return_value = {"bge-m3": "revision-c"}
+
+    both_embedding = asyncio.Event()
+    arrivals = 0
+
+    async def simultaneous(contents: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        nonlocal arrivals
+        arrivals += 1
+        if arrivals == 2:
+            both_embedding.set()
+        await asyncio.wait_for(both_embedding.wait(), timeout=5)
+        return await vectorize(contents)
+
+    embed.side_effect = simultaneous
+    concurrent = {**rebuild, "revision": "revision-c", "expected_collection": current_id}
+    first_rebuild, second_rebuild = await asyncio.gather(
+        client.post(index, headers=OWN, json=concurrent),
+        client.post(index, headers=OWN, json=concurrent),
+    )
+    assert {first_rebuild.status_code, second_rebuild.status_code} == {200, 409}
+    active = (await client.get(index, headers=OWN)).json()
+    assert active["indexed"] == 16 and active["active_profile"]["revision"] == "revision-c"
+    embed.side_effect = vectorize
+
+    async with async_sessionmaker(engine)() as session:
+        snapshot = await WorkspaceSemanticRepository(session, owner, notebook).active()
+        assert snapshot is not None
+        with pytest.raises(NotebookNotFound):
+            await WorkspaceSemanticRepository(session, outsider, notebook).store(
+                snapshot.collection_id, snapshot.spec, ()
+            )
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            WorkspaceSemanticRepository, "active", AsyncMock(side_effect=[snapshot, None])
+        )
+        replaced_while_searching = await client.post(
+            search,
+            headers=OWN,
+            json={
+                "query": "salty seawater",
+                "collection_id": active["active_collection"],
+            },
+        )
+        assert replaced_while_searching.status_code == 409
+
+    monkeypatch.setattr(
+        WorkspaceSemanticRepository, "store", AsyncMock(side_effect=NotebookNotFound)
+    )
+    assert (
+        await client.post(
+            index,
+            headers=OWN,
+            json={**concurrent, "expected_collection": active["active_collection"]},
+        )
+    ).status_code == 404
 
 
 @pytest.mark.asyncio
