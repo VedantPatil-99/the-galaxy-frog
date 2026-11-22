@@ -212,6 +212,204 @@
         "title": "ChapterRequest",
         "type": "object"
       },
+      "CloudEmbeddingConfirmation": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "discriminator": {
+              "mapping": {
+                "index": "#/components/schemas/CloudEmbeddingIndex",
+                "search": "#/components/schemas/CloudEmbeddingSearch"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CloudEmbeddingIndex"
+              },
+              {
+                "$ref": "#/components/schemas/CloudEmbeddingSearch"
+              }
+            ],
+            "title": "Action"
+          },
+          "allow_cloud": {
+            "const": true,
+            "title": "Allow Cloud",
+            "type": "boolean"
+          },
+          "preview_id": {
+            "format": "uuid",
+            "title": "Preview Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preview_id",
+          "action",
+          "allow_cloud"
+        ],
+        "title": "CloudEmbeddingConfirmation",
+        "type": "object"
+      },
+      "CloudEmbeddingIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Collection"
+          },
+          "kind": {
+            "const": "index",
+            "title": "Kind",
+            "type": "string"
+          },
+          "replace": {
+            "default": false,
+            "title": "Replace",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "expected_collection"
+        ],
+        "title": "CloudEmbeddingIndex",
+        "type": "object"
+      },
+      "CloudEmbeddingPreview": {
+        "properties": {
+          "estimated_input_tokens": {
+            "title": "Estimated Input Tokens",
+            "type": "integer"
+          },
+          "estimated_remaining_usd": {
+            "title": "Estimated Remaining Usd",
+            "type": "string"
+          },
+          "estimated_usd": {
+            "title": "Estimated Usd",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "inputs": {
+            "title": "Inputs",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "index",
+              "search"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "model": {
+            "const": "gemini-embedding-2",
+            "default": "gemini-embedding-2",
+            "title": "Model",
+            "type": "string"
+          },
+          "preview_id": {
+            "format": "uuid",
+            "title": "Preview Id",
+            "type": "string"
+          },
+          "remaining_inputs": {
+            "title": "Remaining Inputs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "preview_id",
+          "kind",
+          "inputs",
+          "estimated_input_tokens",
+          "estimated_usd",
+          "remaining_inputs",
+          "estimated_remaining_usd",
+          "expires_at"
+        ],
+        "title": "CloudEmbeddingPreview",
+        "type": "object"
+      },
+      "CloudEmbeddingSearch": {
+        "additionalProperties": false,
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "search",
+            "title": "Kind",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "kind",
+          "collection_id"
+        ],
+        "title": "CloudEmbeddingSearch",
+        "type": "object"
+      },
+      "CloudIndexResult": {
+        "properties": {
+          "index": {
+            "$ref": "#/components/schemas/WorkspaceSemanticBatchResponse"
+          },
+          "kind": {
+            "const": "index",
+            "default": "index",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "title": "CloudIndexResult",
+        "type": "object"
+      },
+      "CloudSearchResult": {
+        "properties": {
+          "kind": {
+            "const": "search",
+            "default": "search",
+            "title": "Kind",
+            "type": "string"
+          },
+          "results": {
+            "$ref": "#/components/schemas/WorkspaceSemanticResults"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "CloudSearchResult",
+        "type": "object"
+      },
       "ConsentScope": {
         "additionalProperties": false,
         "properties": {
@@ -5353,6 +5551,16 @@
               }
             ]
           },
+          "cloud_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "embedding_ms": {
             "minimum": 0.0,
             "title": "Embedding Ms",
@@ -5534,6 +5742,16 @@
             ]
           },
           "available_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cloud_profile": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/EmbeddingCollectionSpec"
@@ -9334,6 +9552,272 @@
           }
         ],
         "summary": "Search Notebook Sources",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-cloud-confirm": {
+      "post": {
+        "operationId": "confirm_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudEmbeddingConfirmation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "index": "#/components/schemas/CloudIndexResult",
+                      "search": "#/components/schemas/CloudSearchResult"
+                    },
+                    "propertyName": "kind"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CloudIndexResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CloudSearchResult"
+                    }
+                  ],
+                  "title": "Response Confirm Cloud Embedding V1 Workspace Notebooks  Notebook Id  Semantic Cloud Confirm Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Confirm Cloud Embedding",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-cloud-preview": {
+      "post": {
+        "operationId": "preview_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "discriminator": {
+                  "mapping": {
+                    "index": "#/components/schemas/CloudEmbeddingIndex",
+                    "search": "#/components/schemas/CloudEmbeddingSearch"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CloudEmbeddingIndex"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CloudEmbeddingSearch"
+                  }
+                ],
+                "title": "Action"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudEmbeddingPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Preview Cloud Embedding",
         "tags": [
           "workspace"
         ]

@@ -1,8 +1,8 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.6 passed locally, including selected-passage answers and revision-bound local semantic search. Gemini and Cohere embedding profiles remain in W3.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.7 passed locally, including selected-passage answers, local semantic search, and Gemini embedding confirmation with simulated provider responses. Cohere Embed v4 remains in W3.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated 2026-11-22 (Asia/Calcutta) after local semantic index verification.
+Updated 2026-11-22 (Asia/Calcutta) after Gemini embedding confirmation verification.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
@@ -228,6 +228,12 @@ text, and saved PDF OCR. **Search by meaning** shows coverage and binds the inde
 installed model digest. Select a related passage to open the original evidence. The next W3
 packet covers the optional cloud profiles and their consent and cost previews.
 [Semantic index architecture](adr/0014-notebook-semantic-index.md)
+
+W3.7 adds the Gemini Embedding 2 cloud profile. A local preview shows the text scope and
+estimated list price before an owner can approve one index batch or query. The server checks
+the preview against the current collection and payload, reserves project quota, and spends
+the receipt before sending text. Cohere Embed v4 remains in W3.
+[Gemini confirmation architecture](adr/0015-gemini-notebook-embedding-confirmation.md)
 
 ### Models and retrieval profiles
 

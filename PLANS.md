@@ -844,8 +844,9 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     configured local model. Validate every citation and measure the answer stages.
   - [x] W3.6 — Local semantic indexing and search with an explicit, revision-bound BGE-M3
     embedding profile. Preserve the original evidence and measure coverage and latency.
-  - [ ] Remaining W3 — Optional Gemini and Cohere embedding profiles with explicit cloud
-    consent and reindex cost previews.
+  - [x] W3.7 — Gemini Embedding 2 profile, cost previews, and one-use cloud confirmation
+    for index batches and semantic queries. Preserve local indexing and source citations.
+  - [ ] Remaining W3 — Cohere Embed v4 using the same cloud confirmation and cost flow.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
@@ -853,14 +854,22 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the active checkpoint. W3.1 through W3.6 passed locally. Optional cloud embedding
-profiles remain in W3. Record measurements as each packet is implemented and tested in
+W3 is the active checkpoint. W3.1 through W3.7 passed locally. Cohere Embed v4 remains in W3.
+Record measurements as each packet is implemented and tested in
 [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
 The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
 also passed live Auth and private preview Storage
 through FastAPI in W1.
 Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.7 local verification — 2026-11-22
+
+- Gemini Embedding 2 uses a separate 1,536-dimensional notebook collection. Owners preview
+  the text scope and estimated cost, then explicitly approve each index batch or query.
+- PostgreSQL and browser fixtures verified one-use confirmation, changed or expired
+  previews, quota checks, and preservation of the original citation after reindexing.
+- The local checks used simulated Gemini responses. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
 
 ### W3.6 local verification — 2026-11-22
 

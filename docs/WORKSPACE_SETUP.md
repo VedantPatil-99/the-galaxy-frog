@@ -249,6 +249,21 @@ Enter a topic under **Topic or phrase** and open a result to inspect the source 
 If the installed model revision changes, **Rebuild for this revision** explicitly replaces
 the notebook's derived semantic vectors after a batch succeeds. [Measurement log](WORKSPACE_MEASUREMENTS.md)
 
+## W3.7 Gemini semantic search
+
+Apply `bun run db:migrate` against the intended local database. To enable the optional
+profile, set `WORKSPACE_GEMINI_EMBEDDING_ENABLED=true` in the backend environment and
+configure `GEMINI_EMBEDDING_API_KEY` with its matching `GEMINI_EMBEDDING_PROJECT_ID`.
+FastAPI applies the existing Gemini project limits to confirmed requests. The API key stays
+on the server. Gemini's standard paid input rate and free-tier data usage are documented at
+[Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-embedding-2).
+
+In **Search by meaning**, select **Gemini Embedding 2 · Cloud**. Choose the Gemini indexing
+or rebuild preview, read the batch and remaining-index estimates, then confirm the text
+transfer for that batch. A semantic search also displays the query and estimate before its
+own confirmation. A confirmed receipt can dispatch once. Review Gemini project usage if the
+outcome is uncertain. [Measurement log](WORKSPACE_MEASUREMENTS.md)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.

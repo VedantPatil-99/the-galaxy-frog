@@ -17,6 +17,8 @@ export type WorkspaceSearchResult = Schema["WorkspaceSearchResponse"]
 export type WorkspaceSearchHit = WorkspaceSearchResult["hits"][number]
 export type WorkspaceAnswer = Schema["WorkspaceAnswerResponse"]
 export type WorkspaceSemanticStatus = Schema["WorkspaceSemanticStatus"]
+export type CloudEmbeddingAction = Schema["CloudEmbeddingIndex"] | Schema["CloudEmbeddingSearch"]
+export type CloudEmbeddingPreview = Schema["CloudEmbeddingPreview"]
 
 const base = "/v1/workspace"
 
@@ -226,6 +228,7 @@ function embeddingProfile(value: unknown) {
 function semanticStatus(value: unknown): value is WorkspaceSemanticStatus {
   return object(value) && (value.active_collection === null || typeof value.active_collection === "string")
     && embeddingProfile(value.active_profile) && embeddingProfile(value.available_profile)
+    && embeddingProfile(value.cloud_profile ?? null)
     && typeof value.indexed === "number" && typeof value.total === "number"
     && Number.isInteger(value.indexed) && Number.isInteger(value.total) && value.indexed >= 0 && value.indexed <= value.total
 }
@@ -243,5 +246,22 @@ export function buildWorkspaceSemanticIndex(notebookId: string, input: Schema["W
 export function searchWorkspaceMeaning(notebookId: string, input: Schema["WorkspaceSemanticQuery"], signal: AbortSignal) {
   return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/semantic-search`, (value): value is Schema["WorkspaceSemanticResults"] =>
     object(value) && value.collection_id === input.collection_id && Array.isArray(value.hits) && value.hits.every(searchHit),
+  fetch, { method: "POST", body: JSON.stringify(input), signal })
+}
+
+export function previewWorkspaceCloudEmbedding(notebookId: string, action: CloudEmbeddingAction, signal: AbortSignal) {
+  return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/semantic-cloud-preview`, (value): value is CloudEmbeddingPreview =>
+    object(value) && value.kind === action.kind && value.model === "gemini-embedding-2"
+      && typeof value.preview_id === "string" && typeof value.expires_at === "string"
+      && typeof value.inputs === "number" && typeof value.remaining_inputs === "number"
+      && typeof value.estimated_usd === "string" && typeof value.estimated_remaining_usd === "string",
+  fetch, { method: "POST", body: JSON.stringify(action), signal })
+}
+
+export function confirmWorkspaceCloudEmbedding(notebookId: string, previewId: string, action: CloudEmbeddingAction, signal: AbortSignal) {
+  const input: Schema["CloudEmbeddingConfirmation"] = { preview_id: previewId, action, allow_cloud: true }
+  return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/semantic-cloud-confirm`, (value): value is Schema["CloudIndexResult"] | Schema["CloudSearchResult"] =>
+    object(value) && (value.kind === "index" && semanticStatus(value.index)
+      || value.kind === "search" && object(value.results) && Array.isArray(value.results.hits) && value.results.hits.every(searchHit)),
   fetch, { method: "POST", body: JSON.stringify(input), signal })
 }

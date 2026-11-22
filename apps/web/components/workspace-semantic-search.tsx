@@ -6,10 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { ElapsedBadge, EvidenceMatchButton, evidenceId } from "@/components/workspace-evidence-display"
 import { ApiClientError } from "@/lib/api/client"
-import { buildWorkspaceSemanticIndex, getWorkspaceSemanticIndex, searchWorkspaceMeaning, type WorkspaceSearchHit, type WorkspaceSemanticStatus } from "@/lib/api/workspace"
+import {
+  buildWorkspaceSemanticIndex, confirmWorkspaceCloudEmbedding, getWorkspaceSemanticIndex, previewWorkspaceCloudEmbedding,
+  searchWorkspaceMeaning, type CloudEmbeddingAction, type CloudEmbeddingPreview, type WorkspaceSearchHit, type WorkspaceSemanticStatus,
+} from "@/lib/api/workspace"
 
 type Props = { notebookId: string; onOpen: (hit: WorkspaceSearchHit) => void; onExpired: () => void }
-type Operation = "status" | "index" | "search"
+type Operation = "status" | "index" | "search" | "preview"
+type Target = "local" | "gemini"
 
 export function WorkspaceSemanticSearch(props: Props) {
   return <Disclosure label="Search by meaning" keepMounted={false}><SemanticPanel {...props} /></Disclosure>
@@ -24,9 +28,13 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
   const [query, setQuery] = useState("")
   const [buildTime, setBuildTime] = useState<number | null>(null)
   const [result, setResult] = useState<{ hits: WorkspaceSearchHit[]; elapsed: number } | null>(null)
-  const available = status?.available_profile
+  const [target, setTarget] = useState<Target | null>(null)
+  const [review, setReview] = useState<{ action: CloudEmbeddingAction; preview: CloudEmbeddingPreview } | null>(null)
+  const [permission, setPermission] = useState(false)
+  const selected = target ?? (status?.active_profile?.provider === "gemini" ? "gemini" : "local")
+  const available = selected === "gemini" ? status?.cloud_profile : status?.available_profile
   const compatible = Boolean(available && status?.active_profile?.revision === available.revision
-    && status.active_profile.model === available.model)
+    && status.active_profile.model === available.model && status.active_profile.provider === available.provider)
   const replace = Boolean(status?.active_collection && !compatible)
 
   useEffect(() => {
@@ -68,6 +76,7 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
   }
 
   function refresh() {
+    setReview(null)
     void run("status", async signal => {
       const current = await getWorkspaceSemanticIndex(notebookId, signal)
       if (signal.aborted) return
@@ -77,8 +86,41 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
     })
   }
 
+  function previewCloud(action: CloudEmbeddingAction) {
+    setReview(null)
+    setPermission(false)
+    void run("preview", async signal => {
+      const preview = await previewWorkspaceCloudEmbedding(notebookId, action, signal)
+      if (!signal.aborted) setReview({ action, preview })
+    })
+  }
+
+  function confirmCloud() {
+    if (!review || !permission) return
+    const { action, preview } = review
+    setReview(null)
+    setPermission(false)
+    void run(action.kind, async signal => {
+      const started = performance.now()
+      const response = await confirmWorkspaceCloudEmbedding(notebookId, preview.preview_id, action, signal)
+      if (signal.aborted) return
+      const elapsed = performance.now() - started
+      if (response.kind === "index") {
+        setStatus(response.index)
+        setBuildTime(elapsed)
+        setResult(null)
+      } else {
+        setResult({ hits: response.results.hits, elapsed })
+      }
+    })
+  }
+
   function build() {
     if (!available || !status) return
+    if (selected === "gemini") {
+      previewCloud({ kind: "index", expected_collection: status.active_collection, replace })
+      return
+    }
     void run("index", async signal => {
       const started = performance.now()
       const current = await buildWorkspaceSemanticIndex(notebookId, {
@@ -97,6 +139,10 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
     const collection = status?.active_collection
     const submitted = query.trim()
     if (!collection || !submitted || !compatible) return
+    if (selected === "gemini") {
+      previewCloud({ kind: "search", query: submitted, collection_id: collection })
+      return
+    }
     void run("search", async signal => {
       setResult(null)
       const started = performance.now()
@@ -111,11 +157,27 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
         <p>{status.indexed} of {status.total} passages indexed</p>
         {buildTime !== null ? <ElapsedBadge elapsed={buildTime} operation="Indexing" /> : null}
       </div>
-      {available ? <p className="text-xs text-muted-foreground">Local BGE-M3 <span title={available.revision}>· {available.revision.slice(0, 12)}</span></p> : <p className="text-sm text-muted-foreground">Start Ollama with BGE-M3 to index or search.</p>}
+      {status.cloud_profile || selected === "gemini" ? (
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          Embedding profile
+          <select value={selected} disabled={operation !== null} className="min-h-11 rounded-md border border-input bg-card px-2" onChange={event => {
+            setTarget(event.target.value === "gemini" ? "gemini" : "local")
+            setReview(null)
+            setError("")
+            setResult(null)
+            setBuildTime(null)
+          }}>
+            <option value="local">Local BGE-M3</option>
+            <option value="gemini">Gemini Embedding 2 · Cloud</option>
+          </select>
+        </label>
+      ) : null}
+      {available ? <p className="text-xs text-muted-foreground" title={available.revision}>{selected === "gemini" ? "Cloud · 1,536 dimensions" : `Local BGE-M3 · ${available.revision.slice(0, 12)}`}</p>
+        : <p className="text-sm text-muted-foreground">{selected === "gemini" ? "Configure the optional Gemini embedding profile to continue." : "Start Ollama with BGE-M3 to index or search."}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {available && status.total > 0 && (replace || status.indexed < status.total) ? (
           <Button type="button" variant="secondary" className="min-h-11" disabled={operation !== null} onClick={build}>
-            {replace ? "Rebuild for this revision" : status.indexed ? "Index next batch" : "Build local index"}
+            {selected === "gemini" ? replace ? "Preview Gemini rebuild" : "Preview Gemini indexing" : replace ? "Rebuild for this revision" : status.indexed ? "Index next batch" : "Build local index"}
           </Button>
         ) : null}
         <Button type="button" variant="ghost" className="min-h-11" disabled={operation !== null} onClick={refresh}>Refresh status</Button>
@@ -124,11 +186,25 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
     {compatible && status && status.indexed > 0 ? <form onSubmit={search} className="space-y-1.5">
       <label htmlFor={field} className="block text-sm font-medium">Topic or phrase</label>
       <div className="flex flex-wrap items-center gap-2">
-        <input id={field} type="search" maxLength={160} required value={query} onChange={event => setQuery(event.target.value)} className="min-h-11 min-w-32 flex-1 rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
-        <Button type="submit" variant="secondary" className="min-h-11" disabled={operation !== null || !query.trim()}>Find related passages</Button>
+        <input id={field} type="search" maxLength={160} required value={query} onChange={event => { setQuery(event.target.value); setReview(null) }} className="min-h-11 min-w-32 flex-1 rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
+        <Button type="submit" variant="secondary" className="min-h-11" disabled={operation !== null || !query.trim()}>{selected === "gemini" ? "Preview Gemini search" : "Find related passages"}</Button>
       </div>
     </form> : null}
-    {operation ? <p role="status" className="text-sm text-muted-foreground">{operation === "status" ? "Checking index…" : operation === "index" ? "Indexing passages…" : "Finding related passages…"}</p> : null}
+    {review ? <section aria-label="Gemini request preview" className="space-y-2.5 rounded-md border border-border bg-card px-3 py-3 text-sm">
+      <p className="font-semibold">Review Gemini request</p>
+      <p className="wrap-anywhere">{review.action.kind === "index" ? `Send ${review.preview.inputs} ${review.preview.inputs === 1 ? "passage excerpt" : "passage excerpts"} to Google Gemini.` : `Send this query to Google Gemini: “${review.action.query}”.`}</p>
+      <p className="text-muted-foreground">Estimated list cost ${review.preview.estimated_usd} USD{review.action.kind === "index" ? ` for this batch, $${review.preview.estimated_remaining_usd} across ${review.preview.remaining_inputs} remaining passages.` : "."} The estimate uses input length.</p>
+      <p className="text-xs text-muted-foreground">Google may use free-tier inputs to improve its products. <a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-embedding-2" target="_blank" rel="noreferrer" className="underline">Gemini pricing and data use</a></p>
+      <label className="flex min-h-11 items-center gap-2">
+        <input type="checkbox" checked={permission} onChange={event => setPermission(event.target.checked)} className="size-4 accent-primary" />
+        I approve sending this text to Gemini
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" className="min-h-11" disabled={!permission || operation !== null} onClick={confirmCloud}>Confirm and send</Button>
+        <Button type="button" variant="ghost" className="min-h-11" onClick={() => setReview(null)}>Cancel</Button>
+      </div>
+    </section> : null}
+    {operation ? <p role="status" className="text-sm text-muted-foreground">{operation === "status" ? "Checking index…" : operation === "index" ? "Indexing passages…" : operation === "preview" ? "Preparing cost preview…" : "Finding related passages…"}</p> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     {result ? <>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">

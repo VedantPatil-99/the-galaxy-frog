@@ -113,3 +113,29 @@ Reproduce the database fixture with the current local migrations applied.
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
   tests/integration/test_workspace_sources.py::test_local_semantic_index_preserves_sources_and_model_revision
 ```
+
+## 2026-11-22 · W3.7 Gemini embedding previews and confirmation
+
+- **Workload** — Local PostgreSQL 17 and FastAPI with simulated authentication and a simulated
+  Gemini model. One index batch sent 147 UTF-8 bytes of prepared text across three passages
+  from a one-second video record, a one-page PDF, and a pasted note. The new collection used
+  1,536-dimensional fixture vectors.
+- **Index confirmation** — 182.47 ms for one API request that included synchronization with a
+  concurrent confirmation attempt. The recorded stages were 59.03 ms for preparation and quota
+  admission, 43.06 ms for the simulated dispatch stage, and 44.53 ms for saving and closing the
+  receipt. The concurrent confirmation was rejected before dispatch.
+- **Search confirmation** — Three serial fixture queries had a 201.74 ms median API time,
+  including 13.10 ms for simulated embedding and 32.40 ms for the database search and active
+  collection check. The expected PDF page ranked first in all three. The fixture also checked
+  expiry, edited queries, duplicate confirmation, quota limits, and uncertain provider outcomes.
+  It verifies application behavior with controlled vectors.
+- **Browser fixture** — Headless Chrome showed 193 ms for index confirmation and 199 ms for
+  search confirmation, each with a deliberate 180 ms response delay. The browser verified both
+  confirmation gates, the displayed cost estimate and text scope, and the citation's PDF page.
+
+Reproduce the local fixture with the current migrations applied.
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
+  tests/integration/test_workspace_sources.py::test_gemini_embeddings_require_current_once_only_cloud_confirmation
+```

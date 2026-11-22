@@ -22,6 +22,7 @@ from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.workspace import NotebookNotFound
 
 INDEX_BATCH_SIZE = 16
+EMBEDDING_PASSAGE_CHARACTERS = 2_000
 
 _COVERAGE = text(
     WORKSPACE_PASSAGE_INVENTORY
@@ -41,6 +42,18 @@ _PENDING = text(
         WHERE e.notebook_id = :notebook_id AND e.collection_id = :collection_id
         AND e.passage_key = p.passage_key
     ) ORDER BY p.passage_key LIMIT :batch_size
+    """
+)
+
+_REMAINING = text(
+    WORKSPACE_PASSAGE_INVENTORY
+    + """
+    SELECT count(*), coalesce(sum(least(octet_length(p.text), :max_bytes)), 0)
+    FROM passages p WHERE NOT EXISTS (
+        SELECT 1 FROM workspace_semantic_embeddings e
+        WHERE e.notebook_id = :notebook_id AND e.collection_id = :collection_id
+        AND e.passage_key = p.passage_key
+    )
     """
 )
 
@@ -136,6 +149,19 @@ class WorkspaceSemanticRepository:
         )
         return tuple((str(key), str(content)) for key, content in rows)
 
+    async def remaining_size(self, collection_id: UUID | None, max_bytes: int) -> tuple[int, int]:
+        total, size = (
+            await self.session.execute(
+                _REMAINING,
+                {
+                    **self._scope(),
+                    "collection_id": collection_id,
+                    "max_bytes": max_bytes,
+                },
+            )
+        ).one()
+        return int(total), int(size)
+
     async def search(self, collection_id: UUID, vector: tuple[float, ...]) -> Sequence[RowMapping]:
         rows = await self.session.execute(
             _SEMANTIC_SEARCH,
@@ -143,13 +169,8 @@ class WorkspaceSemanticRepository:
         )
         return rows.mappings().all()
 
-    async def store(
-        self,
-        expected_collection: UUID | None,
-        spec: EmbeddingCollectionSpec,
-        entries: tuple[tuple[str, tuple[float, ...]], ...],
-    ) -> int:
-        # The short write transaction serializes activations, including the first index.
+    async def lock_notebook(self) -> None:
+        """Serialize changes within the owner scope without holding locks during inference."""
         notebook = await self.session.scalar(
             select(WorkspaceNotebookRow.id)
             .where(
@@ -160,6 +181,14 @@ class WorkspaceSemanticRepository:
         )
         if notebook is None:
             raise NotebookNotFound
+
+    async def store(
+        self,
+        expected_collection: UUID | None,
+        spec: EmbeddingCollectionSpec,
+        entries: tuple[tuple[str, tuple[float, ...]], ...],
+    ) -> int:
+        await self.lock_notebook()
         current = await self.active()
         if (current.collection_id if current else None) != expected_collection:
             raise WorkspaceIndexChanged

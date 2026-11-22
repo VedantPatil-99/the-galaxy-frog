@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     gemini_study_project_id: str | None = None
     gemini_visual_api_key: SecretStr | None = None
     gemini_visual_project_id: str | None = None
+    workspace_gemini_embedding_enabled: bool = False
+    gemini_embedding_api_key: SecretStr | None = None
+    gemini_embedding_project_id: str | None = None
     gemini_generation_enabled: bool = False
     gemini_study_enabled: bool = False
     gemini_generation_model: str | None = None
@@ -163,7 +166,12 @@ class Settings(BaseSettings):
             raise ValueError("Use a Supabase publishable key, not a secret or service-role key.")
         return SecretStr(key)
 
-    @field_validator("gemini_api_key", "gemini_study_api_key", "gemini_visual_api_key")
+    @field_validator(
+        "gemini_api_key",
+        "gemini_study_api_key",
+        "gemini_visual_api_key",
+        "gemini_embedding_api_key",
+    )
     @classmethod
     def normalize_gemini_secret(cls, value: SecretStr | None) -> SecretStr | None:
         if value is None or not value.get_secret_value().strip():
@@ -180,7 +188,12 @@ class Settings(BaseSettings):
             raise ValueError("Use a modern Supabase secret key for server storage.")
         return SecretStr(key)
 
-    @field_validator("gemini_project_id", "gemini_study_project_id", "gemini_visual_project_id")
+    @field_validator(
+        "gemini_project_id",
+        "gemini_study_project_id",
+        "gemini_visual_project_id",
+        "gemini_embedding_project_id",
+    )
     @classmethod
     def validate_gemini_project(cls, value: str | None) -> str | None:
         if value is None or not value.strip():

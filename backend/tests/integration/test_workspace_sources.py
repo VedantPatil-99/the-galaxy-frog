@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import median
 from time import perf_counter
@@ -14,16 +14,22 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from tests.test_workspace_auth import auth_settings
 
+from galaxy_frog.adapters.embeddings.gemini import (
+    GEMINI_DOCUMENT_PREFIX,
+    GEMINI_QUERY_PREFIX,
+    GeminiEmbeddingProvider,
+)
 from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
 from galaxy_frog.api.app import create_app
 from galaxy_frog.api.routes import workspace as workspace_routes
-from galaxy_frog.api.routes import workspace_semantic
+from galaxy_frog.api.routes import workspace_semantic, workspace_semantic_cloud
 from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
+from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
 from galaxy_frog.config import Settings
 from galaxy_frog.db.models import VideoFrameRow, VideoRow
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
@@ -34,7 +40,7 @@ from galaxy_frog.db.workspace_documents import (
     WorkspaceDocumentRow,
 )
 from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRepository, WorkspacePageOCRRow
-from galaxy_frog.db.workspace_semantic import WorkspaceSemanticRepository
+from galaxy_frog.db.workspace_semantic import WorkspaceIndexChanged, WorkspaceSemanticRepository
 from galaxy_frog.db.workspace_sources import (
     LegacySourceAssignmentError,
     WorkspaceLegacySourceRow,
@@ -49,6 +55,7 @@ from galaxy_frog.domain.generation.workspace_answer import (
     WorkspaceModelMetrics,
 )
 from galaxy_frog.domain.retrieval.errors import EmbeddingProviderError
+from galaxy_frog.domain.retrieval.models import EmbeddingCollectionSpec
 from galaxy_frog.domain.transcripts.models import RetrievalUnit, TranscriptCue
 from galaxy_frog.domain.videos.models import (
     CaptionKind,
@@ -197,6 +204,306 @@ async def workspace(
                 await session.execute(
                     delete(WorkspaceAccountRow).where(WorkspaceAccountRow.id.in_([owner, outsider]))
                 )
+
+
+@pytest.mark.asyncio
+async def test_gemini_embeddings_require_current_once_only_cloud_confirmation(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, engine, owner, _, videos, _ = workspace
+    created = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Gemini fixture"}
+    )
+    notebook = UUID(created.json()["notebook_id"])
+    base = f"/v1/workspace/notebooks/{notebook}"
+    preview_path, confirm_path = f"{base}/semantic-cloud-preview", f"{base}/semantic-cloud-confirm"
+    pasted = "A flame provides heat for cooking."
+    paste = await client.post(
+        f"{base}/text-sources",
+        headers=OWN,
+        json={"title": "Gemini fixture note", "format": "plain", "text": pasted},
+    )
+    assert paste.status_code == 200
+    pdf_text = "Ocean water contains dissolved salt."
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        await WorkspaceSourceRepository(session).assign_legacy_videos(owner, notebook, videos[:1])
+        docs = WorkspaceDocumentRepository(session)
+        pdf = await docs.save(
+            owner,
+            notebook,
+            DocumentImport(
+                "ocean.pdf",
+                "pdf",
+                "f" * 64,
+                200,
+                ParsedDocument(
+                    sections=(StoredDocumentSection(text=pdf_text, spans=((0, len(pdf_text)),)),)
+                ),
+            ),
+        )
+        repository = WorkspaceSemanticRepository(session, owner, notebook)
+        local_example = (1.0,) + (0.0,) * 1023
+        await repository.store(
+            None,
+            EmbeddingCollectionSpec("ollama", "bge-m3:latest", "local-digest", 1024, "l2"),
+            tuple((key, local_example) for key, _ in await repository.pending(None)),
+        )
+        local = await repository.active()
+        assert local is not None
+        await session.commit()
+    local_collection = str(local.collection_id)
+
+    disabled = auth_settings()
+    config = Mock(return_value=disabled)
+    monkeypatch.setattr(workspace_semantic_cloud, "workspace_settings", config)
+    monkeypatch.setattr(workspace_semantic, "workspace_settings", config)
+    monkeypatch.setattr(
+        workspace_semantic,
+        "probe_ollama_models",
+        AsyncMock(return_value={"bge-m3:latest": "local-digest"}),
+    )
+    action: dict[str, object] = {
+        "kind": "index",
+        "expected_collection": local_collection,
+        "replace": True,
+    }
+    assert (await client.post(preview_path, headers=OWN, json=action)).status_code == 503
+    assert (await client.get(f"{base}/semantic-index", headers=OWN)).json()["cloud_profile"] is None
+    settings = auth_settings(
+        workspace_gemini_embedding_enabled=True,
+        gemini_embedding_api_key="fixture-key",
+        gemini_embedding_project_id=f"embeddings-{uuid4().hex[:12]}",
+    )
+    config.return_value = settings
+
+    async def vectorize(contents: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        await asyncio.sleep(0.007)
+        return tuple(
+            (0.0, 1.0) + (0.0,) * 1534
+            if value
+            in {
+                GEMINI_DOCUMENT_PREFIX + pdf_text,
+                GEMINI_QUERY_PREFIX + "salty seawater",
+            }
+            else (1.0, 0.0) + (0.0,) * 1534
+            for value in contents
+        )
+
+    embed = AsyncMock(side_effect=vectorize)
+    monkeypatch.setattr(GeminiEmbeddingProvider, "embed", embed)
+    status = await client.get(f"{base}/semantic-index", headers=OWN)
+    assert status.json()["cloud_profile"]["dimension"] == 1536
+    assert (await client.post(preview_path, json=action)).status_code == 401
+    assert (await client.post(preview_path, headers=OTHER, json=action)).status_code == 404
+    assert (
+        await client.post(preview_path, headers=OWN, json={**action, "replace": False})
+    ).status_code == 409
+    assert (
+        await client.post(preview_path, headers=OWN, json={**action, "expected_collection": None})
+    ).status_code == 409
+    assert (
+        await client.post(
+            preview_path,
+            headers=OWN,
+            json={"kind": "search", "collection_id": local_collection, "query": "salty seawater"},
+        )
+    ).status_code == 409
+
+    async def preview(payload: dict[str, object]) -> dict[str, object]:
+        response = await client.post(preview_path, headers=OWN, json=payload)
+        assert response.status_code == 200, response.text
+        assert response.headers["cache-control"] == "no-store"
+        return dict(response.json())
+
+    def consent(quote: dict[str, object], selected: dict[str, object]) -> dict[str, object]:
+        return {"preview_id": quote["preview_id"], "action": selected, "allow_cloud": True}
+
+    quoted = await preview(action)
+    assert quoted["inputs"] == quoted["remaining_inputs"] == 3
+    assert quoted["estimated_input_tokens"] == sum(
+        len((GEMINI_DOCUMENT_PREFIX + line).encode())
+        for line in (pasted, pdf_text, "Original evidence")
+    )
+    assert quoted["estimated_usd"] == quoted["estimated_remaining_usd"]
+    approved = consent(quoted, action)
+    for invalid in (False, 1, "true"):
+        assert (
+            await client.post(confirm_path, headers=OWN, json={**approved, "allow_cloud": invalid})
+        ).status_code == 422
+    assert (await client.post(confirm_path, headers=OTHER, json=approved)).status_code == 404
+    assert (
+        await client.post(confirm_path, headers=OWN, json={**approved, "preview_id": str(uuid4())})
+    ).status_code == 409
+    config.return_value = settings.model_copy(update={"gemini_input_tokens_per_minute": 1})
+    assert (await client.post(confirm_path, headers=OWN, json=approved)).json()["error"][
+        "code"
+    ] == ProviderCode.INPUT_LIMIT.value
+    config.return_value = settings
+    embed.assert_not_awaited()
+    began, release = asyncio.Event(), asyncio.Event()
+
+    async def delayed(contents: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        assert set(contents) == {
+            GEMINI_DOCUMENT_PREFIX + line for line in (pasted, pdf_text, "Original evidence")
+        }
+        began.set()
+        await asyncio.wait_for(release.wait(), timeout=5)
+        return await vectorize(contents)
+
+    embed.side_effect = delayed
+    start = perf_counter()
+    inflight = asyncio.create_task(client.post(confirm_path, headers=OWN, json=approved))
+    try:
+        await asyncio.wait_for(began.wait(), timeout=5)
+        rival = await client.post(confirm_path, headers=OWN, json=approved)
+        assert rival.json()["error"]["code"] == "WORKSPACE_CLOUD_EMBEDDING_BUSY"
+    finally:
+        release.set()
+    completed_index = await inflight
+    index_ms = (perf_counter() - start) * 1_000
+    assert completed_index.status_code == 200, completed_index.text
+    result = completed_index.json()["index"]
+    collection = result["active_collection"]
+    assert isinstance(collection, str)
+    assert collection != local_collection and result["indexed"] == 3
+    assert (
+        result["active_profile"]["provider"] == "gemini"
+        and result["active_profile"]["dimension"] == 1536
+    )
+    assert (await client.post(confirm_path, headers=OWN, json=approved)).status_code == 409
+    assert (
+        await client.post(
+            preview_path, headers=OWN, json={**action, "expected_collection": collection}
+        )
+    ).json()["error"]["code"] == "WORKSPACE_CLOUD_INDEX_CURRENT"
+    embed.assert_awaited_once()
+    embed.side_effect = vectorize
+
+    search: dict[str, object] = {
+        "kind": "search",
+        "collection_id": collection,
+        "query": "salty seawater",
+    }
+    assert (
+        await client.post(
+            preview_path, headers=OWN, json={**search, "query": "after the explanation"}
+        )
+    ).status_code == 422
+    expired = await preview(search)
+    from galaxy_frog.api.routes.workspace_semantic_cloud import WorkspaceEmbeddingPreviewRow
+
+    async with async_sessionmaker(engine)() as session:
+        await session.execute(
+            update(WorkspaceEmbeddingPreviewRow)
+            .where(WorkspaceEmbeddingPreviewRow.id == UUID(str(expired["preview_id"])))
+            .values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+        )
+        await session.commit()
+    assert (
+        await client.post(confirm_path, headers=OWN, json=consent(expired, search))
+    ).status_code == 409
+    bound = await preview(search)
+    assert (
+        await client.post(
+            confirm_path, headers=OWN, json=consent(bound, {**search, "query": "edited query"})
+        )
+    ).status_code == 409
+    assert (
+        await client.post(
+            f"{base}/semantic-search",
+            headers=OWN,
+            json={"collection_id": collection, "query": "salty seawater"},
+        )
+    ).status_code in (409, 503)
+
+    timings: list[dict[str, float]] = []
+    for _ in range(3):
+        approved_search = consent(await preview(search), search)
+        start = perf_counter()
+        response = await client.post(confirm_path, headers=OWN, json=approved_search)
+        api_ms = (perf_counter() - start) * 1_000
+        assert response.status_code == 200, response.text
+        found = response.json()["results"]
+        assert found["hits"][0]["source"]["source_id"] == str(pdf.source_id)
+        assert found["hits"][0]["page_number"] == 1
+        assert found["collection_id"] == collection
+        timings.append(
+            {"api_ms": api_ms, "embedding_ms": found["embedding_ms"], "query_ms": found["query_ms"]}
+        )
+        assert (
+            await client.post(confirm_path, headers=OWN, json=approved_search)
+        ).status_code == 409
+    print(
+        json.dumps(
+            {
+                "index_api_ms_with_concurrency_assertions": round(index_ms, 3),
+                "batch_inputs": quoted["inputs"],
+                "batch_input_bytes": quoted["estimated_input_tokens"],
+                "index_stages_ms": {
+                    field: result[field] for field in ("prepare_ms", "embedding_ms", "save_ms")
+                },
+                "search_queries": len(timings),
+                "top1_correct": len(timings),
+                "search_median_ms": {
+                    field: round(median(row[field] for row in timings), 3) for field in timings[0]
+                },
+            }
+        )
+    )
+
+    embed.side_effect = ProviderFailure(ProviderCode.RATE_LIMITED)
+    limited = await client.post(
+        confirm_path, headers=OWN, json=consent(await preview(search), search)
+    )
+    assert limited.status_code == 429
+    config.return_value = settings.model_copy(update={"gemini_requests_per_minute": 20})
+    embed.side_effect = vectorize
+    with monkeypatch.context() as race:
+        race.setattr(
+            WorkspaceSemanticRepository, "lock_notebook", AsyncMock(side_effect=NotebookNotFound)
+        )
+        missing = await client.post(
+            confirm_path, headers=OWN, json=consent(await preview(search), search)
+        )
+        assert missing.status_code == 404
+    async with async_sessionmaker(engine)() as session:
+        snapshot = await WorkspaceSemanticRepository(session, owner, notebook).active()
+        assert snapshot is not None
+    search_confirmation = consent(await preview(search), search)
+    with monkeypatch.context() as race:
+        race.setattr(WorkspaceSemanticRepository, "active", AsyncMock(side_effect=[snapshot, None]))
+        disappeared = await client.post(confirm_path, headers=OWN, json=search_confirmation)
+        assert disappeared.status_code == 409
+    assert (
+        await client.post(
+            f"{base}/text-sources",
+            headers=OWN,
+            json={
+                "title": "New source",
+                "format": "plain",
+                "text": "Another saved passage.",
+            },
+        )
+    ).status_code == 200
+    append: dict[str, object] = {"kind": "index", "expected_collection": collection}
+    for failure, expected in ((WorkspaceIndexChanged, 409), (NotebookNotFound, 404)):
+        saved_confirmation = consent(await preview(append), append)
+        with monkeypatch.context() as race:
+            race.setattr(WorkspaceSemanticRepository, "store", AsyncMock(side_effect=failure))
+            race_response = await client.post(confirm_path, headers=OWN, json=saved_confirmation)
+            assert race_response.status_code == expected
+    embed.side_effect = ProviderFailure(ProviderCode.OUTCOME_UNKNOWN)
+    ambiguous = await client.post(
+        confirm_path, headers=OWN, json=consent(await preview(search), search)
+    )
+    assert (
+        ambiguous.status_code == 503
+        and ambiguous.json()["error"]["code"] == ProviderCode.OUTCOME_UNKNOWN.value
+    )
+    assert (
+        await client.post(confirm_path, headers=OWN, json=consent(await preview(search), search))
+    ).json()["error"]["code"] == "WORKSPACE_CLOUD_EMBEDDING_BUSY"
 
 
 @pytest.mark.asyncio

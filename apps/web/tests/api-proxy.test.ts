@@ -17,6 +17,8 @@ describe("API proxy", () => {
         [["v1", "workspace", "notebooks", "id", "answers"], "POST", 100_000],
         [["v1", "workspace", "notebooks", "id", "semantic-index"], "POST", 75_000],
         [["v1", "workspace", "notebooks", "id", "semantic-search"], "POST", 75_000],
+        [["v1", "workspace", "notebooks", "id", "semantic-cloud-preview"], "POST", 10_000],
+        [["v1", "workspace", "notebooks", "id", "semantic-cloud-confirm"], "POST", 75_000],
         [["health", "live"], "GET", 10_000],
       ] as const) {
         await proxyRequest(new Request("http://web.test/api/proxy/check", { method }), path, async () => Response.json({}), "http://api.test")

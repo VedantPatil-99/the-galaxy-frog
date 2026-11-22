@@ -671,6 +671,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspace/notebooks/{notebook_id}/semantic-cloud-confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Cloud Embedding */
+        post: operations["confirm_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/notebooks/{notebook_id}/semantic-cloud-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Cloud Embedding */
+        post: operations["preview_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/notebooks/{notebook_id}/semantic-index": {
         parameters: {
             query?: never;
@@ -922,6 +956,103 @@ export interface components {
              * Format: uuid
              */
             request_id: string;
+        };
+        /** CloudEmbeddingConfirmation */
+        CloudEmbeddingConfirmation: {
+            /** Action */
+            action: components["schemas"]["CloudEmbeddingIndex"] | components["schemas"]["CloudEmbeddingSearch"];
+            /**
+             * Allow Cloud
+             * @constant
+             */
+            allow_cloud: true;
+            /**
+             * Preview Id
+             * Format: uuid
+             */
+            preview_id: string;
+        };
+        /** CloudEmbeddingIndex */
+        CloudEmbeddingIndex: {
+            /** Expected Collection */
+            expected_collection: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "index";
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
+        };
+        /** CloudEmbeddingPreview */
+        CloudEmbeddingPreview: {
+            /** Estimated Input Tokens */
+            estimated_input_tokens: number;
+            /** Estimated Remaining Usd */
+            estimated_remaining_usd: string;
+            /** Estimated Usd */
+            estimated_usd: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Inputs */
+            inputs: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "index" | "search";
+            /**
+             * Model
+             * @default gemini-embedding-2
+             * @constant
+             */
+            model: "gemini-embedding-2";
+            /**
+             * Preview Id
+             * Format: uuid
+             */
+            preview_id: string;
+            /** Remaining Inputs */
+            remaining_inputs: number;
+        };
+        /** CloudEmbeddingSearch */
+        CloudEmbeddingSearch: {
+            /**
+             * Collection Id
+             * Format: uuid
+             */
+            collection_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "search";
+            /** Query */
+            query: string;
+        };
+        /** CloudIndexResult */
+        CloudIndexResult: {
+            index: components["schemas"]["WorkspaceSemanticBatchResponse"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "index";
+        };
+        /** CloudSearchResult */
+        CloudSearchResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "search";
+            results: components["schemas"]["WorkspaceSemanticResults"];
         };
         /** ConsentScope */
         ConsentScope: {
@@ -2769,6 +2900,7 @@ export interface components {
             /** Added */
             added: number;
             available_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            cloud_profile?: components["schemas"]["EmbeddingCollectionSpec"] | null;
             /** Embedding Ms */
             embedding_ms: number;
             /** Indexed */
@@ -2827,6 +2959,7 @@ export interface components {
             active_collection: string | null;
             active_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
             available_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            cloud_profile?: components["schemas"]["EmbeddingCollectionSpec"] | null;
             /** Indexed */
             indexed: number;
             /** Total */
@@ -5357,6 +5490,184 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    confirm_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudEmbeddingConfirmation"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudIndexResult"] | components["schemas"]["CloudSearchResult"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notebook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudEmbeddingIndex"] | components["schemas"]["CloudEmbeddingSearch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudEmbeddingPreview"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */

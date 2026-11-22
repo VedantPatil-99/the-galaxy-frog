@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from galaxy_frog.adapters.embeddings.gemini import GEMINI_EMBEDDING_SPEC
 from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.routes.workspace import Creator, Repository, notebook_not_found
@@ -19,6 +20,7 @@ from galaxy_frog.api.workspace_schemas import (
 )
 from galaxy_frog.application.provider_registry import probe_ollama_models
 from galaxy_frog.db.workspace_semantic import (
+    EMBEDDING_PASSAGE_CHARACTERS,
     ActiveWorkspaceIndex,
     WorkspaceIndexChanged,
     WorkspaceSemanticRepository,
@@ -36,13 +38,13 @@ router = APIRouter(
     responses={code: {"model": ErrorResponse} for code in (401, 403, 404, 409, 422, 503)},
 )
 _MODEL = "bge-m3:latest"
-_MAX_PASSAGE_CHARACTERS = 2_000
 
 
 class WorkspaceSemanticStatus(BaseModel):
     active_collection: UUID | None
     active_profile: EmbeddingCollectionSpec | None
     available_profile: EmbeddingCollectionSpec | None
+    cloud_profile: EmbeddingCollectionSpec | None = None
     indexed: int = Field(ge=0)
     total: int = Field(ge=0)
 
@@ -98,6 +100,19 @@ async def _available_spec(request: Request) -> EmbeddingCollectionSpec | None:
     if not revision or settings.embedding_model_revision not in {"ollama", revision}:
         return None
     return EmbeddingCollectionSpec("ollama", _MODEL, revision, 1024, "l2")
+
+
+def _cloud_profile(request: Request) -> EmbeddingCollectionSpec | None:
+    settings = workspace_settings(request)
+    return (
+        GEMINI_EMBEDDING_SPEC
+        if (
+            settings.workspace_gemini_embedding_enabled
+            and settings.gemini_embedding_api_key is not None
+            and settings.gemini_embedding_project_id is not None
+        )
+        else None
+    )
 
 
 def _changed() -> ApiError:
@@ -164,7 +179,12 @@ async def semantic_index_status(
     active = await repository.active()
     status = await _status(repository, active, None)
     await repository.session.rollback()
-    return status.model_copy(update={"available_profile": await _available_spec(request)})
+    return status.model_copy(
+        update={
+            "available_profile": await _available_spec(request),
+            "cloud_profile": _cloud_profile(request),
+        }
+    )
 
 
 @router.post("/{notebook_id}/semantic-index")
@@ -198,7 +218,7 @@ async def build_semantic_index(
     if pending:
         started = perf_counter()
         vectors = await _embed(
-            request, spec, tuple(content[:_MAX_PASSAGE_CHARACTERS] for _, content in pending)
+            request, spec, tuple(content[:EMBEDDING_PASSAGE_CHARACTERS] for _, content in pending)
         )
         embedding_ms = (perf_counter() - started) * 1_000
         started = perf_counter()
@@ -213,7 +233,9 @@ async def build_semantic_index(
         except NotebookNotFound:
             raise notebook_not_found() from None
         save_ms = (perf_counter() - started) * 1_000
-    status = await _status(repository, await repository.active(), spec)
+    status = (await _status(repository, await repository.active(), spec)).model_copy(
+        update={"cloud_profile": _cloud_profile(request)}
+    )
     return WorkspaceSemanticBatchResponse(
         **status.model_dump(),
         added=added,
