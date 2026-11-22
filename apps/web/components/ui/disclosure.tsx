@@ -6,14 +6,15 @@ import type { ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 
-export function Disclosure({ label, children, details, keepMounted = true }: {
+export function Disclosure({ label, children, details, keepMounted = true, defaultOpen = false }: {
   label: string
   children: ReactNode
   details?: string
   keepMounted?: boolean
+  defaultOpen?: boolean
 }) {
   return (
-    <Collapsible.Root className="border-t">
+    <Collapsible.Root className="border-t" defaultOpen={defaultOpen}>
       <Collapsible.Trigger render={
         <Button variant="ghost" className="group/disclosure h-auto min-h-11 w-full justify-between rounded-md px-2 py-2 text-left whitespace-normal" />
       }>

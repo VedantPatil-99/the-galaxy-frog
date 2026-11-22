@@ -32,6 +32,7 @@ class WorkspacePromptDraft(BaseModel):
 
 class WorkspaceChatSummary(WorkspaceChatName):
     chat_id: UUID
+    has_draft: bool
     created_at: datetime
     updated_at: datetime
 

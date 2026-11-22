@@ -66,7 +66,7 @@ export function createNotebook(title: string) {
 
 function chatSummary(value: unknown): value is WorkspaceChatSummary {
   return object(value) && typeof value.chat_id === "string" && typeof value.title === "string"
-    && typeof value.created_at === "string" && typeof value.updated_at === "string"
+    && typeof value.has_draft === "boolean" && typeof value.created_at === "string" && typeof value.updated_at === "string"
 }
 
 function promptDraft(value: unknown): value is WorkspacePromptDraft {

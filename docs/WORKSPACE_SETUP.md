@@ -293,10 +293,16 @@ If a call has an uncertain outcome, inspect Cohere usage before approving anothe
 Apply `bun run db:migrate` to the configured local database and restart FastAPI. The
 migration adds the private chat table using the existing dependencies.
 
-Open an owned notebook and select **New chat**. Use **Rename** to change its name. The
-question saves as you type. Once **Draft saved** appears, switching chats or refreshing
-restores the saved text. If another tab saved a revision, use **Review saved draft**
-to choose which text to keep.
+Open an owned notebook and select **New chat**. Use **Rename** to change its name. Edits
+are kept in the current browser while the server saves them. The same account can return
+to the last composer after refreshing, closing the tab, or signing out. **Draft saved**
+means the server has confirmed the chat draft, so it can be opened on another device.
+If a newer revision is saved, use **Review saved draft** to choose which text to keep.
+The pencil beside a chat name signals text in its composer. Use the picker or browser
+Back and Forward to switch between chats and their drafts.
+
+**Quick question** drafts stay in the current browser profile and site address. Clearing
+site data removes browser-only drafts and unsynced edits.
 
 To use the draft with the existing local Ollama workflow, find words in the notebook
 and select supporting passages before choosing **Ask with Ollama**. The answer is a

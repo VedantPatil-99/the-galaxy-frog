@@ -850,6 +850,8 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
   - [x] W4.1 — Private chat library, chat names, and revisioned prompt drafts that feed
     the existing selected-passage composer.
+    - [x] W4.1 follow-up — Recover unsent question text after refresh, tab closure,
+      sign-out, and chat switches. Mark chats with drafts and support browser Back and Forward.
   - [ ] W4.2 — Saved grounded turns and idempotent generation runs with recovery and
     replay of validated blocks and their source versions.
   - [ ] W4.3 — Chat groups and organization, branching, and answer revisions.
@@ -860,7 +862,7 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 and W4.1 passed locally. W4.2 is next.
+W3 and W4.1, including draft recovery and chat navigation, passed locally. W4.2 is next.
 Record measurements as each packet is implemented and tested in
 [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
 The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
@@ -875,6 +877,9 @@ Do not access Notion for this program.
   composer restores the selected chat's autosaved question after switching or refreshing.
 - PostgreSQL verified revision conflicts, exact prompt restoration, and private notebook
   scope. The browser checked both conflict resolution choices and opening a cited PDF page.
+- The follow-up verified unsynced draft recovery across refresh, tab closure, sign-out,
+  and chat switches. Browser Back and Forward restored each chat independently, with a
+  pencil marker for both pending and server-saved drafts.
 - Saved answer history and recoverable runs are part of W4.2. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
 
 ### W3.8 local verification — 2026-11-22

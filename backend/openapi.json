@@ -5042,6 +5042,10 @@
           "draft": {
             "$ref": "#/components/schemas/WorkspacePromptDraft"
           },
+          "has_draft": {
+            "title": "Has Draft",
+            "type": "boolean"
+          },
           "title": {
             "maxLength": 120,
             "minLength": 1,
@@ -5058,6 +5062,7 @@
         "required": [
           "title",
           "chat_id",
+          "has_draft",
           "created_at",
           "updated_at",
           "draft"
@@ -5147,6 +5152,10 @@
             "title": "Created At",
             "type": "string"
           },
+          "has_draft": {
+            "title": "Has Draft",
+            "type": "boolean"
+          },
           "title": {
             "maxLength": 120,
             "minLength": 1,
@@ -5163,6 +5172,7 @@
         "required": [
           "title",
           "chat_id",
+          "has_draft",
           "created_at",
           "updated_at"
         ],

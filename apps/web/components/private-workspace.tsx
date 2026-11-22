@@ -15,6 +15,8 @@ import { WorkspaceTextPreview, WorkspaceTextSources } from "@/components/workspa
 import { ApiClientError } from "@/lib/api/client"
 import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceDocument, type WorkspaceSearchHit, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
 import { timestamp } from "@/lib/timestamp"
+import type { DraftFlushRef } from "@/lib/use-workspace-draft"
+import { readComposerLocation } from "@/lib/workspace-draft-recovery"
 import { YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 
 function youtubePreview(source: WorkspaceSource, milliseconds: number) {
@@ -101,13 +103,14 @@ function SourcePreview({ notebookId, source, match, onExpired }: {
 
 type SelectedSource = WorkspaceSource | WorkspaceTextSource | WorkspaceDocument
 
-function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId }: {
+function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId, draftFlushRef }: {
   notebook: Notebook
   pane: WorkspacePane
   setPane: (pane: WorkspacePane) => void
   onExpired: () => void
   galaxy: ReactNode
   accountId: string
+  draftFlushRef: DraftFlushRef
 }) {
   const [sources, setSources] = useState<WorkspaceSource[]>([])
   const [after, setAfter] = useState<string | null>(null)
@@ -170,7 +173,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
     >
       <div className="space-y-5">
         <h1 className="text-3xl font-semibold tracking-tight">{notebook.title}</h1>
-        <WorkspaceSourceSearch notebookId={notebook.notebook_id} onOpen={openMatch} onExpired={onExpired} />
+        <WorkspaceSourceSearch accountId={accountId} notebookId={notebook.notebook_id} draftFlushRef={draftFlushRef} onOpen={openMatch} onExpired={onExpired} />
         <WorkspaceSemanticSearch notebookId={notebook.notebook_id} onOpen={openMatch} onExpired={onExpired} />
         <WorkspaceDocuments notebookId={notebook.notebook_id} selectedId={selectedDocument?.source_id} onSelect={openSource} onExpired={onExpired} />
         <WorkspaceTextSources notebookId={notebook.notebook_id} selectedId={selectedText?.source_id} onSelect={openSource} onExpired={onExpired} />
@@ -202,8 +205,11 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
 }
 
 export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; onExpired: () => void }) {
+  const draftFlushRef = useRef<(() => Promise<void>) | null>(null)
   const [notebooks, setNotebooks] = useState<Notebook[] | null>(null)
-  const [selected, setSelected] = useState<string | null>(() => typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("notebook"))
+  const [selected, setSelected] = useState<string | null>(() => typeof window === "undefined"
+    ? null
+    : new URLSearchParams(window.location.search).get("notebook") ?? readComposerLocation(accountId).get("notebook"))
   const [pane, setPane] = useState<WorkspacePane>("work")
   const [title, setTitle] = useState("")
   const [busy, setBusy] = useState(false)
@@ -222,11 +228,22 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
     return () => request.abort()
   }, [attempt, onExpired])
 
+  useEffect(() => {
+    function restoreNotebook() {
+      setSelected(new URLSearchParams(window.location.search).get("notebook"))
+      setPane("work")
+    }
+    window.addEventListener("popstate", restoreNotebook)
+    return () => window.removeEventListener("popstate", restoreNotebook)
+  }, [])
+
   function chooseNotebook(id: string) {
     const url = new URL(window.location.href)
-    if (notebook?.notebook_id !== id) url.searchParams.delete("chat")
-    url.searchParams.set("notebook", id)
-    window.history.replaceState(window.history.state, "", url)
+    if (notebook?.notebook_id !== id) {
+      url.searchParams.delete("chat")
+      url.searchParams.set("notebook", id)
+      window.history.pushState(window.history.state, "", url)
+    }
     setSelected(id)
     setPane("work")
   }
@@ -253,6 +270,13 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
     setBusy(true)
     setError("")
     try {
+      const save = draftFlushRef.current?.()
+      if (save) {
+        let timer: number | undefined
+        // An unavailable API should not delay sign-out beyond the brief sync attempt.
+        const deadline = new Promise<void>(resolve => { timer = window.setTimeout(resolve, 750) })
+        await Promise.race([save, deadline]).finally(() => window.clearTimeout(timer))
+      }
       await workspaceAuthAction("sign-out")
       onExpired()
     } catch (caught) {
@@ -288,7 +312,7 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
   )
 
   if (notebook) {
-    return <NotebookSources key={notebook.notebook_id} notebook={notebook} pane={pane} setPane={setPane} onExpired={onExpired} galaxy={galaxy} accountId={accountId} />
+    return <NotebookSources key={notebook.notebook_id} notebook={notebook} pane={pane} setPane={setPane} onExpired={onExpired} galaxy={galaxy} accountId={accountId} draftFlushRef={draftFlushRef} />
   }
 
   return (

@@ -57,7 +57,7 @@ export function WorkspaceEntry() {
   }, [attempt])
 
   if (mode.kind === "local") return <TranscriptWorkspace />
-  if (mode.kind === "private") return <PrivateWorkspace accountId={mode.accountId} onExpired={onExpired} />
+  if (mode.kind === "private") return <PrivateWorkspace key={mode.accountId} accountId={mode.accountId} onExpired={onExpired} />
 
   return (
     <WorkspaceShell title="Workspace" pane={pane} onPaneChange={setPane} galaxy={null}>

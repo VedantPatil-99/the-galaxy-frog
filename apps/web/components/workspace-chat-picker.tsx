@@ -1,5 +1,8 @@
 "use client"
 
+import { Select } from "@base-ui/react/select"
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown"
+import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 
@@ -9,16 +12,48 @@ import {
   createWorkspaceChat, getWorkspaceChat, listWorkspaceChats, renameWorkspaceChat,
   type WorkspaceChat, type WorkspaceChatSummary,
 } from "@/lib/api/workspace"
+import {
+  readComposerLocation, readDraftRecovery, rememberComposerLocation, workspaceDraftKey,
+} from "@/lib/workspace-draft-recovery"
 
-export function WorkspaceChatPicker({ notebookId, onSelect, onExpired }: {
+const quickQuestion = "question"
+
+function updateComposerUrl(notebookId: string, chatId: string, method: "pushState" | "replaceState") {
+  const url = new URL(window.location.href)
+  if (url.searchParams.get("notebook") === notebookId && url.searchParams.get("chat") === chatId) return
+  url.searchParams.set("notebook", notebookId)
+  url.searchParams.set("chat", chatId)
+  window.history[method](window.history.state, "", url)
+}
+
+function withRecovery(chat: WorkspaceChatSummary, accountId: string, notebookId: string) {
+  const local = readDraftRecovery(workspaceDraftKey(accountId, notebookId, chat.chat_id))
+  return local ? { ...chat, has_draft: Boolean(local.text.trim()) } : chat
+}
+
+function ChatLabel({ title, hasDraft }: { title: string; hasDraft: boolean }) {
+  return <span className="flex min-w-0 items-center gap-2">
+    {hasDraft ? <>
+      <PencilSimpleIcon data-chat-draft="" aria-hidden="true" className="size-4 shrink-0 text-primary" />
+      <span className="sr-only">Draft</span>
+    </> : null}
+    <span className="truncate">{title}</span>
+  </span>
+}
+
+export function WorkspaceChatPicker({ accountId, notebookId, draftPresence, onSelect, onExpired }: {
+  accountId: string
   notebookId: string
+  draftPresence: Readonly<Record<string, boolean>>
   onSelect: (chat: WorkspaceChat | null) => void
   onExpired: () => void
 }) {
   const field = useId()
+  const portalParent = useRef<HTMLElement | null>(null)
   const request = useRef<AbortController | null>(null)
   const newChat = useRef<string | null>(null)
   const [items, setItems] = useState<WorkspaceChatSummary[]>([])
+  const [quickDraft, setQuickDraft] = useState(false)
   const [after, setAfter] = useState<string | null>(null)
   const [active, setActive] = useState("")
   const [busy, setBusy] = useState(true)
@@ -33,28 +68,41 @@ export function WorkspaceChatPicker({ notebookId, onSelect, onExpired }: {
       try {
         const data = await listWorkspaceChats(notebookId, null, controller.signal)
         if (controller.signal.aborted) return
-        const requested = new URLSearchParams(window.location.search).get("chat")
+        const route = new URLSearchParams(window.location.search)
+        const remembered = readComposerLocation(accountId)
+        const requested = (route.get("notebook") === notebookId ? route.get("chat") : null)
+          ?? (remembered.get("notebook") === notebookId ? remembered.get("chat") : null)
         const first = data.chats[0]?.chat_id
         let chat: WorkspaceChat | null = null
-        if (requested) {
+        if (requested && requested !== quickQuestion) {
           try {
             chat = await getWorkspaceChat(notebookId, requested, controller.signal)
           } catch (caught) {
             if (!(caught instanceof ApiClientError) || ![404, 422].includes(caught.status)) throw caught
           }
         }
-        if (!chat && first) chat = await getWorkspaceChat(notebookId, first, controller.signal)
+        if (!chat && first && requested !== quickQuestion) {
+          chat = await getWorkspaceChat(notebookId, first, controller.signal)
+        }
         if (controller.signal.aborted) return
         const all = chat && !data.chats.some(item => item.chat_id === chat.chat_id)
           ? [chat, ...data.chats] : data.chats
-        setItems(all)
+        setItems(all.map(item => withRecovery(item, accountId, notebookId)))
+        const localQuick = readDraftRecovery(workspaceDraftKey(accountId, notebookId))
+        setQuickDraft(Boolean(localQuick?.text.trim()))
         setAfter(data.next_after)
         setActive(chat?.chat_id ?? "")
+        setName(null)
+        updateComposerUrl(notebookId, chat?.chat_id ?? quickQuestion, "replaceState")
+        rememberComposerLocation(accountId, notebookId, chat?.chat_id ?? quickQuestion)
         onSelect(chat)
       } catch (caught) {
         if (controller.signal.aborted) return
         if (caught instanceof ApiClientError && caught.status === 401) onExpired()
-        else setError(caught instanceof Error ? caught.message : "Chats could not load.")
+        else {
+          setError(caught instanceof Error ? caught.message : "Chats could not load.")
+          onSelect(null)
+        }
       } finally {
         if (!controller.signal.aborted) {
           request.current = null
@@ -64,7 +112,19 @@ export function WorkspaceChatPicker({ notebookId, onSelect, onExpired }: {
     }
     void load()
     return () => request.current?.abort()
-  }, [attempt, notebookId, onExpired, onSelect])
+  }, [accountId, attempt, notebookId, onExpired, onSelect])
+
+  useEffect(() => {
+    function restoreChat() {
+      if (new URLSearchParams(window.location.search).get("notebook") !== notebookId) return
+      request.current?.abort()
+      setBusy(true)
+      setError("")
+      setAttempt(current => current + 1)
+    }
+    window.addEventListener("popstate", restoreChat)
+    return () => window.removeEventListener("popstate", restoreChat)
+  }, [notebookId])
 
   async function act(action: (signal: AbortSignal) => Promise<void>) {
     if (request.current) return
@@ -86,12 +146,10 @@ export function WorkspaceChatPicker({ notebookId, onSelect, onExpired }: {
     }
   }
 
-  function select(chat: WorkspaceChat) {
-    const url = new URL(window.location.href)
-    url.searchParams.set("notebook", notebookId)
-    url.searchParams.set("chat", chat.chat_id)
-    window.history.replaceState(window.history.state, "", url)
-    setActive(chat.chat_id)
+  function select(chat: WorkspaceChat | null) {
+    updateComposerUrl(notebookId, chat?.chat_id ?? quickQuestion, "pushState")
+    rememberComposerLocation(accountId, notebookId, chat?.chat_id ?? quickQuestion)
+    setActive(chat?.chat_id ?? "")
     setName(null)
     onSelect(chat)
   }
@@ -115,36 +173,59 @@ export function WorkspaceChatPicker({ notebookId, onSelect, onExpired }: {
     void act(async signal => {
       const chat = await renameWorkspaceChat(notebookId, active, title, signal)
       if (signal.aborted) return
-      setItems(current => current.map(item => item.chat_id === chat.chat_id ? chat : item))
+      const updated = withRecovery(chat, accountId, notebookId)
+      setItems(current => current.map(item => item.chat_id === chat.chat_id ? updated : item))
       setName(null)
     })
   }
 
+  const activeChat = items.find(chat => chat.chat_id === active)
+  const hasQuickDraft = draftPresence[""] ?? quickDraft
+  const activeHasDraft = activeChat ? draftPresence[activeChat.chat_id] ?? activeChat.has_draft : hasQuickDraft
+  const rowClass = "flex min-h-11 cursor-default items-center rounded-md px-2 text-sm outline-none data-[highlighted]:bg-accent"
+
   return (
-    <section className="space-y-2 border-b pb-4" aria-labelledby={`${field}-heading`}>
+    <section ref={portalParent} className="space-y-2 border-b pb-4" aria-labelledby={`${field}-heading`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id={`${field}-heading`} className="font-semibold">Chats</h2>
         <Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={create}>
           <PlusIcon aria-hidden="true" /> New chat
         </Button>
       </div>
-      {active ? <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor={field} className="sr-only">Open chat</label>
-        <select id={field} value={active} disabled={busy} className="min-h-11 min-w-32 max-w-full flex-1 rounded-md border border-input bg-card px-2 text-sm" onChange={event => {
-          const id = event.target.value
-          void act(async signal => {
+      {items.length ? <div className="flex flex-wrap items-center gap-2">
+        <Select.Root<string> value={activeChat?.chat_id ?? quickQuestion} disabled={busy} onValueChange={id => {
+          if (id === quickQuestion) select(null)
+          else if (id) void act(async signal => {
             const chat = await getWorkspaceChat(notebookId, id, signal)
             if (!signal.aborted) select(chat)
           })
         }}>
-          {items.map(chat => <option key={chat.chat_id} value={chat.chat_id}>{chat.title}</option>)}
-        </select>
-        <Button type="button" variant="ghost" className="min-h-11" disabled={busy} onClick={() => setName(items.find(chat => chat.chat_id === active)?.title ?? "")}>Rename</Button>
+          <Select.Trigger aria-label="Open chat" className="flex min-h-11 min-w-32 max-w-full flex-1 items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring">
+            <Select.Value className="min-w-0"><ChatLabel title={activeChat?.title ?? "Quick question"} hasDraft={activeHasDraft} /></Select.Value>
+            <Select.Icon><CaretDownIcon aria-hidden="true" className="size-4" /></Select.Icon>
+          </Select.Trigger>
+          <Select.Portal container={portalParent}>
+            <Select.Positioner sideOffset={5} align="start" alignItemWithTrigger={false} className="z-50 w-[var(--anchor-width)] max-w-[var(--available-width)]">
+              <Select.Popup className="max-h-[var(--available-height)] overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+                <Select.Item value={quickQuestion} label="Quick question" className={rowClass}>
+                  <Select.ItemText className="min-w-0"><ChatLabel title="Quick question" hasDraft={hasQuickDraft} /></Select.ItemText>
+                </Select.Item>
+                {items.map(chat => (
+                  <Select.Item key={chat.chat_id} value={chat.chat_id} label={chat.title} className={rowClass}>
+                    <Select.ItemText className="min-w-0"><ChatLabel title={chat.title} hasDraft={draftPresence[chat.chat_id] ?? chat.has_draft} /></Select.ItemText>
+                  </Select.Item>
+                ))}
+              </Select.Popup>
+            </Select.Positioner>
+          </Select.Portal>
+        </Select.Root>
+        {active ? <Button type="button" variant="ghost" className="min-h-11" disabled={busy} onClick={() => setName(items.find(chat => chat.chat_id === active)?.title ?? "")}>Rename</Button> : null}
         {after ? <Button type="button" variant="ghost" className="min-h-11" disabled={busy} onClick={() => {
           void act(async signal => {
             const data = await listWorkspaceChats(notebookId, after, signal)
             if (signal.aborted) return
-            setItems(current => [...current, ...data.chats.filter(chat => !current.some(item => item.chat_id === chat.chat_id))])
+            const older = data.chats.map(chat => withRecovery(chat, accountId, notebookId))
+            setItems(current => [...current, ...older.filter(chat => !current.some(item => item.chat_id === chat.chat_id))])
             setAfter(data.next_after)
           })
         }}>Load older chats</Button> : null}

@@ -103,7 +103,7 @@ Use the repository's existing shadcn **Base UI**, `base-nova`, Phosphor icons, a
 - Support chat groups within each Galaxy, rename, move, pin, archive, delete, and search.
 - Deleting a group moves its chats to Ungrouped.
 - Editing an earlier prompt creates a branch. Regeneration creates a new answer version without overwriting the original.
-- Save prompt drafts and restore them after navigation or refresh. Clear account-scoped browser caches on logout/account change.
+- Save prompt drafts and restore them after navigation, refresh, tab closure, or signing back in. Mark chat names that have draft text with a pencil. Browser Back and Forward reopen the corresponding chat and its draft. Clear session caches on logout or account change. Keep unsynced text in browser storage under the verified account and restore it only for that account. Remove chat recovery copies when the server acknowledges them. Keep quick-question drafts in the browser.
 - Composer settings include source selection, permitted provider profile, response length, language, thinking level where supported, and research mode.
 - Research modes are **Sources**, **Web**, and **Sources + Web**. Sources is the default.
 - Enter sends on desktop; Shift+Enter inserts a newline. Respect IME composition and use the send button on mobile.
@@ -244,7 +244,8 @@ profiles requires a confirmed rebuild because each provider has its own collecti
 ### Persistent notebook chats
 
 W4.1 adds a private chat picker and an autosaved question draft for each chat. Reopening a
-chat restores its prompt. A conflicting revision keeps the local editor text and allows
+chat restores its prompt. The browser also retains edits awaiting a server save and remembers
+the last open composer for the same account. A conflicting revision keeps the local editor text and allows
 the user to compare it with the saved draft. The existing selected-passage workflow
 uses the current draft and opens its citations in the source preview. Saved answer
 history and recoverable generation runs follow in W4.2.

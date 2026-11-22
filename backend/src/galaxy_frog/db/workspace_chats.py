@@ -40,7 +40,11 @@ class WorkspaceChatRow(Base):
 
 def _summary(row: WorkspaceChatRow) -> WorkspaceChatSummary:
     return WorkspaceChatSummary(
-        chat_id=row.id, title=row.title, created_at=row.created_at, updated_at=row.updated_at
+        chat_id=row.id,
+        title=row.title,
+        has_draft=bool(row.draft_text.strip()),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 

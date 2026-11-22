@@ -192,3 +192,19 @@ Reproduce the local fixture with the current migrations applied.
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
   tests/integration/test_workspace_sources.py::test_workspace_chats_scope_and_compare_prompt_draft_revisions
 ```
+
+### W4.1 follow-up · Browser draft recovery
+
+- **Workload** — Headless Chrome on Windows, with synthetic chat, draft, and sign-in
+  fixtures. Eight edits of 27 UTF-8 bytes each measured the synchronous browser
+  storage write. The median and maximum were about 0.1 ms at the browser's timer
+  resolution. This excludes the autosave delay and server request.
+- **Recovery** — Seven checks restored the exact input across immediate refresh,
+  browser Back and Forward, chat picker switching, closing a tab, same-account
+  sign-in, and reopening a quick question. The fixture also confirmed separate
+  account state, conflict review, removal of the recovery copy after server
+  acknowledgement, and the pencil on both pending and synced drafts.
+- **Sign-out** — With a deliberately stalled 1.8-second fixture write, the browser
+  initiated sign-out 754 ms after the fixture received the draft request and
+  recovered the edit after sign-in. This measures the wait before sign-out, excluding
+  the sign-out request itself.

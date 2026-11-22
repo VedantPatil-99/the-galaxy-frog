@@ -252,6 +252,7 @@ async def test_workspace_chats_scope_and_compare_prompt_draft_revisions(
     assert page.json()["next_after"] is None
     assert page.json()["chats"][0]["chat_id"] == first_body["chat_id"]
     assert "draft" not in page.json()["chats"][0]
+    assert page.json()["chats"][0]["has_draft"] is False
     for notebook_id, headers in ((sibling, OWN), (foreign, OTHER), (owned, OTHER)):
         inaccessible = f"/v1/workspace/notebooks/{notebook_id}/chats/{first_body['chat_id']}"
         assert (await client.get(inaccessible, headers=headers)).status_code == 404
@@ -283,6 +284,11 @@ async def test_workspace_chats_scope_and_compare_prompt_draft_revisions(
         read_ms.append((perf_counter() - started) * 1_000)
         assert reopened.status_code == 200 and reopened.json()["draft"] == saved.json()
     saved_prompt = f"{sample}7"
+    listed = (await client.get(path, headers=OWN)).json()["chats"]
+    assert {item["chat_id"]: item["has_draft"] for item in listed} == {
+        first_body["chat_id"]: True,
+        second_body["chat_id"]: False,
+    }
     identical = await client.put(
         draft_path, headers=OWN, json={"text": saved_prompt, "revision": 7}
     )
@@ -303,6 +309,7 @@ async def test_workspace_chats_scope_and_compare_prompt_draft_revisions(
     ).status_code == 422
     cleared = await client.put(draft_path, headers=OWN, json={"text": "", "revision": 9})
     assert cleared.json() == {"text": "", "revision": 10}
+    assert (await client.get(first_path, headers=OWN)).json()["has_draft"] is False
     print(
         json.dumps(
             {

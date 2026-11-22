@@ -2797,6 +2797,8 @@ export interface components {
              */
             created_at: string;
             draft: components["schemas"]["WorkspacePromptDraft"];
+            /** Has Draft */
+            has_draft: boolean;
             /** Title */
             title: string;
             /**
@@ -2839,6 +2841,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Has Draft */
+            has_draft: boolean;
             /** Title */
             title: string;
             /**
