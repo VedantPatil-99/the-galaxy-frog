@@ -202,6 +202,21 @@ defaults to `tmp/workspace-documents` in the repository. A backup of document so
 both the database and this directory. The file path stays server-side, and only a
 verified notebook owner can request its extracted text or generated page images.
 
+## W3.3 scanned PDF page OCR
+
+This packet uses the installed PDF renderer and HTTP client. Run `bun run db:migrate`
+against the intended local database to add the page OCR records. FastAPI leaves document
+OCR off by default. To enable it, set `WORKSPACE_DOCUMENT_OCR_ENABLED=true` in the backend
+environment alongside the existing `LLAMA_CLOUD_API_KEY` and restart FastAPI.
+
+In a private notebook, open an imported PDF to a page with no extractable text. Open
+**Read this page with OCR**, approve sending that page image to LlamaParse, and select **Run OCR**. Sending
+the page can use LlamaCloud credits. The owner can reopen the same page to see the saved
+result or processing status. Each source version and page can be submitted once, including
+when a connection failure leaves the outcome unknown.
+[LlamaParse pricing](https://developers.llamaindex.ai/llamaparse/general/pricing/)
+[LlamaParse data retention](https://developers.llamaindex.ai/llamaparse/general/data_retention/)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.

@@ -49,6 +49,7 @@ from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.vision_repository import SqlAlchemyVisionRepository
 from galaxy_frog.db.workspace import WorkspaceRepository
 from galaxy_frog.db.workspace_documents import DocumentImport, WorkspaceDocumentRepository
+from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRepository
 from galaxy_frog.db.workspace_sources import WorkspaceSourceRepository
 from galaxy_frog.db.workspace_text import WorkspaceTextRepository
 from galaxy_frog.domain.videos.models import VideoSourceKind
@@ -68,11 +69,19 @@ from galaxy_frog.domain.workspace_documents import (
     WorkspaceDocumentSource,
     document_filename,
 )
+from galaxy_frog.domain.workspace_ocr import (
+    PageOCRFailed,
+    PageOCROutcomeUnknown,
+    WorkspacePageOCR,
+    WorkspacePageOCRConsent,
+    WorkspacePageOCRProvider,
+)
 from galaxy_frog.domain.workspace_text import (
     WorkspaceTextDraft,
     WorkspaceTextNotFound,
     WorkspaceTextRejected,
     WorkspaceTextVersion,
+    prepare_workspace_text,
 )
 
 router = APIRouter(
@@ -426,6 +435,90 @@ async def get_document_page_image(
         media_type="image/png",
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
     )
+
+
+async def _authorized_ocr_page(
+    notebook_id: UUID,
+    source_id: UUID,
+    version_id: UUID,
+    page_number: Annotated[int, Path(ge=1, le=DOCUMENT_MAX_PAGES)],
+    identity: Creator,
+    repository: Repository,
+) -> WorkspaceDocumentSection:
+    section = await get_document_section(
+        notebook_id, source_id, version_id, page_number, identity, repository
+    )
+    if section.page_number is None:
+        raise _source_not_found()
+    return section
+
+
+OCRPage = Annotated[WorkspaceDocumentSection, Depends(_authorized_ocr_page)]
+_PAGE_OCR_PATH = (
+    "/notebooks/{notebook_id}/documents/{source_id}/versions/{version_id}/pages/{page_number}/ocr"
+)
+
+
+def _page_ocr_provider(request: Request) -> WorkspacePageOCRProvider | None:
+    return cast("WorkspacePageOCRProvider | None", request.app.state.workspace_page_ocr_provider)
+
+
+@router.get(_PAGE_OCR_PATH)
+async def get_page_ocr(page: OCRPage, request: Request, repository: Repository) -> WorkspacePageOCR:
+    ledger = WorkspacePageOCRRepository(repository.session, page)
+    return await ledger.read(available=_page_ocr_provider(request) is not None)
+
+
+@router.post(
+    _PAGE_OCR_PATH,
+    responses={code: {"model": ErrorResponse} for code in (422, 504)},
+)
+async def start_page_ocr(
+    notebook_id: UUID,
+    page: OCRPage,
+    request: Request,
+    identity: Creator,
+    repository: Repository,
+    _consent: WorkspacePageOCRConsent,
+) -> WorkspacePageOCR:
+    provider = _page_ocr_provider(request)
+    ledger = WorkspacePageOCRRepository(repository.session, page)
+    receipt = await ledger.read(available=provider is not None)
+    if provider is None or receipt.status != "ready":
+        return receipt
+
+    try:
+        digest = await WorkspaceDocumentRepository(repository.session).pdf_digest(
+            identity.account_id, notebook_id, page.source_id, page.version_id, page.section_number
+        )
+        await repository.session.rollback()
+        original = await document_original(
+            workspace_settings(request).workspace_document_root, notebook_id, digest
+        )
+        png = await _document_processor(request).preview(original, page.section_number)
+    except DocumentNotFound:
+        raise _source_not_found() from None
+    except (
+        DocumentRejected,
+        DocumentProcessingTimeout,
+        DocumentProcessingUnavailable,
+        DocumentStorageUnavailable,
+    ) as exc:
+        raise _document_error(exc) from None
+
+    if not await ledger.reserve(identity.account_id):
+        return await ledger.read(available=True)
+
+    try:
+        result = await provider.extract(png, record_job=ledger.record_job)
+        if not result.text.strip():
+            return await ledger.finish("no_text")
+        evidence = prepare_workspace_text(result.text)
+    except PageOCROutcomeUnknown:
+        return await ledger.finish("unknown")
+    except PageOCRFailed, WorkspaceTextRejected:
+        return await ledger.finish("failed")
+    return await ledger.finish("succeeded", evidence)
 
 
 def _source_response(video: VideoRow) -> WorkspaceVideoSourceResponse:

@@ -12,6 +12,7 @@ export type WorkspaceTextVersion = Schema["WorkspaceTextVersion"]
 export type WorkspaceTextDraft = paths["/v1/workspace/notebooks/{notebook_id}/text-sources"]["post"]["requestBody"]["content"]["application/json"]
 export type WorkspaceDocument = Schema["WorkspaceDocumentSource"]
 export type WorkspaceDocumentSection = Schema["WorkspaceDocumentSection"]
+export type WorkspacePageOCR = Schema["WorkspacePageOCR"]
 
 const base = "/v1/workspace"
 
@@ -151,4 +152,24 @@ export function getDocumentSection(notebookId: string, source: WorkspaceDocument
 
 export function documentPageImageUrl(notebookId: string, source: WorkspaceDocument, page: number) {
   return `/api/proxy${documentVersionPath(notebookId, source)}/pages/${page}/image`
+}
+
+const pageOCRStatuses = new Set<string>(["unavailable", "not_needed", "ready", "running", "succeeded", "no_text", "failed", "unknown"])
+
+export function getPageOCR(notebookId: string, source: WorkspaceDocument, page: number, signal: AbortSignal) {
+  return requestPageOCR(notebookId, source, page, { signal })
+}
+
+export function startPageOCR(notebookId: string, source: WorkspaceDocument, page: number, signal: AbortSignal) {
+  const consent: Schema["WorkspacePageOCRConsent"] = { allow_external_page_image: true }
+  return requestPageOCR(notebookId, source, page, { method: "POST", body: JSON.stringify(consent), signal })
+}
+
+function requestPageOCR(notebookId: string, source: WorkspaceDocument, page: number, init: RequestInit) {
+  return requestApi(`${documentVersionPath(notebookId, source)}/pages/${page}/ocr`, (value): value is WorkspacePageOCR =>
+    object(value) && value.source_id === source.source_id && value.version_id === source.version_id
+      && value.page_number === page && pageOCRStatuses.has(String(value.status))
+      && value.provider === "llamaparse" && value.profile === "parse-v2-fast"
+      && (value.text === null || typeof value.text === "string")
+      && Array.isArray(value.blocks) && value.blocks.every(textBlock), fetch, init)
 }

@@ -71,4 +71,6 @@ Use existing shadcn Base UI primitives, Phosphor icons, theme foundations, and t
 
 W2 used the repository's frontend-design and design-taste-frontend guidance for visual hierarchy, aligned panels, concise copy, and readable controls. The product layout and interaction requirements take priority over marketing hero, stock photography, and static landing-page gates.
 
+In W3.3, a PDF page without extractable text shows its own OCR disclosure beneath the preview. The owner approves processing for that page. Saved OCR text opens on demand from the same page.
+
 The local browser check used the real local workspace status and a separate synthetic answer fixture with a public YouTube embed. It checked desktop and phone screenshots, horizontal reflow at 1440, 1024, 820, 768, 390, and 320px, both themes, actual font loading, draft retention, remembered layouts, focus after clicking a citation, and keyboard access to the transcript disclosure. The fixture verifies the frontend interaction. Live model generation, hosted browser sign-in, and a full accessibility audit are separate checks.

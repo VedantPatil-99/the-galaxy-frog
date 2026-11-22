@@ -12,6 +12,7 @@ describe("API proxy", () => {
         [["v1", "videos", "import"], "POST", 120_000],
         [["v1", "workspace", "notebooks", "id", "documents"], "POST", 60_000],
         [["v1", "workspace", "notebooks", "id", "documents", "id", "versions", "id", "pages", "1", "image"], "GET", 60_000],
+        [["v1", "workspace", "notebooks", "id", "documents", "id", "versions", "id", "pages", "1", "ocr"], "POST", 95_000],
         [["v1", "workspace", "notebooks", "id", "documents"], "GET", 10_000],
         [["health", "live"], "GET", 10_000],
       ] as const) {

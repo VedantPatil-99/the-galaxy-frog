@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     workspace_preview_storage: Literal["local", "supabase"] = "local"
     supabase_storage_secret_key: SecretStr | None = None
     workspace_document_root: Path = _REPOSITORY_ROOT / "tmp" / "workspace-documents"
+    workspace_document_ocr_enabled: bool = False
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "bge-m3"
     embedding_model_revision: str = "ollama"

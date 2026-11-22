@@ -27,6 +27,16 @@ We will use **LlamaParse Cloud** as the OCR adapter for Phase 4, bypassing the l
 3. **Cloud Consent**: Explicit API-key configuration is required. Phase 5 strengthens this boundary in [ADR 0007](0007-query-adaptive-visual-retrieval.md): a key alone is insufficient; worker uploads also require `EXTERNAL_FRAME_PROCESSING_ENABLED=true` and `OCR_EXTERNAL_FRAMES_PERMITTED=true`.
 4. **Data Privacy**: Local video frames are extracted, hashed, and deduplicated locally. Only bounded selected unique frames may be sent to LlamaParse after both explicit permission flags pass. The default is no external frame submission.
 
+### W3.3 document pages
+
+FastAPI uses a separate LlamaParse v2 Fast adapter for PDF pages with no extractable text.
+An operator must enable document OCR, and the authenticated notebook owner must approve
+sending the selected rasterized page. The provider receives a PNG with a generic filename.
+FastAPI commits one attempt record per source version and page before any external request.
+It stores a provider job ID when available and retains the attempt when a result is uncertain.
+Successful OCR text and block spans are stored alongside the original extraction and retain
+the page reference. The entire document stays in private local storage.
+
 ## Consequences
 
 - **Positive**: We avoid Python 3.14 C-extension build issues and PaddleOCR dependencies.

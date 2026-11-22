@@ -836,8 +836,10 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     versions, stable block citations, and ownership and retry checks.
   - [x] W3.2 — Bounded PDF, DOCX, plain text, and Markdown file import. Keep originals
     private and preserve PDF pages and immutable text blocks in source previews.
-  - [ ] Remaining W3 — OCR processing with explicit permission, mixed-source retrieval,
-    validated citations in answers, and indexing with explicit profiles.
+  - [x] W3.3 — Opt-in OCR for one selected PDF page. Save immutable OCR evidence and
+    prevent duplicate cloud processing on refresh, retries, and concurrent requests.
+  - [ ] Remaining W3 — Mixed-source retrieval, validated citations in answers, and
+    indexing with explicit profiles.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
@@ -845,12 +847,23 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the active checkpoint. W3.1 and W3.2 passed locally. The remaining work is OCR processing,
-mixed-source retrieval, and indexing. The user confirmed W2 live browser acceptance on
+W3 is the active checkpoint. W3.1 through W3.3 passed locally. Mixed-source retrieval,
+validated citations in answers, and explicit indexing profiles remain in W3. The user
+confirmed W2 live browser acceptance on
 2026-11-22. The separate Supabase project also passed live Auth and private preview Storage
 through FastAPI in W1.
 Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.3 local verification — 2026-11-22
+
+- Private notebook owners can approve OCR for one PDF page with no extractable text.
+  The saved result retains the immutable source version, page number, and OCR block spans.
+- The local migration and focused PostgreSQL integration tests passed, including owner
+  isolation, literal approval, concurrent requests, timeouts, and reloads. A browser fixture
+  verified that approval is required and that OCR text opens on demand after refresh.
+- Provider protocol tests used simulated LlamaParse responses. Document OCR stays off by
+  default. A live run can use the existing LlamaCloud key and needs no new dependencies.
 
 ### W3.2 local verification — 2026-11-22
 

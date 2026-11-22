@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
+import { WorkspacePageOCRPanel } from "@/components/workspace-page-ocr"
 import { ApiClientError } from "@/lib/api/client"
 import {
   documentPageImageUrl, getDocumentSection, importDocument, listDocuments,
@@ -194,8 +195,13 @@ export function WorkspaceDocumentPreview({ notebookId, source, onExpired }: {
             // eslint-disable-next-line @next/next/no-img-element -- The same-origin private image needs the browser's session.
             <img key={page} src={documentPageImageUrl(notebookId, source, page)} alt={`Page ${page} of ${source.filename}`} className="mx-auto max-h-[70dvh] w-full rounded-md border object-contain" onError={() => setImageError(true)} />
           )}
-          {current && !current.text ? <p className="text-sm text-muted-foreground">This page may need OCR.</p> : null}
-          <Disclosure label="Extracted text">{text}</Disclosure>
+          {current && !current.text ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">This page has no extractable text.</p>
+              <WorkspacePageOCRPanel key={page} notebookId={notebookId} source={source} page={page} onExpired={onExpired} />
+            </div>
+          ) : null}
+          {!current || current.text ? <Disclosure label="Extracted text">{text}</Disclosure> : null}
         </>
       ) : <div className="border-t pt-3">{text}</div>}
     </div>

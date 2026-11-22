@@ -2,9 +2,9 @@
 
 import asyncio
 import os
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import httpx
@@ -25,14 +25,23 @@ from galaxy_frog.api.app import create_app
 from galaxy_frog.api.routes import workspace
 from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
 from galaxy_frog.config import Settings
+from galaxy_frog.db import workspace_page_ocr
 from galaxy_frog.db.workspace import WorkspaceAccountRow, WorkspaceNotebookRow
 from galaxy_frog.db.workspace_documents import WorkspaceDocumentRepository, WorkspaceDocumentRow
+from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRow
 from galaxy_frog.db.workspace_text import WorkspaceTextSourceRow
 from galaxy_frog.domain.workspace import NotebookNotFound
 from galaxy_frog.domain.workspace_documents import (
+    DocumentNotFound,
     DocumentStorageUnavailable,
     ParsedDocument,
     StoredDocumentSection,
+)
+from galaxy_frog.domain.workspace_ocr import (
+    PageOCRFailed,
+    PageOCROutcomeUnknown,
+    PageOCRResult,
+    WorkspacePageOCRProvider,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -85,6 +94,15 @@ async def workspace_http(
             async with async_sessionmaker(engine)() as session:
                 notebook_ids = select(WorkspaceNotebookRow.id).where(
                     WorkspaceNotebookRow.owner_id.in_(owners.values())
+                )
+                await session.execute(
+                    delete(WorkspacePageOCRRow).where(
+                        WorkspacePageOCRRow.version_id.in_(
+                            select(WorkspaceDocumentRow.version_id).where(
+                                WorkspaceDocumentRow.notebook_id.in_(notebook_ids)
+                            )
+                        )
+                    )
                 )
                 await session.execute(
                     delete(WorkspaceDocumentRow).where(
@@ -329,3 +347,180 @@ async def test_document_import_errors_are_typed_and_do_not_create_sources(
         )
         assert disappeared.status_code == 404
     assert (await client.get(path, headers=identity)).json() == {"sources": [], "next_after": None}
+
+
+_OWNER = {"authorization": "Bearer owner-token"}
+_OTHER = {"authorization": "Bearer other-token"}
+_CONSENT = {"allow_external_page_image": True}
+_OCR_PNG = b"\x89PNG\r\n\x1a\nscanned-page"
+
+
+@pytest_asyncio.fixture
+async def pdf_ocr_url(workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]]) -> str:
+    client, _ = workspace_http
+    result = await client.post(
+        "/v1/workspace/notebooks", headers=_OWNER, json={"title": "OCR test"}
+    )
+    assert result.status_code == 201
+    root = f"/v1/workspace/notebooks/{result.json()['notebook_id']}/documents"
+    uploaded = await client.post(
+        root,
+        params={"filename": "scan.pdf"},
+        headers=_OWNER | {"content-type": "application/octet-stream"},
+        content=sample_pdf(),
+    )
+    assert uploaded.status_code == 200
+    source = uploaded.json()
+    return f"{root}/{source['source_id']}/versions/{source['version_id']}/pages/2/ocr"
+
+
+@pytest.mark.asyncio
+async def test_ocr_requests_require_consent_blank_pdf_page_and_owner(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+    pdf_ocr_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = workspace_http
+    assert (await client.get(pdf_ocr_url, headers=_OWNER)).json()["status"] == "unavailable"
+    off = await client.post(pdf_ocr_url, headers=_OWNER, json=_CONSENT)
+    assert off.status_code == 200 and off.json()["status"] == "unavailable"
+    provider = AsyncMock(spec=WorkspacePageOCRProvider)
+    monkeypatch.setattr(workspace, "_page_ocr_provider", Mock(return_value=provider))
+    read = await client.get(pdf_ocr_url, headers=_OWNER)
+    assert read.json()["status"] == "ready"
+    assert read.headers["cache-control"] == "no-store"
+    for invalid in (
+        {},
+        {"allow_external_page_image": False},
+        {"allow_external_page_image": 1},
+        {"allow_external_page_image": "true"},
+    ):
+        assert (await client.post(pdf_ocr_url, headers=_OWNER, json=invalid)).status_code == 422
+    assert (await client.get(pdf_ocr_url, headers=_OTHER)).status_code == 404
+    assert (await client.post(pdf_ocr_url, headers=_OTHER, json=_CONSENT)).status_code == 404
+    assert (await client.post(pdf_ocr_url, json=_CONSENT)).status_code == 401
+    first_page = pdf_ocr_url.replace("/pages/2/", "/pages/1/")
+    assert (await client.get(first_page, headers=_OWNER)).json()["status"] == "not_needed"
+    assert (await client.post(first_page, headers=_OWNER, json=_CONSENT)).json()[
+        "status"
+    ] == "not_needed"
+
+    root = pdf_ocr_url.split("/documents/", 1)[0] + "/documents"
+    uploaded = await client.post(
+        root,
+        params={"filename": "notes.txt"},
+        headers=_OWNER | {"content-type": "application/octet-stream"},
+        content=b"notes",
+    )
+    source = uploaded.json()
+    non_pdf = f"{root}/{source['source_id']}/versions/{source['version_id']}/pages/1/ocr"
+    assert (await client.get(non_pdf, headers=_OWNER)).status_code == 404
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            WorkspaceDocumentRepository, "pdf_digest", AsyncMock(side_effect=DocumentNotFound)
+        )
+        assert (await client.post(pdf_ocr_url, headers=_OWNER, json=_CONSENT)).status_code == 404
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            WorkspaceDocumentProcessor, "preview", AsyncMock(side_effect=DocumentProcessingTimeout)
+        )
+        assert (await client.post(pdf_ocr_url, headers=_OWNER, json=_CONSENT)).status_code == 504
+    provider.extract.assert_not_called()
+    assert (await client.get(pdf_ocr_url, headers=_OWNER)).json()["status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_ocr_approvals_send_one_page_and_reopen_saved_evidence(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+    pdf_ocr_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = workspace_http
+    both_rendering = asyncio.Event()
+    job_recorded = asyncio.Event()
+    finish = asyncio.Event()
+    participants = 0
+
+    async def render(_: Path, page_number: int) -> bytes:
+        nonlocal participants
+        assert page_number == 2
+        participants += 1
+        if participants == 2:
+            both_rendering.set()
+        await both_rendering.wait()
+        return _OCR_PNG
+
+    async def recognize(
+        png: bytes, *, record_job: Callable[[str], Awaitable[None]]
+    ) -> PageOCRResult:
+        assert png == _OCR_PNG
+        await record_job("versioned-job")
+        job_recorded.set()
+        await finish.wait()
+        return PageOCRResult("Glacier evidence.\r\n\r\nSecond line.")
+
+    provider = AsyncMock(spec=WorkspacePageOCRProvider)
+    provider.extract.side_effect = recognize
+    monkeypatch.setattr(workspace, "_page_ocr_provider", Mock(return_value=provider))
+    monkeypatch.setattr(WorkspaceDocumentProcessor, "preview", AsyncMock(side_effect=render))
+    requests = [
+        asyncio.create_task(client.post(pdf_ocr_url, headers=_OWNER, json=_CONSENT))
+        for _ in range(2)
+    ]
+    try:
+        await asyncio.wait_for(job_recorded.wait(), timeout=5)
+        completed, _ = await asyncio.wait(requests, timeout=5, return_when=asyncio.FIRST_COMPLETED)
+        assert len(completed) == 1
+        assert completed.pop().result().json()["status"] == "running"
+        with monkeypatch.context() as patch:
+            patch.setattr(workspace_page_ocr, "OCR_LEDGER_TIMEOUT_SECONDS", 0)
+            assert (await client.get(pdf_ocr_url, headers=_OWNER)).json()["status"] == "unknown"
+    finally:
+        finish.set()
+        await asyncio.gather(*requests)
+
+    receipt = (await client.get(pdf_ocr_url, headers=_OWNER)).json()
+    assert receipt["status"] == "succeeded"
+    assert receipt["page_number"] == 2 and receipt["provider"] == "llamaparse"
+    assert receipt["approved_at"] and receipt["completed_at"]
+    assert receipt["text"] == "Glacier evidence.\n\nSecond line."
+    assert [block["text"] for block in receipt["blocks"]] == ["Glacier evidence.", "Second line."]
+    assert (await client.post(pdf_ocr_url, headers=_OWNER, json=_CONSENT)).json() == receipt
+    assert "provider_job_id" not in receipt
+    assert (await client.get(pdf_ocr_url, headers=_OTHER)).status_code == 404
+    original = pdf_ocr_url.replace("/pages/2/ocr", "/sections/2")
+    assert (await client.get(original, headers=_OWNER)).json()["text"] == ""
+    provider.extract.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("result", "status"),
+    [
+        ("", "no_text"),
+        ("bad\0text", "failed"),
+        (PageOCRFailed, "failed"),
+        (PageOCROutcomeUnknown, "unknown"),
+    ],
+)
+async def test_ocr_terminal_results_are_reopened_without_resending(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+    pdf_ocr_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    result: str | type[Exception],
+    status: str,
+) -> None:
+    client, _ = workspace_http
+    provider = AsyncMock(spec=WorkspacePageOCRProvider)
+    if isinstance(result, str):
+        provider.extract.return_value = PageOCRResult(result)
+    else:
+        provider.extract.side_effect = result
+    monkeypatch.setattr(workspace, "_page_ocr_provider", Mock(return_value=provider))
+    monkeypatch.setattr(WorkspaceDocumentProcessor, "preview", AsyncMock(return_value=_OCR_PNG))
+    first = await client.post(pdf_ocr_url, headers=_OWNER, json=_CONSENT)
+    assert first.status_code == 200 and first.json()["status"] == status
+    assert first.json()["blocks"] == []
+    assert (await client.post(pdf_ocr_url, headers=_OWNER, json=_CONSENT)).json() == first.json()
+    provider.extract.assert_awaited_once()

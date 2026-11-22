@@ -16,6 +16,7 @@ from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.adapters.vision.reasoning import GeminiVisualReasoner, OllamaQwenVisualReasoner
 from galaxy_frog.adapters.vision.siglip import SiglipEmbeddingProvider
 from galaxy_frog.adapters.workspace_documents import WorkspaceDocumentProcessor
+from galaxy_frog.adapters.workspace_page_ocr import LlamaParsePageOCR
 from galaxy_frog.api.errors import register_error_handlers
 from galaxy_frog.api.middleware import correlation_id_middleware
 from galaxy_frog.api.routes.health import router as health_router
@@ -148,6 +149,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     legacy.include_router(study_router)
     application.include_router(legacy)
     application.state.workspace_document_processor = WorkspaceDocumentProcessor()
+    key = resolved_settings.llama_cloud_api_key
+    application.state.workspace_page_ocr_provider = (
+        LlamaParsePageOCR(key, resolved_settings.llama_cloud_base_url)
+        if resolved_settings.workspace_document_ocr_enabled
+        and key is not None
+        and resolved_settings.llama_cloud_base_url.startswith("https://")
+        else None
+    )
     application.include_router(workspace_router)
     return application
 

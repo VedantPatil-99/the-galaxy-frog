@@ -1,8 +1,8 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. The user confirmed W2 browser sign-in on 2026-11-22. W3.1 adds private pasted text and Markdown.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.3 passed locally and cover private text, document import, and opt-in OCR for individual PDF pages.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated 2026-11-21 (Asia/Calcutta) after private Storage acceptance.
+Updated 2026-11-22 (Asia/Calcutta) after selected-page OCR verification.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
@@ -201,9 +201,15 @@ PDF page numbers and immutable version-scoped blocks survive reopening. PDF imag
 are generated one page at a time and sent through the owner-authorized API. The original
 remains in private local storage. PDF pages without extractable text are flagged for OCR.
 DOCX previews show main-body text and table cells without page numbers.
-The remaining W3 work covers pending OCR processing and mixed-source retrieval and indexing.
 [PDF extraction guidance](https://pypdf.readthedocs.io/en/stable/user/extract-text.html)
 [PDFium Python API](https://pypdfium2.readthedocs.io/en/stable/python_api.html)
+
+W3.3 adds opt-in OCR to an individual PDF page with no extractable text. The owner can open
+**Read this page with OCR** below the image and approve sending that page's rasterized image to LlamaParse
+Fast. Saved results retain the source version, PDF page, provider profile, and stable text
+blocks. A recorded attempt prevents repeat submissions for the same page and version,
+including when the provider's outcome is unknown. Mixed-source retrieval, citation validation
+in answers, and indexing remain in W3. [LlamaParse OCR guide](https://developers.llamaindex.ai/llamaparse/parse/features/ocr-and-languages/)
 
 ### Models and retrieval profiles
 
@@ -335,8 +341,8 @@ Keep commits focused and preserve the installed skills/MCP configuration. Do not
 **W2 is implemented locally.** The workspace defaults to Notebook with sources beside the
 question area. Focus is available, and the transcript and evidence details open on demand.
 Doto appears in the wordmark and Commissioner handles reading and controls. Live browser
-email-link acceptance was user-confirmed. W3 started with pasted plain text and Markdown and
-continues with bounded document file import.
+email-link acceptance was user-confirmed. W3 now supports pasted text, bounded document
+imports, and opt-in OCR for PDF pages without extractable text.
 
 W1.3 added private storage authorization and explicit legacy
 video ownership. The operator migration and notebook-scoped API preserve existing
