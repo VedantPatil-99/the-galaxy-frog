@@ -831,7 +831,7 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
   - [x] Verify that ordinary signed-in users have no direct Storage read policy.
 - [x] W2 — Both workspace layouts and typography checked locally. The user confirmed
   the live browser callback, session persistence after refresh, and sign-out.
-- [ ] W3 — Mixed-source pipeline.
+- [x] W3 — Mixed-source pipeline.
   - [x] W3.1 — Private notebook paste import for plain text and Markdown, immutable source
     versions, stable block citations, and ownership and retry checks.
   - [x] W3.2 — Bounded PDF, DOCX, plain text, and Markdown file import. Keep originals
@@ -846,7 +846,7 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     embedding profile. Preserve the original evidence and measure coverage and latency.
   - [x] W3.7 — Gemini Embedding 2 profile, cost previews, and one-use cloud confirmation
     for index batches and semantic queries. Preserve local indexing and source citations.
-  - [ ] Remaining W3 — Cohere Embed v4 using the same cloud confirmation and cost flow.
+  - [x] W3.8 — Cohere Embed v4 using the same cloud confirmation and cost flow.
 - [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
 - [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
@@ -854,7 +854,7 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
 - [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
 - [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
 
-W3 is the active checkpoint. W3.1 through W3.7 passed locally. Cohere Embed v4 remains in W3.
+W3 passed locally. W4 is the next checkpoint.
 Record measurements as each packet is implemented and tested in
 [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
 The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
@@ -862,6 +862,16 @@ also passed live Auth and private preview Storage
 through FastAPI in W1.
 Hosted deployment, CI, and merge are separate gates.
 Do not access Notion for this program.
+
+### W3.8 local verification — 2026-11-22
+
+- Cohere Embed v4 is an optional text-only semantic profile. Owners review the passage
+  scope or query and the trial or configured-rate estimate before each dispatch.
+- PostgreSQL fixtures verified profile and rate binding, explicit rebuild, receipt reuse
+  rejection, temporal-query rejection, and preservation of the original video interval and
+  caption lineage. The browser verified cancellation, both confirmation flows, and cited
+  page navigation.
+- Local acceptance used simulated Cohere responses. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
 
 ### W3.7 local verification — 2026-11-22
 

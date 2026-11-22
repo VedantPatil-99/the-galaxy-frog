@@ -264,6 +264,30 @@ transfer for that batch. A semantic search also displays the query and estimate 
 own confirmation. A confirmed receipt can dispatch once. Review Gemini project usage if the
 outcome is uncertain. [Measurement log](WORKSPACE_MEASUREMENTS.md)
 
+## W3.8 Cohere semantic search
+
+Cohere uses the W3.7 schema and existing Python HTTP client. To try the optional profile,
+set these variables in the backend environment and restart FastAPI.
+
+```dotenv
+WORKSPACE_COHERE_EMBEDDING_ENABLED=true
+COHERE_EMBEDDING_API_KEY=<your Cohere trial key>
+COHERE_EMBEDDING_MODE=trial
+```
+
+Use trial mode for development evaluation. It displays the trial estimate and is unavailable
+when `APP_ENV=production`. For paid use, supply a Cohere production key, set
+`COHERE_EMBEDDING_MODE=production`, and set `COHERE_EMBEDDING_USD_PER_MILLION_TOKENS`
+to the positive USD rate your account pays per million Embed v4 input tokens. FastAPI keeps
+the key server-side and uses input length to estimate usage. Actual billing comes from Cohere.
+[Cohere pricing guide](https://docs.cohere.com/docs/how-does-cohere-pricing-work)
+
+In **Search by meaning**, select **Cohere Embed v4 · Cloud**. Review the excerpts count and
+estimate under **Preview Cohere indexing** or **Preview Cohere rebuild**. Confirm each batch
+to update the index. **Preview Cohere search** shows the exact query for a separate confirmation.
+If a call has an uncertain outcome, inspect Cohere usage before approving another request.
+[Cohere data use](https://cohere.com/enterprise-data-commitments) · [Measurement log](WORKSPACE_MEASUREMENTS.md)
+
 ## Application dependencies added when needed
 
 Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.

@@ -272,6 +272,15 @@
             "title": "Kind",
             "type": "string"
           },
+          "profile": {
+            "default": "gemini-embedding-2",
+            "enum": [
+              "gemini-embedding-2",
+              "embed-v4.0"
+            ],
+            "title": "Profile",
+            "type": "string"
+          },
           "replace": {
             "default": false,
             "title": "Replace",
@@ -317,14 +326,26 @@
             "type": "string"
           },
           "model": {
-            "const": "gemini-embedding-2",
-            "default": "gemini-embedding-2",
+            "enum": [
+              "gemini-embedding-2",
+              "embed-v4.0"
+            ],
             "title": "Model",
             "type": "string"
           },
           "preview_id": {
             "format": "uuid",
             "title": "Preview Id",
+            "type": "string"
+          },
+          "pricing_basis": {
+            "default": "list",
+            "enum": [
+              "list",
+              "configured",
+              "trial"
+            ],
+            "title": "Pricing Basis",
             "type": "string"
           },
           "remaining_inputs": {
@@ -335,6 +356,7 @@
         "required": [
           "preview_id",
           "kind",
+          "model",
           "inputs",
           "estimated_input_tokens",
           "estimated_usd",
@@ -356,6 +378,15 @@
           "kind": {
             "const": "search",
             "title": "Kind",
+            "type": "string"
+          },
+          "profile": {
+            "default": "gemini-embedding-2",
+            "enum": [
+              "gemini-embedding-2",
+              "embed-v4.0"
+            ],
+            "title": "Profile",
             "type": "string"
           },
           "query": {
@@ -5561,6 +5592,16 @@
               }
             ]
           },
+          "cohere_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "embedding_ms": {
             "minimum": 0.0,
             "title": "Embedding Ms",
@@ -5752,6 +5793,16 @@
             ]
           },
           "cloud_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cohere_profile": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/EmbeddingCollectionSpec"

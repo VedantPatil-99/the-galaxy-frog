@@ -1,6 +1,7 @@
 """Typed configuration for the Galaxy Frog application."""
 
 import re
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
@@ -93,6 +94,10 @@ class Settings(BaseSettings):
     workspace_gemini_embedding_enabled: bool = False
     gemini_embedding_api_key: SecretStr | None = None
     gemini_embedding_project_id: str | None = None
+    workspace_cohere_embedding_enabled: bool = False
+    cohere_embedding_api_key: SecretStr | None = None
+    cohere_embedding_mode: Literal["trial", "production"] = "trial"
+    cohere_embedding_usd_per_million_tokens: Decimal | None = Field(default=None, gt=0)
     gemini_generation_enabled: bool = False
     gemini_study_enabled: bool = False
     gemini_generation_model: str | None = None
@@ -134,6 +139,14 @@ class Settings(BaseSettings):
 
         return self.workspace_auth_enabled or self.app_env == "production"
 
+    @property
+    def cohere_embedding_rate(self) -> Decimal | None:
+        if not self.workspace_cohere_embedding_enabled or self.cohere_embedding_api_key is None:
+            return None
+        if self.cohere_embedding_mode == "trial":
+            return None if self.app_env == "production" else Decimal(0)
+        return self.cohere_embedding_usd_per_million_tokens
+
     @field_validator("supabase_url")
     @classmethod
     def validate_supabase_url(cls, value: str | None) -> str | None:
@@ -171,9 +184,10 @@ class Settings(BaseSettings):
         "gemini_study_api_key",
         "gemini_visual_api_key",
         "gemini_embedding_api_key",
+        "cohere_embedding_api_key",
     )
     @classmethod
-    def normalize_gemini_secret(cls, value: SecretStr | None) -> SecretStr | None:
+    def normalize_provider_secret(cls, value: SecretStr | None) -> SecretStr | None:
         if value is None or not value.get_secret_value().strip():
             return None
         return SecretStr(value.get_secret_value().strip())

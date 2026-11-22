@@ -5,9 +5,11 @@ import json
 import os
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from statistics import median
 from time import perf_counter
+from typing import cast
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
@@ -18,8 +20,10 @@ from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from tests.test_workspace_auth import auth_settings
 
+from galaxy_frog.adapters.embeddings import cohere
 from galaxy_frog.adapters.embeddings.gemini import (
     GEMINI_DOCUMENT_PREFIX,
+    GEMINI_EMBEDDING_SPEC,
     GEMINI_QUERY_PREFIX,
     GeminiEmbeddingProvider,
 )
@@ -504,6 +508,188 @@ async def test_gemini_embeddings_require_current_once_only_cloud_confirmation(
     assert (
         await client.post(confirm_path, headers=OWN, json=consent(await preview(search), search))
     ).json()["error"]["code"] == "WORKSPACE_CLOUD_EMBEDDING_BUSY"
+
+
+@pytest.mark.asyncio
+async def test_cohere_rebuild_and_search_bind_consent_to_profile_and_rate(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, engine, owner, _, videos, _ = workspace
+    created = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Cohere fixture"}
+    )
+    notebook = UUID(created.json()["notebook_id"])
+    base = f"/v1/workspace/notebooks/{notebook}"
+    preview_path, confirm_path = f"{base}/semantic-cloud-preview", f"{base}/semantic-cloud-confirm"
+    pasted = "Café water contains dissolved salt."
+    assert (
+        await client.post(
+            f"{base}/text-sources",
+            headers=OWN,
+            json={"title": "Cohere fixture note", "format": "plain", "text": pasted},
+        )
+    ).status_code == 200
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        await WorkspaceSourceRepository(session).assign_legacy_videos(owner, notebook, videos[:1])
+        repository = WorkspaceSemanticRepository(session, owner, notebook)
+        pending = await repository.pending(None)
+        await repository.store(
+            None, GEMINI_EMBEDDING_SPEC, ((pending[0][0], (1.0,) + (0.0,) * 1535),)
+        )
+        gemini = await repository.active()
+        assert gemini is not None
+        await session.commit()
+    gemini_id = str(gemini.collection_id)
+    config = Mock(return_value=auth_settings())
+    monkeypatch.setattr(workspace_semantic, "workspace_settings", config)
+    monkeypatch.setattr(workspace_semantic_cloud, "workspace_settings", config)
+    monkeypatch.setattr(workspace_semantic, "probe_ollama_models", AsyncMock(return_value={}))
+    monkeypatch.setattr(workspace_semantic_cloud, "_COHERE_QUOTA_GROUP", uuid4().hex)
+    index: dict[str, object] = {
+        "kind": "index",
+        "profile": "embed-v4.0",
+        "expected_collection": gemini_id,
+        "replace": True,
+    }
+    assert (await client.post(preview_path, headers=OWN, json=index)).status_code == 503
+    trial = auth_settings(
+        workspace_cohere_embedding_enabled=True,
+        cohere_embedding_api_key="cohere-fixture",
+        workspace_gemini_embedding_enabled=True,
+        gemini_embedding_api_key="gemini-fixture",
+        gemini_embedding_project_id=f"embeddings-{uuid4().hex[:12]}",
+    )
+    config.return_value = trial
+    search_text = "original spoken evidence"
+
+    async def embed(
+        _endpoint: str,
+        payload: dict[str, object],
+        _headers: dict[str, str],
+        _transport: object,
+    ) -> bytearray:
+        texts = cast(tuple[str, ...], payload["texts"])
+        assert payload["input_type"] == (
+            "search_query" if texts == (search_text,) else "search_document"
+        )
+        assert set(texts) in ({search_text}, {pasted, "Original evidence"})
+        await asyncio.sleep(0.007)
+        vectors = [
+            ([1, 0] if value in {search_text, "Original evidence"} else [0, 1]) + [0] * 1534
+            for value in texts
+        ]
+        return bytearray(json.dumps({"embeddings": {"float": vectors}}).encode())
+
+    dispatch = AsyncMock(side_effect=embed)
+    monkeypatch.setattr(cohere, "post_embedding", dispatch)
+
+    async def preview(action: dict[str, object]) -> dict[str, object]:
+        response = await client.post(preview_path, headers=OWN, json=action)
+        assert response.status_code == 200, response.text
+        return dict(response.json())
+
+    def consent(quote: dict[str, object], action: dict[str, object]) -> dict[str, object]:
+        return {"preview_id": quote["preview_id"], "action": action, "allow_cloud": True}
+
+    status = (await client.get(f"{base}/semantic-index", headers=OWN)).json()
+    assert status["cohere_profile"]["model"] == "embed-v4.0"
+    assert status["cloud_profile"]["model"] == "gemini-embedding-2"
+    assert (await client.post(preview_path, headers=OWN, json={**index, "replace": False})).json()[
+        "error"
+    ]["code"] == "WORKSPACE_SEMANTIC_REBUILD_REQUIRED"
+    trial_quote = await preview(index)
+    assert trial_quote["pricing_basis"] == "trial" and trial_quote["estimated_usd"] == "0.00000000"
+    assert (
+        await client.post(
+            confirm_path,
+            headers=OWN,
+            json=consent(trial_quote, {**index, "profile": "gemini-embedding-2"}),
+        )
+    ).status_code == 409
+    paid = trial.model_copy(
+        update={
+            "cohere_embedding_mode": "production",
+            "cohere_embedding_usd_per_million_tokens": Decimal("0.13"),
+        }
+    )
+    config.return_value = paid
+    assert (
+        await client.post(confirm_path, headers=OWN, json=consent(trial_quote, index))
+    ).status_code == 409
+    started = perf_counter()
+    quote = await preview(index)
+    preview_ms = (perf_counter() - started) * 1_000
+    input_bytes = len(pasted.encode()) + len(b"Original evidence")
+    assert quote["pricing_basis"] == "configured" and quote["model"] == "embed-v4.0"
+    assert quote["estimated_input_tokens"] == input_bytes
+    assert quote["estimated_usd"] == quote["estimated_remaining_usd"] == "0.00000689"
+    dispatch.assert_not_awaited()
+    approved = consent(quote, index)
+    started = perf_counter()
+    rebuilt = await client.post(confirm_path, headers=OWN, json=approved)
+    index_ms = (perf_counter() - started) * 1_000
+    assert rebuilt.status_code == 200, rebuilt.text
+    result = rebuilt.json()["index"]
+    collection = result["active_collection"]
+    assert collection != gemini_id and result["indexed"] == 2
+    assert result["active_profile"]["provider"] == "cohere"
+    assert (await client.post(confirm_path, headers=OWN, json=approved)).status_code == 409
+    dispatch.assert_awaited_once()
+    search: dict[str, object] = {
+        "kind": "search",
+        "profile": "embed-v4.0",
+        "collection_id": collection,
+        "query": search_text,
+    }
+    assert (
+        await client.post(
+            preview_path, headers=OWN, json={**search, "query": "after the explanation"}
+        )
+    ).status_code == 422
+    timings: list[dict[str, float]] = []
+    for _ in range(3):
+        approved_search = consent(await preview(search), search)
+        started = perf_counter()
+        response = await client.post(confirm_path, headers=OWN, json=approved_search)
+        api_ms = (perf_counter() - started) * 1_000
+        assert response.status_code == 200, response.text
+        found = response.json()["results"]
+        hit = found["hits"][0]
+        assert hit["kind"] == "video" and hit["source"]["video_id"] == str(videos[0])
+        assert (hit["unit_id"], hit["start_ms"], hit["end_ms"]) == (UNIT_ID, 123, 456)
+        assert hit["cues"] == [
+            {
+                "cue_id": CUE_ID,
+                "origin": "caption",
+                "track_id": "original-track",
+                "transcription_run_id": None,
+            }
+        ]
+        timings.append(
+            {"api_ms": api_ms, "embedding_ms": found["embedding_ms"], "query_ms": found["query_ms"]}
+        )
+        assert (
+            await client.post(confirm_path, headers=OWN, json=approved_search)
+        ).status_code == 409
+    print(
+        json.dumps(
+            {
+                "cohere_preview_ms": round(preview_ms, 3),
+                "index_api_ms": round(index_ms, 3),
+                "batch_inputs": quote["inputs"],
+                "batch_input_bytes": input_bytes,
+                "index_stages_ms": {
+                    field: result[field] for field in ("prepare_ms", "embedding_ms", "save_ms")
+                },
+                "search_queries": len(timings),
+                "top1_correct": len(timings),
+                "search_median_ms": {
+                    field: round(median(row[field] for row in timings), 3) for field in timings[0]
+                },
+            }
+        )
+    )
 
 
 @pytest.mark.asyncio

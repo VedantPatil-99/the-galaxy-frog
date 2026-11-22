@@ -1,4 +1,4 @@
-"""Project-scoped Gemini budgets shared by API and background workers."""
+"""Provider budgets shared by API and background workers."""
 
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4

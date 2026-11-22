@@ -982,6 +982,12 @@ export interface components {
              */
             kind: "index";
             /**
+             * Profile
+             * @default gemini-embedding-2
+             * @enum {string}
+             */
+            profile: "gemini-embedding-2" | "embed-v4.0";
+            /**
              * Replace
              * @default false
              */
@@ -1009,15 +1015,20 @@ export interface components {
             kind: "index" | "search";
             /**
              * Model
-             * @default gemini-embedding-2
-             * @constant
+             * @enum {string}
              */
-            model: "gemini-embedding-2";
+            model: "gemini-embedding-2" | "embed-v4.0";
             /**
              * Preview Id
              * Format: uuid
              */
             preview_id: string;
+            /**
+             * Pricing Basis
+             * @default list
+             * @enum {string}
+             */
+            pricing_basis: "list" | "configured" | "trial";
             /** Remaining Inputs */
             remaining_inputs: number;
         };
@@ -1033,6 +1044,12 @@ export interface components {
              * @enum {string}
              */
             kind: "search";
+            /**
+             * Profile
+             * @default gemini-embedding-2
+             * @enum {string}
+             */
+            profile: "gemini-embedding-2" | "embed-v4.0";
             /** Query */
             query: string;
         };
@@ -2901,6 +2918,7 @@ export interface components {
             added: number;
             available_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
             cloud_profile?: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            cohere_profile?: components["schemas"]["EmbeddingCollectionSpec"] | null;
             /** Embedding Ms */
             embedding_ms: number;
             /** Indexed */
@@ -2960,6 +2978,7 @@ export interface components {
             active_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
             available_profile: components["schemas"]["EmbeddingCollectionSpec"] | null;
             cloud_profile?: components["schemas"]["EmbeddingCollectionSpec"] | null;
+            cohere_profile?: components["schemas"]["EmbeddingCollectionSpec"] | null;
             /** Indexed */
             indexed: number;
             /** Total */

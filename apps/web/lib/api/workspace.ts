@@ -228,7 +228,7 @@ function embeddingProfile(value: unknown) {
 function semanticStatus(value: unknown): value is WorkspaceSemanticStatus {
   return object(value) && (value.active_collection === null || typeof value.active_collection === "string")
     && embeddingProfile(value.active_profile) && embeddingProfile(value.available_profile)
-    && embeddingProfile(value.cloud_profile ?? null)
+    && embeddingProfile(value.cloud_profile ?? null) && embeddingProfile(value.cohere_profile ?? null)
     && typeof value.indexed === "number" && typeof value.total === "number"
     && Number.isInteger(value.indexed) && Number.isInteger(value.total) && value.indexed >= 0 && value.indexed <= value.total
 }
@@ -251,7 +251,10 @@ export function searchWorkspaceMeaning(notebookId: string, input: Schema["Worksp
 
 export function previewWorkspaceCloudEmbedding(notebookId: string, action: CloudEmbeddingAction, signal: AbortSignal) {
   return requestApi(`${base}/notebooks/${encodeURIComponent(notebookId)}/semantic-cloud-preview`, (value): value is CloudEmbeddingPreview =>
-    object(value) && value.kind === action.kind && value.model === "gemini-embedding-2"
+    object(value) && value.kind === action.kind && value.model === (action.profile ?? "gemini-embedding-2")
+      && (value.model === "embed-v4.0"
+        ? value.pricing_basis === "trial" || value.pricing_basis === "configured"
+        : value.pricing_basis === "list" || value.pricing_basis === undefined)
       && typeof value.preview_id === "string" && typeof value.expires_at === "string"
       && typeof value.inputs === "number" && typeof value.remaining_inputs === "number"
       && typeof value.estimated_usd === "string" && typeof value.estimated_remaining_usd === "string",

@@ -1,15 +1,15 @@
 # Galaxy Frog workspace redesign and system plan
 
-Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3.1 through W3.7 passed locally, including selected-passage answers, local semantic search, and Gemini embedding confirmation with simulated provider responses. Cohere Embed v4 remains in W3.
+Status: W0 through W2 are complete on `feat/workspace`, including live Supabase email-session and private preview Storage acceptance from local FastAPI. W3 passed locally with controlled fixtures for both cloud embedding providers. W4 is next.
 Saved: 2026-11-18 (Asia/Calcutta).
-Updated 2026-11-22 (Asia/Calcutta) after Gemini embedding confirmation verification.
+Updated 2026-11-22 (Asia/Calcutta) after Cohere embedding confirmation verification.
 This document records the agreed future workspace program. It is separate from Phase 8.
 
 ## 1. Direction and boundaries
 
 Phase 8 merge was confirmed by the user on 2026-11-19. Workspace work starts from merged `origin/main` at `4299de6`; do not repeat the Phase 8 status audit. Keep the completed provider/consent behavior intact.
 
-Follow [the design direction](WORKSPACE_DESIGN.md) and [the staged setup instructions](WORKSPACE_SETUP.md). A separate `galaxy-frog` Supabase project has been created with explicit approval at a quoted $0/month, and its approved local Auth connection passed live email-session acceptance through FastAPI. Storage configuration/acceptance and the browser sign-in UI remain pending in their later packets.
+Follow [the design direction](WORKSPACE_DESIGN.md) and [the staged setup instructions](WORKSPACE_SETUP.md). The separate `galaxy-frog` Supabase project passed FastAPI email-session and private Storage acceptance. The user confirmed live browser sign-in in W2.
 
 The redesigned product will provide:
 
@@ -232,8 +232,14 @@ packet covers the optional cloud profiles and their consent and cost previews.
 W3.7 adds the Gemini Embedding 2 cloud profile. A local preview shows the text scope and
 estimated list price before an owner can approve one index batch or query. The server checks
 the preview against the current collection and payload, reserves project quota, and spends
-the receipt before sending text. Cohere Embed v4 remains in W3.
+the receipt before sending text.
 [Gemini confirmation architecture](adr/0015-gemini-notebook-embedding-confirmation.md)
+
+W3.8 adds Cohere Embed v4 to the same search panel and confirmation flow. Cohere indexes
+passage excerpts with its document input role and embeds queries with its query role.
+The preview uses the configured production rate or indicates local trial mode. Changing
+profiles requires a confirmed rebuild because each provider has its own collection identity.
+[Cohere confirmation architecture](adr/0016-cohere-notebook-embedding-confirmation.md)
 
 ### Models and retrieval profiles
 
@@ -248,7 +254,9 @@ Use separate collections, initially at 1,536 dimensions, with provider/model/con
 
 Index a Galaxy into its selected collection only. Switching models requires an explicit reindex operation and cost preview. Equal vector dimensions do not imply compatibility.
 
-Cohere evaluation keys are for development evaluation; hosted production requires approved production access. Bedrock remains an optional adapter with regional, model-access, pricing, and credit-eligibility gates. [Cohere policy](https://cohere.com/pricing)
+Cohere trial keys are for development evaluation. Production uses production access and a
+configured Embed v4 input rate. Bedrock remains an optional adapter with regional,
+model-access, pricing, and credit-eligibility gates. [Cohere pricing guide](https://docs.cohere.com/docs/how-does-cohere-pricing-work)
 
 Use Gemini Flash-Lite for routine generation and explicit Flash profiles for harder work. Preserve Phase 8 consent, manual selection, fallback visibility, quota handling, and actual-provider reporting.
 

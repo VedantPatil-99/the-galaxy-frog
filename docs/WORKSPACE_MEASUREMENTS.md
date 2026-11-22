@@ -139,3 +139,30 @@ Reproduce the local fixture with the current migrations applied.
 RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
   tests/integration/test_workspace_sources.py::test_gemini_embeddings_require_current_once_only_cloud_confirmation
 ```
+
+## 2026-11-22 · W3.8 Cohere Embed v4
+
+- **Workload** — Local PostgreSQL 17 and FastAPI on Windows, with simulated authentication
+  and a simulated Cohere HTTP response. One two-passage rebuild transformed 53 UTF-8 bytes
+  from a one-second video record and a pasted note into 1,536-dimensional fixture vectors.
+  Each simulated provider dispatch waited 7 ms before returning the deterministic vectors.
+- **Preview and indexing** — The local preview took 30.20 ms. One confirmed rebuild took
+  121.37 ms, or 16.5 passages per second across the API request. The measured stages
+  were 44.32 ms for preparing and claiming the receipt, 12.85 ms for simulated embedding and
+  response validation, and 36.06 ms for saving vectors and closing the receipt.
+- **Search and accuracy** — Three repeats of a 24-byte query had a median 76.47 ms API time,
+  including 15.11 ms in simulated embedding and 13.77 ms for the database search and active
+  collection check. The expected source ranked first all three times. Each result retained
+  the original transcript unit, caption, and half-open interval. This measures ranking and
+  citation behavior with controlled vectors. Live Cohere latency, billing, and relevance
+  were unmeasured.
+- **Browser fixture** — Headless Chrome displayed 191 ms for indexing and 195 ms for search,
+  each with a deliberate 180 ms fixture delay. The browser verified cancellation, confirmation
+  before each send, cost and input disclosure, 390 px reflow, and opening the cited OCR page.
+
+Reproduce the local fixture with the current migrations applied.
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-cov \
+  tests/integration/test_workspace_sources.py::test_cohere_rebuild_and_search_bind_consent_to_profile_and_rate
+```

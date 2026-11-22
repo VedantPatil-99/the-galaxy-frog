@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from galaxy_frog.adapters.embeddings.cohere import COHERE_EMBEDDING_SPEC
 from galaxy_frog.adapters.embeddings.gemini import GEMINI_EMBEDDING_SPEC
 from galaxy_frog.adapters.embeddings.ollama import OllamaBgeM3EmbeddingProvider
 from galaxy_frog.api.errors import ApiError
@@ -45,6 +46,7 @@ class WorkspaceSemanticStatus(BaseModel):
     active_profile: EmbeddingCollectionSpec | None
     available_profile: EmbeddingCollectionSpec | None
     cloud_profile: EmbeddingCollectionSpec | None = None
+    cohere_profile: EmbeddingCollectionSpec | None = None
     indexed: int = Field(ge=0)
     total: int = Field(ge=0)
 
@@ -111,6 +113,14 @@ def _cloud_profile(request: Request) -> EmbeddingCollectionSpec | None:
             and settings.gemini_embedding_api_key is not None
             and settings.gemini_embedding_project_id is not None
         )
+        else None
+    )
+
+
+def _cohere_profile(request: Request) -> EmbeddingCollectionSpec | None:
+    return (
+        COHERE_EMBEDDING_SPEC
+        if workspace_settings(request).cohere_embedding_rate is not None
         else None
     )
 
@@ -183,6 +193,7 @@ async def semantic_index_status(
         update={
             "available_profile": await _available_spec(request),
             "cloud_profile": _cloud_profile(request),
+            "cohere_profile": _cohere_profile(request),
         }
     )
 
@@ -234,7 +245,10 @@ async def build_semantic_index(
             raise notebook_not_found() from None
         save_ms = (perf_counter() - started) * 1_000
     status = (await _status(repository, await repository.active(), spec)).model_copy(
-        update={"cloud_profile": _cloud_profile(request)}
+        update={
+            "cloud_profile": _cloud_profile(request),
+            "cohere_profile": _cohere_profile(request),
+        }
     )
     return WorkspaceSemanticBatchResponse(
         **status.model_dump(),

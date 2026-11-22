@@ -13,7 +13,7 @@ import {
 
 type Props = { notebookId: string; onOpen: (hit: WorkspaceSearchHit) => void; onExpired: () => void }
 type Operation = "status" | "index" | "search" | "preview"
-type Target = "local" | "gemini"
+type Target = "local" | NonNullable<CloudEmbeddingAction["profile"]>
 
 export function WorkspaceSemanticSearch(props: Props) {
   return <Disclosure label="Search by meaning" keepMounted={false}><SemanticPanel {...props} /></Disclosure>
@@ -31,8 +31,14 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
   const [target, setTarget] = useState<Target | null>(null)
   const [review, setReview] = useState<{ action: CloudEmbeddingAction; preview: CloudEmbeddingPreview } | null>(null)
   const [permission, setPermission] = useState(false)
-  const selected = target ?? (status?.active_profile?.provider === "gemini" ? "gemini" : "local")
-  const available = selected === "gemini" ? status?.cloud_profile : status?.available_profile
+  const activeProvider = status?.active_profile?.provider
+  const selected = target ?? (activeProvider === "cohere" ? "embed-v4.0" : activeProvider === "gemini" ? "gemini-embedding-2" : "local")
+  const available = selected === "local" ? status?.available_profile
+    : selected === "embed-v4.0" ? status?.cohere_profile : status?.cloud_profile
+  const providerName = selected === "embed-v4.0" ? "Cohere" : "Gemini"
+  const isCohereReview = review?.preview.model === "embed-v4.0"
+  const reviewName = isCohereReview ? "Cohere" : "Gemini"
+  const destination = isCohereReview ? "Cohere" : "Google Gemini"
   const compatible = Boolean(available && status?.active_profile?.revision === available.revision
     && status.active_profile.model === available.model && status.active_profile.provider === available.provider)
   const replace = Boolean(status?.active_collection && !compatible)
@@ -101,6 +107,7 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
     setReview(null)
     setPermission(false)
     void run(action.kind, async signal => {
+      if (action.kind === "search") setResult(null)
       const started = performance.now()
       const response = await confirmWorkspaceCloudEmbedding(notebookId, preview.preview_id, action, signal)
       if (signal.aborted) return
@@ -117,8 +124,8 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
 
   function build() {
     if (!available || !status) return
-    if (selected === "gemini") {
-      previewCloud({ kind: "index", expected_collection: status.active_collection, replace })
+    if (selected !== "local") {
+      previewCloud({ kind: "index", profile: selected, expected_collection: status.active_collection, replace })
       return
     }
     void run("index", async signal => {
@@ -139,8 +146,8 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
     const collection = status?.active_collection
     const submitted = query.trim()
     if (!collection || !submitted || !compatible) return
-    if (selected === "gemini") {
-      previewCloud({ kind: "search", query: submitted, collection_id: collection })
+    if (selected !== "local") {
+      previewCloud({ kind: "search", profile: selected, query: submitted, collection_id: collection })
       return
     }
     void run("search", async signal => {
@@ -154,30 +161,32 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
   return <div className="space-y-3 px-2 pt-2">
     {status ? <div className="space-y-2">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">
-        <p>{status.indexed} of {status.total} passages indexed</p>
+        <p>{status.indexed} of {status.total} passages indexed{replace ? " in the current index" : ""}</p>
         {buildTime !== null ? <ElapsedBadge elapsed={buildTime} operation="Indexing" /> : null}
       </div>
-      {status.cloud_profile || selected === "gemini" ? (
+      {status.cloud_profile || status.cohere_profile || activeProvider === "cohere" || activeProvider === "gemini" || selected !== "local" ? (
         <label className="flex flex-wrap items-center gap-2 text-sm">
           Embedding profile
           <select value={selected} disabled={operation !== null} className="min-h-11 rounded-md border border-input bg-card px-2" onChange={event => {
-            setTarget(event.target.value === "gemini" ? "gemini" : "local")
+            const profile = event.target.value
+            setTarget(profile === "gemini-embedding-2" || profile === "embed-v4.0" ? profile : "local")
             setReview(null)
             setError("")
             setResult(null)
             setBuildTime(null)
           }}>
             <option value="local">Local BGE-M3</option>
-            <option value="gemini">Gemini Embedding 2 · Cloud</option>
+            {status.cloud_profile || activeProvider === "gemini" || selected === "gemini-embedding-2" ? <option value="gemini-embedding-2">Gemini Embedding 2 · Cloud</option> : null}
+            {status.cohere_profile || activeProvider === "cohere" || selected === "embed-v4.0" ? <option value="embed-v4.0">Cohere Embed v4 · Cloud</option> : null}
           </select>
         </label>
       ) : null}
-      {available ? <p className="text-xs text-muted-foreground" title={available.revision}>{selected === "gemini" ? "Cloud · 1,536 dimensions" : `Local BGE-M3 · ${available.revision.slice(0, 12)}`}</p>
-        : <p className="text-sm text-muted-foreground">{selected === "gemini" ? "Configure the optional Gemini embedding profile to continue." : "Start Ollama with BGE-M3 to index or search."}</p>}
+      {available ? <p className="text-xs text-muted-foreground" title={available.revision}>{selected !== "local" ? `Cloud · ${available.dimension.toLocaleString()} dimensions` : `Local BGE-M3 · ${available.revision.slice(0, 12)}`}</p>
+        : <p className="text-sm text-muted-foreground">{selected !== "local" ? `Configure the optional ${providerName} embedding profile to continue.` : "Start Ollama with BGE-M3 to index or search."}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {available && status.total > 0 && (replace || status.indexed < status.total) ? (
           <Button type="button" variant="secondary" className="min-h-11" disabled={operation !== null} onClick={build}>
-            {selected === "gemini" ? replace ? "Preview Gemini rebuild" : "Preview Gemini indexing" : replace ? "Rebuild for this revision" : status.indexed ? "Index next batch" : "Build local index"}
+            {selected !== "local" ? `Preview ${providerName} ${replace ? "rebuild" : "indexing"}` : replace ? "Rebuild for this revision" : status.indexed ? "Index next batch" : "Build local index"}
           </Button>
         ) : null}
         <Button type="button" variant="ghost" className="min-h-11" disabled={operation !== null} onClick={refresh}>Refresh status</Button>
@@ -186,18 +195,27 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
     {compatible && status && status.indexed > 0 ? <form onSubmit={search} className="space-y-1.5">
       <label htmlFor={field} className="block text-sm font-medium">Topic or phrase</label>
       <div className="flex flex-wrap items-center gap-2">
-        <input id={field} type="search" maxLength={160} required value={query} onChange={event => { setQuery(event.target.value); setReview(null) }} className="min-h-11 min-w-32 flex-1 rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
-        <Button type="submit" variant="secondary" className="min-h-11" disabled={operation !== null || !query.trim()}>{selected === "gemini" ? "Preview Gemini search" : "Find related passages"}</Button>
+        <input id={field} type="search" maxLength={160} required value={query} readOnly={operation !== null} onChange={event => { setQuery(event.target.value); setReview(null) }} className="min-h-11 min-w-32 flex-1 rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
+        <Button type="submit" variant="secondary" className="min-h-11" disabled={operation !== null || !query.trim()}>{selected !== "local" ? `Preview ${providerName} search` : "Find related passages"}</Button>
       </div>
     </form> : null}
-    {review ? <section aria-label="Gemini request preview" className="space-y-2.5 rounded-md border border-border bg-card px-3 py-3 text-sm">
-      <p className="font-semibold">Review Gemini request</p>
-      <p className="wrap-anywhere">{review.action.kind === "index" ? `Send ${review.preview.inputs} ${review.preview.inputs === 1 ? "passage excerpt" : "passage excerpts"} to Google Gemini.` : `Send this query to Google Gemini: “${review.action.query}”.`}</p>
-      <p className="text-muted-foreground">Estimated list cost ${review.preview.estimated_usd} USD{review.action.kind === "index" ? ` for this batch, $${review.preview.estimated_remaining_usd} across ${review.preview.remaining_inputs} remaining passages.` : "."} The estimate uses input length.</p>
-      <p className="text-xs text-muted-foreground">Google may use free-tier inputs to improve its products. <a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-embedding-2" target="_blank" rel="noreferrer" className="underline">Gemini pricing and data use</a></p>
+    {review ? <section aria-label={`${reviewName} request preview`} className="space-y-2.5 rounded-md border border-border bg-card px-3 py-3 text-sm">
+      <p className="font-semibold">Review {reviewName} request</p>
+      <p className="wrap-anywhere">{review.action.kind === "index" ? `Send ${review.preview.inputs} ${review.preview.inputs === 1 ? "passage excerpt" : "passage excerpts"} to ${destination}.` : `Send “${review.action.query}” to ${destination}.`}</p>
+      <p className="text-muted-foreground">
+        {review.preview.pricing_basis === "trial" ? "Estimated trial cost" : isCohereReview ? "Estimated cost at the configured rate" : "Estimated list cost"} ${review.preview.estimated_usd} USD
+        {review.action.kind === "index" ? " for this batch." : "."}
+        {review.action.kind === "index" && review.preview.remaining_inputs > review.preview.inputs
+          ? ` $${review.preview.estimated_remaining_usd} USD total for all ${review.preview.remaining_inputs} passages still to index.`
+          : null}
+        {review.preview.pricing_basis === "trial" ? " For development evaluation." : " The estimate uses input length."}
+      </p>
+      {isCohereReview
+        ? <p className="text-xs text-muted-foreground">Cohere’s data-use terms depend on the account. <a href="https://cohere.com/enterprise-data-commitments" target="_blank" rel="noreferrer" className="underline">Cohere data use</a></p>
+        : <p className="text-xs text-muted-foreground">Google may use free-tier inputs to improve its products. <a href="https://ai.google.dev/gemini-api/docs/pricing#gemini-embedding-2" target="_blank" rel="noreferrer" className="underline">Gemini pricing and data use</a></p>}
       <label className="flex min-h-11 items-center gap-2">
         <input type="checkbox" checked={permission} onChange={event => setPermission(event.target.checked)} className="size-4 accent-primary" />
-        I approve sending this text to Gemini
+        I approve sending this text to {reviewName}
       </label>
       <div className="flex flex-wrap gap-2">
         <Button type="button" className="min-h-11" disabled={!permission || operation !== null} onClick={confirmCloud}>Confirm and send</Button>
