@@ -34,6 +34,21 @@ Once installed, use Impeccable for workspace UI/UX reasoning, critique, and desi
 
 Read the relevant installed skill instructions and supporting references for each workspace packet. Use the [Gemini API skill](.agents/skills/gemini-api-dev/SKILL.md) for Gemini integration in Python/FastAPI. Preserve the installed skill and MCP configuration during workspace implementation.
 
+## Agent skills
+
+### Issue tracker
+
+For engineering tickets and specs, read [Issue tracker](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Before triaging issues, read [Triage labels](docs/agents/triage-labels.md).
+
+### Domain docs
+
+For domain terminology and architecture decisions, read
+[Domain docs](docs/agents/domain.md). Galaxy Frog uses a single domain context.
+
 ## Working Method & Delivery Rules
 
 1. Inspect existing code, docs, and git status.
