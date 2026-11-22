@@ -309,14 +309,14 @@ and select supporting passages before choosing **Ask with Ollama**. The answer i
 session result in this packet. Saved answer history and recoverable runs follow in W4.2.
 [Measurement log](WORKSPACE_MEASUREMENTS.md)
 
-## Application dependencies added when needed
+## Application dependencies
 
-Install dependencies in the packet that first uses them, with the project package manager and lockfile. Do not install this entire list in advance or add paid editor extensions.
+The [web package manifest](../apps/web/package.json) and Bun lockfile include the later-phase libraries below. Add feature-specific extensions and adapters in the packets that use them.
 
-- **Remote and transient state:** consider `@tanstack/react-query` and `zustand` when shared caching or durable chat state requires them.
+- **Remote and transient state:** `@tanstack/react-query` and `zustand`.
 - **Shell:** existing shadcn Base UI components; add Resizable/Command/Toast packages only when the relevant controls need them. Doto and Commissioner use `next/font/local` with bundled WOFF2 files and OFL notices.
-- **Answers and documents:** `react-markdown`, `remark-gfm`, math/KaTeX and Shiki support, followed by Tiptap's open-source editor packages when their renderers are implemented.
-- **Maps, previews, and motion:** `@xyflow/react`, `pdfjs-dist`, and `motion` in the corresponding feature packets.
-- **Document ingestion/export:** Python `pypdf` and `python-docx` when document adapters are introduced. External OCR providers and cloud storage remain explicit optional adapters.
+- **Answers and documents:** `react-markdown`, `remark-gfm`, `remark-math`, `rehype-katex`, `katex`, `shiki`, and the Tiptap starter packages `@tiptap/react`, `@tiptap/pm`, and `@tiptap/starter-kit`.
+- **Maps, previews, and motion:** `@xyflow/react`, `pdfjs-dist`, and `motion`.
+- **Document ingestion/export:** the backend includes `pypdf`, `pypdfium2`, and `python-docx`. External OCR providers and cloud storage remain explicit optional adapters.
 
 Cloud Run, Vercel, Supabase email/storage, Tavily, and optional AWS configuration belong to their later packets. No cloud deployment, machine-level installation, model download, or automatic paid upgrade is needed to start the local foundation.
