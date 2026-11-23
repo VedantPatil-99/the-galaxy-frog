@@ -1,21 +1,22 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 
-import { pausedPlayheadMs, seekCommands, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
+import { pausedPlayheadMs, seekToMs, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 
 describe("YouTube player commands", () => {
-  test("seeks to a citation interval and resumes playback", () => {
-    const commands = seekCommands(90_500).map((command) => JSON.parse(command))
+  test("seeks to the cited millisecond through the ready player", () => {
+    const player = { seekTo: mock() }
+    seekToMs(player, 90_500)
 
     expect(YOUTUBE_PLAYER_ORIGIN).toBe("https://www.youtube-nocookie.com")
-    expect(commands).toEqual([
-      { event: "command", func: "seekTo", args: [90.5, true] },
-      { event: "command", func: "playVideo", args: [] },
-    ])
+    expect(player.seekTo).toHaveBeenCalledTimes(1)
+    expect(player.seekTo).toHaveBeenCalledWith(90.5, true)
   })
 
   test("rejects invalid citation timestamps", () => {
-    expect(() => seekCommands(-1)).toThrow(RangeError)
-    expect(() => seekCommands(Number.NaN)).toThrow(RangeError)
+    const player = { seekTo: mock() }
+    expect(() => seekToMs(player, -1)).toThrow(RangeError)
+    expect(() => seekToMs(player, Number.NaN)).toThrow(RangeError)
+    expect(player.seekTo).not.toHaveBeenCalled()
   })
 
   test("samples the current paused playhead on every request", () => {

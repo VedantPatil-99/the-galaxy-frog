@@ -3,13 +3,22 @@ import { describe, expect, spyOn, test } from "bun:test"
 import { buildUpstreamUrl, proxyRequest } from "@/lib/api/proxy"
 
 describe("API proxy", () => {
-  test("allows bounded retrieval time for search and questions", async () => {
+  test("allows bounded processing time for retrieval and document previews", async () => {
     const timeout = spyOn(AbortSignal, "timeout").mockImplementation(() => new AbortController().signal)
     try {
       for (const [path, method, expected] of [
         [["v1", "videos", "id", "search"], "POST", 300_000],
         [["v1", "videos", "id", "questions"], "POST", 300_000],
         [["v1", "videos", "import"], "POST", 120_000],
+        [["v1", "workspace", "notebooks", "id", "documents"], "POST", 60_000],
+        [["v1", "workspace", "notebooks", "id", "documents", "id", "versions", "id", "pages", "1", "image"], "GET", 60_000],
+        [["v1", "workspace", "notebooks", "id", "documents", "id", "versions", "id", "pages", "1", "ocr"], "POST", 95_000],
+        [["v1", "workspace", "notebooks", "id", "documents"], "GET", 10_000],
+        [["v1", "workspace", "notebooks", "id", "answers"], "POST", 100_000],
+        [["v1", "workspace", "notebooks", "id", "semantic-index"], "POST", 75_000],
+        [["v1", "workspace", "notebooks", "id", "semantic-search"], "POST", 75_000],
+        [["v1", "workspace", "notebooks", "id", "semantic-cloud-preview"], "POST", 10_000],
+        [["v1", "workspace", "notebooks", "id", "semantic-cloud-confirm"], "POST", 75_000],
         [["health", "live"], "GET", 10_000],
       ] as const) {
         await proxyRequest(new Request("http://web.test/api/proxy/check", { method }), path, async () => Response.json({}), "http://api.test")
@@ -44,6 +53,8 @@ describe("API proxy", () => {
           headers: {
             "X-Correlation-ID": "backend-id",
             "X-Private-Header": "not-forwarded",
+            "WWW-Authenticate": "Bearer",
+            "X-Content-Type-Options": "nosniff",
           },
         },
       )
@@ -67,6 +78,8 @@ describe("API proxy", () => {
     expect(response.headers.get("X-Correlation-ID")).toBe("backend-id")
     expect(response.headers.get("X-Private-Header")).toBeNull()
     expect(response.headers.get("Cache-Control")).toBe("no-store")
+    expect(response.headers.get("WWW-Authenticate")).toBe("Bearer")
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff")
   })
 
   test("rejects traversal paths before contacting FastAPI", async () => {

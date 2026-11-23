@@ -808,3 +808,290 @@ Hosted acceptance is limited to small synthetic Gemini answer and chapter calls.
 answer quality, larger Study materials, hosted vision/OCR/ASR/Bedrock acceptance, account billing,
 and comparative latency remain unverified. Optional adapters may remain disabled after code
 delivery. The workspace redesign and Phase 9 research are not authorized by this closeout.
+
+## Active program — Workspace redesign
+
+Authorized by the user on 2026-11-19. Phase 8 merge is user-confirmed; this program starts from
+merged `origin/main` at `4299de6` on `feat/workspace`, without repeating the Phase 8 audit.
+See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
+[design direction](docs/WORKSPACE_DESIGN.md), and [setup stages](docs/WORKSPACE_SETUP.md).
+
+- [x] W0 — Compare layout concepts, record the selected working-surface design, require local
+  design skills, specify Doto from Google Fonts, and document installation stages.
+- [x] W1.1 — Local owner-scoped account/notebook persistence, additive migration, isolation,
+  validation, and transaction tests. No HTTP exposure or automatic legacy ownership.
+- [x] W1.2 — Verified Supabase authentication, invite-only creators, generated HTTP contracts,
+  and authorization fences covering existing resource paths before workspace exposure.
+  Implementation, local API checks, and both production build modes are verified.
+  Real Supabase email-session acceptance through FastAPI passed on 2026-11-20.
+- [x] W1.3 — Private storage authorization and explicit legacy-resource ownership migration.
+  - [x] Add the local assignment migration, operator command, and authenticated source reads.
+  - [x] Implement the optional private Supabase preview reader with simulated Storage checks.
+  - [x] Provision the private preview bucket and verify live reads through FastAPI.
+  - [x] Verify that ordinary signed-in users have no direct Storage read policy.
+- [x] W2 — Both workspace layouts and typography checked locally. The user confirmed
+  the live browser callback, session persistence after refresh, and sign-out.
+- [x] W3 — Mixed-source pipeline.
+  - [x] W3.1 — Private notebook paste import for plain text and Markdown, immutable source
+    versions, stable block citations, and ownership and retry checks.
+  - [x] W3.2 — Bounded PDF, DOCX, plain text, and Markdown file import. Keep originals
+    private and preserve PDF pages and immutable text blocks in source previews.
+  - [x] W3.3 — Opt-in OCR for one selected PDF page. Save immutable OCR evidence and
+    prevent duplicate cloud processing on refresh, retries, and concurrent requests.
+  - [x] W3.4 — Notebook-wide keyword search over transcripts, documents, pasted text,
+    and saved page OCR. Open each match at its source and measure the local search path.
+  - [x] W3.5 — Answer questions from explicitly selected notebook passages using the
+    configured local model. Validate every citation and measure the answer stages.
+  - [x] W3.6 — Local semantic indexing and search with an explicit, revision-bound BGE-M3
+    embedding profile. Preserve the original evidence and measure coverage and latency.
+  - [x] W3.7 — Gemini Embedding 2 profile, cost previews, and one-use cloud confirmation
+    for index batches and semantic queries. Preserve local indexing and source citations.
+  - [x] W3.8 — Cohere Embed v4 using the same cloud confirmation and cost flow.
+- [ ] W4 — Persistent chats, drafts, branches, durable runs, and validated evidence.
+  - [x] W4.1 — Private chat library, chat names, and revisioned prompt drafts that feed
+    the existing selected-passage composer.
+    - [x] W4.1 follow-up — Recover unsent question text after refresh, tab closure,
+      sign-out, and chat switches. Mark chats with drafts and support browser Back and Forward.
+  - [ ] W4.2 — Saved grounded turns and idempotent generation runs with recovery and
+    replay of validated blocks and their source versions.
+  - [ ] W4.3 — Chat groups and organization, branching, and answer revisions.
+  - [ ] W4.4 — Bounded context summaries and chat workflow acceptance.
+- [ ] W5 — Frog Memory with provenance, retention, and deletion.
+- [ ] W6 — Frog Lab documents, study tools, reports, mind maps, versions, and exports.
+- [ ] W7 — Gallery, visual pins, and cited web research.
+- [ ] W8 — Sharing, revocation, usage limits, and hosted beta.
+- [ ] W9 — Public release checks for capacity, abuse, email delivery, accessibility, and recovery.
+
+W3 and W4.1, including draft recovery and chat navigation, passed locally. W4.2 is next.
+Record measurements as each packet is implemented and tested in
+[Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
+The user confirmed W2 live browser acceptance on 2026-11-22. The separate Supabase project
+also passed live Auth and private preview Storage
+through FastAPI in W1.
+Hosted deployment, CI, and merge are separate gates.
+Do not access Notion for this program.
+
+### W4.1 local verification — 2026-11-22
+
+- Owners can create, rename, and reopen notebook chats. The existing selected-passage
+  composer restores the selected chat's autosaved question after switching or refreshing.
+- PostgreSQL verified revision conflicts, exact prompt restoration, and private notebook
+  scope. The browser checked both conflict resolution choices and opening a cited PDF page.
+- The follow-up verified unsynced draft recovery across refresh, tab closure, sign-out,
+  and chat switches. Browser Back and Forward restored each chat independently, with a
+  pencil marker for both pending and server-saved drafts.
+- Saved answer history and recoverable runs are part of W4.2. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
+
+### W4.1 account-isolation follow-up — 2026-11-23
+
+- A verified browser session now scopes workspace state and pending requests. FastAPI
+  checks the expected account against the verified bearer before workspace access.
+- Two synthetic accounts in separate tabs verified sign-in and sign-out, stale responses,
+  browser history, preview cleanup, and owner-only draft recovery.
+  [Measurements](docs/WORKSPACE_MEASUREMENTS.md#w41-follow-up--account-isolation-across-tabs)
+
+### W3.8 local verification — 2026-11-22
+
+- Cohere Embed v4 is an optional text-only semantic profile. Owners review the passage
+  scope or query and the trial or configured-rate estimate before each dispatch.
+- PostgreSQL fixtures verified profile and rate binding, explicit rebuild, receipt reuse
+  rejection, temporal-query rejection, and preservation of the original video interval and
+  caption lineage. The browser verified cancellation, both confirmation flows, and cited
+  page navigation.
+- Local acceptance used simulated Cohere responses. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
+
+### W3.7 local verification — 2026-11-22
+
+- Gemini Embedding 2 uses a separate 1,536-dimensional notebook collection. Owners preview
+  the text scope and estimated cost, then explicitly approve each index batch or query.
+- PostgreSQL and browser fixtures verified one-use confirmation, changed or expired
+  previews, quota checks, and preservation of the original citation after reindexing.
+- The local checks used simulated Gemini responses. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
+
+### W3.6 local verification — 2026-11-22
+
+- An owner can build an explicit local BGE-M3 index in batches, inspect coverage, and
+  open semantically ranked results at their original pages, blocks, or video intervals.
+- PostgreSQL tests verified notebook isolation, no mixing of model revisions, and one
+  successful activation when two rebuilds race. The browser verified indexing and
+  search timing badges and reopening the cited OCR page.
+- The controlled database fixture and a separate run with the installed model recorded
+  latency, throughput, and ranking results. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
+
+### W3.5 local verification — 2026-11-22
+
+- Questions use selected passages from the owned notebook. FastAPI rejects stale
+  selections, unresolved temporal queries, and drafts with unverifiable citations.
+- The browser verified passage selection, the elapsed-time badge, and reopening the
+  cited PDF page. The controlled API fixture and a separate three-call run on the
+  installed `qwen3:4b` model passed. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
+
+### W3.4 local verification — 2026-11-22
+
+- The local keyword profile searches the owned notebook's saved transcripts, pasted text,
+  document extractions, and successful page OCR. Results retain exact citation coordinates.
+- Local PostgreSQL tests verified owner and notebook isolation, match accuracy on labeled
+  queries, and stable references across source previews. The browser showed the measured
+  request duration and opened the PDF match on its cited page.
+- The new indexes are additive and use installed PostgreSQL functionality. The first
+  latency, throughput, and match accuracy sample is in [Workspace measurements](docs/WORKSPACE_MEASUREMENTS.md).
+
+### W3.3 local verification — 2026-11-22
+
+- Private notebook owners can approve OCR for one PDF page with no extractable text.
+  The saved result retains the immutable source version, page number, and OCR block spans.
+- The local migration and focused PostgreSQL integration tests passed, including owner
+  isolation, literal approval, concurrent requests, timeouts, and reloads. A browser fixture
+  verified that approval is required and that OCR text opens on demand after refresh.
+- Provider protocol tests used simulated LlamaParse responses. Document OCR stays off by
+  default. A live run can use the existing LlamaCloud key and needs no new dependencies.
+
+### W3.2 local verification — 2026-11-22
+
+- Private notebooks can import PDF, DOCX, TXT, and Markdown files. Originals are kept in
+  private local storage, and repeat uploads preserve the immutable source version.
+- PDF extraction preserves page numbers, and the Sources pane renders one authorized page
+  at a time. Pages without embedded text show an OCR hint. DOCX and text sources keep stable
+  block references without invented page numbers or timestamps.
+- The additive migration, parser tests, and owner-scoped PostgreSQL integration checks passed.
+  The browser fixture verified binary upload, page navigation, reload, and mobile reflow.
+- The full backend suite passed with 1,615 tests, 4 skips, and 100% coverage. The 57 web tests,
+  lint, type checks, generated contract checks, and production build passed locally.
+
+### W3.1 local verification — 2026-11-22
+
+- Private notebooks can paste plain text or Markdown and reopen the saved version from Sources.
+  Immutable text and block spans live in local PostgreSQL. Repeating the same title, format, and
+  normalized body in a notebook reuses the same source and version, including concurrent requests.
+- Blocks identify their source version and exact half-open Unicode character ranges. They carry
+  the text slice from those coordinates. Existing video IDs and millisecond intervals are separate
+  and remain supported by the notebook video endpoints.
+- The additive local migration and 18 focused backend checks passed, including owner isolation,
+  pagination, and oversized and invalid pastes. The local browser fixture passed save, refresh,
+  and preview checks on desktop and mobile. The 57 frontend tests, lint, type checks, generated
+  contracts, and production build passed. The browser fixture uses synthetic sign-in.
+
+### W2 local verification — 2026-11-22
+
+- Notebook is the default layout. Focus, Sources, and Frog Lab reuse the same local work state.
+  Timestamp citations open the source preview and seek while the transcript stays collapsed by
+  default. Temporal anchor selection remains visible. Doto and Commissioner are served locally.
+- The signed-in shell lists and creates notebooks, reads assigned sources, and supports
+  server-side PKCE email sign-in and sign-out. The FastAPI verification and ownership fence
+  remains in force. The browser run used a synthetic answer and did not send a hosted email.
+- Browser checks covered two layouts, both themes, six viewport widths, a retained draft,
+  persisted layout choice, and keyboard access to the transcript. See
+  [workspace design verification](docs/WORKSPACE_DESIGN.md#implementation-and-verification-contract).
+
+### W1.1 local verification — 2026-11-19
+
+Migration `20261119_0018` was applied to the existing localhost PostgreSQL database. All six
+new PostgreSQL ownership checks passed, including cross-account isolation, transaction rollback,
+database constraints, and RLS without browser policies. The full backend gate passed **1,462 tests,
+four optional skips, and 100% statement/branch coverage** with `RUN_DATABASE_INTEGRATION=1`.
+Ruff lint/format, strict Pyright, and both generated-contract checks passed. The checkout's missing
+locked Google GenAI dependencies were installed with `uv sync --locked --inexact`; existing
+optional packages were preserved. No new workspace package dependencies or frontend changes
+were introduced. Browser acceptance belongs to the later shell packet. Hosted CI/merge and live
+Supabase authentication/storage acceptance are pending.
+
+### W1.2 implementation and verification — 2026-11-19
+
+- Added a request-scoped Supabase Auth verifier using the existing HTTPX dependency, confirmed
+  email creator allowlists, HTTPS origin/publishable-key validation, safe errors, and private
+  notebook/session APIs with generated OpenAPI/TypeScript contracts. No new runtime packages.
+- In private mode, all 28 global legacy API operations are locked. W1.3 uses new
+  notebook-scoped routes for assigned resources.
+  Production cannot disable this boundary. Existing local development mode is preserved.
+  The internal signed callback remains separate. See [ADR 0010](docs/adr/0010-private-workspace-auth.md).
+- Full PostgreSQL/backend gate: **1,517 passed, four optional skips, 100% statement/branch
+  coverage**. Includes real-database HTTP owner-isolation with synthetic Auth responses.
+  Ruff lint/format, strict Pyright, deterministic contracts, frontend lint/type checks,
+  all **52 frontend tests**, and the supported Webpack production build passed.
+- The normal `bun run build` initially failed in the agent execution environment during
+  Turbopack loader-worker startup. On 2026-11-19, the user's PowerShell terminal was directly
+  inspected and confirmed the standard build passed against implementation `9137ee2`:
+  Turbopack compiled in 2.9s, TypeScript finished in 2.0s, all 10 static pages were generated,
+  optimization completed, and the terminal returned to its prompt. The default-build gate is
+  closed. The supported Webpack build also passed without changing project configuration.
+- With explicit approval, Supabase read-only organization/project discovery completed. A separate
+  `galaxy-frog` project was then created in Mumbai after the operator approved creation only at
+  $0 and Supabase quoted $0/month. It reports `ACTIVE_HEALTHY`. No hosted SQL, migrations, or
+  authentication-setting changes were made. Application credentials/configuration and live
+  acceptance were completed on 2026-11-20 below; the unrelated project was not modified.
+- Browser sign-in/session UI belongs to W2. Hosted CI, merge, and hosted application deployment
+  remain separate from the completed local/API packet and live Auth acceptance below.
+
+### W1.2 live Auth acceptance — 2026-11-20
+
+- Live acceptance passed at **16:52:35 IST (11:22:35 UTC)**: real creator identity was verified
+  through FastAPI against Supabase Auth; private notebook access succeeded; anonymous requests
+  returned 401; legacy-resource requests returned 403; private responses used `no-store`; and
+  Supabase accepted logout of the test session. All six receipt checks are true.
+- With approval, connected the project's URL and modern publishable key in ignored `.env`,
+  added the selected creator email to the allowlist, and requested a test sign-in email.
+  Two further fresh-link tests were authorized in the conversation; the third email completed
+  acceptance after the user paused Raycast previews. Earlier receipts are preserved and the
+  helper prevents unapproved automatic resends.
+- Added `scripts/workspace_auth_smoke.py` and its focused tests. The helper accepts proof only
+  through a hidden local input, pins confirmation/session origins, validates identity through
+  the real FastAPI boundary against Supabase, checks private notebook access and denial paths,
+  and logs out the test session. It only uses the existing localhost application DB. Token input
+  and session values stay in memory; ignored receipts store only status, time, and boolean checks.
+- Earlier replay attempts returned `otp_expired`. Approved read-only Auth logs showed an earlier
+  successful login four seconds before the helper exchanged that link. The next test worked
+  after Raycast link previews were paused; the earlier opener remains unproven. A synthetic
+  Windows dialog transport check also returned exactly the supplied test address.
+- All 19 helper behavior tests, Ruff lint/format, and targeted strict Pyright passed. No hosted
+  database SQL, migrations, or Auth-template/settings changes were performed.
+- Final backend/PostgreSQL regression gate after local Auth configuration: **1,536 passed,
+  four optional skips, 100% statement/branch coverage**. Full backend Ruff lint/format and strict
+  Pyright, plus the helper's explicit lint/format/type checks, passed. No frontend or HTTP schema
+  changes were introduced; the previously verified frontend, contract, and build gates stand.
+- No new dependencies, frontend changes, or later-phase functionality were introduced. The
+  ordinary local application has not been switched to private mode. Setup/consent instructions
+  are recorded in [WORKSPACE_SETUP.md](docs/WORKSPACE_SETUP.md).
+- Corrected the proposed OTP template route after checking Supabase's 2026-06-03 breaking change:
+  this new Free project cannot edit templates with built-in SMTP. Custom SMTP permits editing
+  without Pro; Send Email Hook is another Free-plan option requiring a provider and handler.
+  These are optional later delivery setup. The successful check needed no SMTP provider, hook,
+  template change, paid upgrade, or installation.
+
+### W1.3 ownership and storage — 2026-11-20
+
+- Migration `20261120_0019` was applied to localhost PostgreSQL. It creates an empty
+  assignment table with RLS and leaves source data in place. Assignments require explicit
+  selection of the owner, notebook, and legacy video IDs. The operator command previews by
+  default, applies an entire batch atomically, and rejects conflicting assignments.
+- New notebook-scoped source, transcript, frame metadata, and preview reads verify the
+  creator and assignment. They preserve original IDs and time intervals and omit local
+  file locations. Existing global routes remain locked in private mode.
+- FastAPI serves bounded JPEGs from local storage or the optional private Supabase bucket.
+  The bucket's privacy is checked before fetching a deterministic object, and failures
+  return errors without switching backends. The proxy forwards the private response
+  headers. No dependencies were added.
+- Local application verification uses real PostgreSQL and synthetic Auth and Storage
+  responses. The user then provisioned the private bucket and configured the server
+  key. Live Supabase Storage and local PostgreSQL passed a disposable preview check
+  using two synthetic application identities. The owner received the exact JPEG with
+  private response headers. The other creator received 404 and an anonymous API
+  request received 401. Supabase denied direct reads without a user session, including
+  requests with only the publishable key.
+- The test removed the hosted JPEG and rolled back its local data. No existing user
+  videos were assigned or uploaded. Hosted Storage returned HTTP 400 wrapping a
+  missing-object response. The adapter now reports that specific case as a preview
+  404, verified against a vacant hosted path.
+- On 2026-11-21, read-only inspection of the Supabase dashboard confirmed zero policies for
+  `workspace-previews` and zero additional policies on `storage.objects` or `storage.buckets`.
+  The bucket is private, so ordinary signed-in callers have no direct read policy. This
+  closes the policy check. The live test used synthetic application identities for notebook
+  access and a publishable key for the direct Storage request. See
+  [the setup steps](docs/WORKSPACE_SETUP.md#w13-legacy-video-assignments-and-private-previews)
+  and [ADR 0011](docs/adr/0011-private-legacy-source-reads.md).
+- Local verification passed: 1,560 backend tests, four optional skips, and 100% statement
+  and branch coverage with PostgreSQL integration enabled. All 52 frontend tests, lint,
+  formatting, type checks, generated contracts, and the standard production build passed.
+- The Storage response follow-up passed 21 focused tests with 100% coverage of the preview
+  adapter, including PostgreSQL source isolation. Lint, formatting, types, and OpenAPI
+  freshness passed. The follow-up full rerun stalled in the existing Windows media
+  subprocess cleanup path. The 1,560-test result above is from before the follow-up.

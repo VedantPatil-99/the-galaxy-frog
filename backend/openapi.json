@@ -212,6 +212,235 @@
         "title": "ChapterRequest",
         "type": "object"
       },
+      "CloudEmbeddingConfirmation": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "discriminator": {
+              "mapping": {
+                "index": "#/components/schemas/CloudEmbeddingIndex",
+                "search": "#/components/schemas/CloudEmbeddingSearch"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CloudEmbeddingIndex"
+              },
+              {
+                "$ref": "#/components/schemas/CloudEmbeddingSearch"
+              }
+            ],
+            "title": "Action"
+          },
+          "allow_cloud": {
+            "const": true,
+            "title": "Allow Cloud",
+            "type": "boolean"
+          },
+          "preview_id": {
+            "format": "uuid",
+            "title": "Preview Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preview_id",
+          "action",
+          "allow_cloud"
+        ],
+        "title": "CloudEmbeddingConfirmation",
+        "type": "object"
+      },
+      "CloudEmbeddingIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Collection"
+          },
+          "kind": {
+            "const": "index",
+            "title": "Kind",
+            "type": "string"
+          },
+          "profile": {
+            "default": "gemini-embedding-2",
+            "enum": [
+              "gemini-embedding-2",
+              "embed-v4.0"
+            ],
+            "title": "Profile",
+            "type": "string"
+          },
+          "replace": {
+            "default": false,
+            "title": "Replace",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "expected_collection"
+        ],
+        "title": "CloudEmbeddingIndex",
+        "type": "object"
+      },
+      "CloudEmbeddingPreview": {
+        "properties": {
+          "estimated_input_tokens": {
+            "title": "Estimated Input Tokens",
+            "type": "integer"
+          },
+          "estimated_remaining_usd": {
+            "title": "Estimated Remaining Usd",
+            "type": "string"
+          },
+          "estimated_usd": {
+            "title": "Estimated Usd",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "inputs": {
+            "title": "Inputs",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "index",
+              "search"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "model": {
+            "enum": [
+              "gemini-embedding-2",
+              "embed-v4.0"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "preview_id": {
+            "format": "uuid",
+            "title": "Preview Id",
+            "type": "string"
+          },
+          "pricing_basis": {
+            "default": "list",
+            "enum": [
+              "list",
+              "configured",
+              "trial"
+            ],
+            "title": "Pricing Basis",
+            "type": "string"
+          },
+          "remaining_inputs": {
+            "title": "Remaining Inputs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "preview_id",
+          "kind",
+          "model",
+          "inputs",
+          "estimated_input_tokens",
+          "estimated_usd",
+          "remaining_inputs",
+          "estimated_remaining_usd",
+          "expires_at"
+        ],
+        "title": "CloudEmbeddingPreview",
+        "type": "object"
+      },
+      "CloudEmbeddingSearch": {
+        "additionalProperties": false,
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "search",
+            "title": "Kind",
+            "type": "string"
+          },
+          "profile": {
+            "default": "gemini-embedding-2",
+            "enum": [
+              "gemini-embedding-2",
+              "embed-v4.0"
+            ],
+            "title": "Profile",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "kind",
+          "collection_id"
+        ],
+        "title": "CloudEmbeddingSearch",
+        "type": "object"
+      },
+      "CloudIndexResult": {
+        "properties": {
+          "index": {
+            "$ref": "#/components/schemas/WorkspaceSemanticBatchResponse"
+          },
+          "kind": {
+            "const": "index",
+            "default": "index",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "title": "CloudIndexResult",
+        "type": "object"
+      },
+      "CloudSearchResult": {
+        "properties": {
+          "kind": {
+            "const": "search",
+            "default": "search",
+            "title": "Kind",
+            "type": "string"
+          },
+          "results": {
+            "$ref": "#/components/schemas/WorkspaceSemanticResults"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "CloudSearchResult",
+        "type": "object"
+      },
       "ConsentScope": {
         "additionalProperties": false,
         "properties": {
@@ -1242,6 +1471,80 @@
           "citations"
         ],
         "title": "NoteItem",
+        "type": "object"
+      },
+      "Notebook": {
+        "additionalProperties": false,
+        "description": "An owned Galaxy notebook.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "notebook_id": {
+            "format": "uuid",
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notebook_id",
+          "owner_id",
+          "title",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Notebook",
+        "type": "object"
+      },
+      "NotebookDraft": {
+        "additionalProperties": false,
+        "description": "Validated notebook name shared by creation and rename operations.",
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "NotebookDraft",
+        "type": "object"
+      },
+      "NotebookListResponse": {
+        "properties": {
+          "notebooks": {
+            "items": {
+              "$ref": "#/components/schemas/Notebook"
+            },
+            "title": "Notebooks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "notebooks"
+        ],
+        "title": "NotebookListResponse",
         "type": "object"
       },
       "OCREvidenceResponse": {
@@ -3971,10 +4274,10 @@
           }
         },
         "required": [
-          "video",
           "cues",
           "retrieval_units",
-          "transcription"
+          "transcription",
+          "video"
         ],
         "title": "TranscriptResponse",
         "type": "object"
@@ -4542,6 +4845,1575 @@
         ],
         "title": "VisualReasoningResponse",
         "type": "object"
+      },
+      "WorkspaceAccount": {
+        "additionalProperties": false,
+        "description": "An explicitly registered, verified identity; registration transfers no legacy data.",
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "created_at"
+        ],
+        "title": "WorkspaceAccount",
+        "type": "object"
+      },
+      "WorkspaceAnswerBlock": {
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceAnswerCitation"
+            },
+            "minItems": 1,
+            "title": "Citations",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "citations"
+        ],
+        "title": "WorkspaceAnswerBlock",
+        "type": "object"
+      },
+      "WorkspaceAnswerCitation": {
+        "properties": {
+          "evidence": {
+            "discriminator": {
+              "mapping": {
+                "document": "#/components/schemas/WorkspaceDocumentMatch",
+                "page_ocr": "#/components/schemas/WorkspaceDocumentMatch",
+                "text": "#/components/schemas/WorkspaceTextMatch",
+                "video": "#/components/schemas/WorkspaceVideoMatch"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceVideoMatch"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceTextMatch"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceDocumentMatch"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quote",
+          "evidence"
+        ],
+        "title": "WorkspaceAnswerCitation",
+        "type": "object"
+      },
+      "WorkspaceAnswerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_ids": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Evidence Ids",
+            "type": "array"
+          },
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "question",
+          "evidence_ids"
+        ],
+        "title": "WorkspaceAnswerRequest",
+        "type": "object"
+      },
+      "WorkspaceAnswerResponse": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceAnswerBlock"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/WorkspaceModelMetrics"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "const": "ollama",
+            "default": "ollama",
+            "title": "Provider",
+            "type": "string"
+          },
+          "timings": {
+            "$ref": "#/components/schemas/WorkspaceAnswerTimings"
+          }
+        },
+        "required": [
+          "model",
+          "blocks",
+          "timings",
+          "metrics"
+        ],
+        "title": "WorkspaceAnswerResponse",
+        "type": "object"
+      },
+      "WorkspaceAnswerTimings": {
+        "properties": {
+          "evidence_ms": {
+            "minimum": 0.0,
+            "title": "Evidence Ms",
+            "type": "number"
+          },
+          "generation_ms": {
+            "minimum": 0.0,
+            "title": "Generation Ms",
+            "type": "number"
+          },
+          "validation_ms": {
+            "minimum": 0.0,
+            "title": "Validation Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "evidence_ms",
+          "generation_ms",
+          "validation_ms"
+        ],
+        "title": "WorkspaceAnswerTimings",
+        "type": "object"
+      },
+      "WorkspaceChat": {
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "format": "uuid",
+            "title": "Chat Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/WorkspacePromptDraft"
+          },
+          "has_draft": {
+            "title": "Has Draft",
+            "type": "boolean"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "chat_id",
+          "has_draft",
+          "created_at",
+          "updated_at",
+          "draft"
+        ],
+        "title": "WorkspaceChat",
+        "type": "object"
+      },
+      "WorkspaceChatCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "format": "uuid",
+            "title": "Chat Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "chat_id"
+        ],
+        "title": "WorkspaceChatCreate",
+        "type": "object"
+      },
+      "WorkspaceChatList": {
+        "properties": {
+          "chats": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceChatSummary"
+            },
+            "title": "Chats",
+            "type": "array"
+          },
+          "next_after": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          }
+        },
+        "required": [
+          "chats",
+          "next_after"
+        ],
+        "title": "WorkspaceChatList",
+        "type": "object"
+      },
+      "WorkspaceChatName": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "WorkspaceChatName",
+        "type": "object"
+      },
+      "WorkspaceChatSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "format": "uuid",
+            "title": "Chat Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "has_draft": {
+            "title": "Has Draft",
+            "type": "boolean"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "chat_id",
+          "has_draft",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkspaceChatSummary",
+        "type": "object"
+      },
+      "WorkspaceDocumentListResponse": {
+        "properties": {
+          "next_after": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceDocumentSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources",
+          "next_after"
+        ],
+        "title": "WorkspaceDocumentListResponse",
+        "type": "object"
+      },
+      "WorkspaceDocumentMatch": {
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/WorkspaceTextBlock"
+          },
+          "kind": {
+            "enum": [
+              "document",
+              "page_ocr"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "section_number": {
+            "minimum": 1.0,
+            "title": "Section Number",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceDocumentSource"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "section_number",
+          "page_number",
+          "block"
+        ],
+        "title": "WorkspaceDocumentMatch",
+        "type": "object"
+      },
+      "WorkspaceDocumentSection": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceTextBlock"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "section_number": {
+            "title": "Section Number",
+            "type": "integer"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "version_id",
+          "section_number",
+          "page_number",
+          "text",
+          "blocks"
+        ],
+        "title": "WorkspaceDocumentSection",
+        "type": "object"
+      },
+      "WorkspaceDocumentSource": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "pdf",
+              "docx",
+              "plain",
+              "markdown"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "pages_without_text": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages Without Text"
+          },
+          "section_count": {
+            "title": "Section Count",
+            "type": "integer"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "version_id",
+          "filename",
+          "format",
+          "size_bytes",
+          "section_count",
+          "pages_without_text",
+          "created_at"
+        ],
+        "title": "WorkspaceDocumentSource",
+        "type": "object"
+      },
+      "WorkspaceFrameResponse": {
+        "properties": {
+          "capture_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Ms"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "frame_id": {
+            "format": "uuid",
+            "title": "Frame Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "frame_id",
+          "sequence",
+          "start_ms",
+          "end_ms",
+          "capture_ms"
+        ],
+        "title": "WorkspaceFrameResponse",
+        "type": "object"
+      },
+      "WorkspaceModelMetrics": {
+        "properties": {
+          "eval_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eval Count"
+          },
+          "eval_duration": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eval Duration"
+          },
+          "load_duration": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Duration"
+          },
+          "prompt_eval_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Eval Count"
+          },
+          "prompt_eval_duration": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Eval Duration"
+          }
+        },
+        "title": "WorkspaceModelMetrics",
+        "type": "object"
+      },
+      "WorkspacePageOCR": {
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "blocks": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceTextBlock"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "page_number": {
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "profile": {
+            "const": "parse-v2-fast",
+            "default": "parse-v2-fast",
+            "title": "Profile",
+            "type": "string"
+          },
+          "provider": {
+            "const": "llamaparse",
+            "default": "llamaparse",
+            "title": "Provider",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "unavailable",
+                  "not_needed",
+                  "ready"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "running",
+                  "succeeded",
+                  "no_text",
+                  "failed",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            ],
+            "title": "Status"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "version_id",
+          "page_number",
+          "status"
+        ],
+        "title": "WorkspacePageOCR",
+        "type": "object"
+      },
+      "WorkspacePageOCRConsent": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_external_page_image": {
+            "const": true,
+            "title": "Allow External Page Image",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "allow_external_page_image"
+        ],
+        "title": "WorkspacePageOCRConsent",
+        "type": "object"
+      },
+      "WorkspacePromptDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 1000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "revision"
+        ],
+        "title": "WorkspacePromptDraft",
+        "type": "object"
+      },
+      "WorkspaceSearchCue": {
+        "properties": {
+          "cue_id": {
+            "title": "Cue Id",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/TranscriptOrigin"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "transcription_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcription Run Id"
+          }
+        },
+        "required": [
+          "cue_id",
+          "origin",
+          "track_id",
+          "transcription_run_id"
+        ],
+        "title": "WorkspaceSearchCue",
+        "type": "object"
+      },
+      "WorkspaceSearchQuery": {
+        "properties": {
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "WorkspaceSearchQuery",
+        "type": "object"
+      },
+      "WorkspaceSearchResponse": {
+        "properties": {
+          "hits": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "document": "#/components/schemas/WorkspaceDocumentMatch",
+                  "page_ocr": "#/components/schemas/WorkspaceDocumentMatch",
+                  "text": "#/components/schemas/WorkspaceTextMatch",
+                  "video": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceTextMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceDocumentMatch"
+                }
+              ]
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "profile": {
+            "const": "postgres-keywords-v1",
+            "default": "postgres-keywords-v1",
+            "title": "Profile",
+            "type": "string"
+          },
+          "query_ms": {
+            "minimum": 0.0,
+            "title": "Query Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "query_ms",
+          "hits"
+        ],
+        "title": "WorkspaceSearchResponse",
+        "type": "object"
+      },
+      "WorkspaceSemanticBatchResponse": {
+        "properties": {
+          "active_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Collection"
+          },
+          "active_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "added": {
+            "minimum": 0.0,
+            "title": "Added",
+            "type": "integer"
+          },
+          "available_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cloud_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cohere_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "embedding_ms": {
+            "minimum": 0.0,
+            "title": "Embedding Ms",
+            "type": "number"
+          },
+          "indexed": {
+            "minimum": 0.0,
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "prepare_ms": {
+            "minimum": 0.0,
+            "title": "Prepare Ms",
+            "type": "number"
+          },
+          "save_ms": {
+            "minimum": 0.0,
+            "title": "Save Ms",
+            "type": "number"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_collection",
+          "active_profile",
+          "available_profile",
+          "indexed",
+          "total",
+          "added",
+          "prepare_ms",
+          "embedding_ms",
+          "save_ms"
+        ],
+        "title": "WorkspaceSemanticBatchResponse",
+        "type": "object"
+      },
+      "WorkspaceSemanticBuild": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Collection"
+          },
+          "profile": {
+            "const": "local-bge-m3",
+            "title": "Profile",
+            "type": "string"
+          },
+          "replace": {
+            "default": false,
+            "title": "Replace",
+            "type": "boolean"
+          },
+          "revision": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "revision",
+          "expected_collection"
+        ],
+        "title": "WorkspaceSemanticBuild",
+        "type": "object"
+      },
+      "WorkspaceSemanticQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[^\\x00]+$",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "collection_id"
+        ],
+        "title": "WorkspaceSemanticQuery",
+        "type": "object"
+      },
+      "WorkspaceSemanticResults": {
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "title": "Collection Id",
+            "type": "string"
+          },
+          "embedding_ms": {
+            "minimum": 0.0,
+            "title": "Embedding Ms",
+            "type": "number"
+          },
+          "hits": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "document": "#/components/schemas/WorkspaceDocumentMatch",
+                  "page_ocr": "#/components/schemas/WorkspaceDocumentMatch",
+                  "text": "#/components/schemas/WorkspaceTextMatch",
+                  "video": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/WorkspaceVideoMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceTextMatch"
+                },
+                {
+                  "$ref": "#/components/schemas/WorkspaceDocumentMatch"
+                }
+              ]
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "query_ms": {
+            "minimum": 0.0,
+            "title": "Query Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "collection_id",
+          "embedding_ms",
+          "query_ms",
+          "hits"
+        ],
+        "title": "WorkspaceSemanticResults",
+        "type": "object"
+      },
+      "WorkspaceSemanticStatus": {
+        "properties": {
+          "active_collection": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Collection"
+          },
+          "active_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cloud_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cohere_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingCollectionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "indexed": {
+            "minimum": 0.0,
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_collection",
+          "active_profile",
+          "available_profile",
+          "indexed",
+          "total"
+        ],
+        "title": "WorkspaceSemanticStatus",
+        "type": "object"
+      },
+      "WorkspaceSessionResponse": {
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/WorkspaceAccount"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "const": "creator",
+            "default": "creator",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account",
+          "email"
+        ],
+        "title": "WorkspaceSessionResponse",
+        "type": "object"
+      },
+      "WorkspaceSourceListResponse": {
+        "properties": {
+          "next_after": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceVideoSourceResponse"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources",
+          "next_after"
+        ],
+        "title": "WorkspaceSourceListResponse",
+        "type": "object"
+      },
+      "WorkspaceStatusResponse": {
+        "properties": {
+          "authentication_configured": {
+            "title": "Authentication Configured",
+            "type": "boolean"
+          },
+          "creator_access_configured": {
+            "title": "Creator Access Configured",
+            "type": "boolean"
+          },
+          "legacy_resources_available": {
+            "title": "Legacy Resources Available",
+            "type": "boolean"
+          },
+          "mode": {
+            "enum": [
+              "local",
+              "workspace"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "authentication_configured",
+          "creator_access_configured",
+          "legacy_resources_available"
+        ],
+        "title": "WorkspaceStatusResponse",
+        "type": "object"
+      },
+      "WorkspaceTextBlock": {
+        "properties": {
+          "block_id": {
+            "format": "uuid",
+            "title": "Block Id",
+            "type": "string"
+          },
+          "end_char": {
+            "title": "End Char",
+            "type": "integer"
+          },
+          "start_char": {
+            "title": "Start Char",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block_id",
+          "start_char",
+          "end_char",
+          "text"
+        ],
+        "title": "WorkspaceTextBlock",
+        "type": "object"
+      },
+      "WorkspaceTextMatch": {
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/WorkspaceTextBlock"
+          },
+          "kind": {
+            "const": "text",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceTextSource"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "block"
+        ],
+        "title": "WorkspaceTextMatch",
+        "type": "object"
+      },
+      "WorkspaceTextSource": {
+        "properties": {
+          "block_count": {
+            "title": "Block Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "plain",
+              "markdown"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "version_id",
+          "title",
+          "format",
+          "created_at",
+          "block_count"
+        ],
+        "title": "WorkspaceTextSource",
+        "type": "object"
+      },
+      "WorkspaceTextSourceListResponse": {
+        "properties": {
+          "next_after": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceTextSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources",
+          "next_after"
+        ],
+        "title": "WorkspaceTextSourceListResponse",
+        "type": "object"
+      },
+      "WorkspaceTextVersion": {
+        "properties": {
+          "block_count": {
+            "title": "Block Count",
+            "type": "integer"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceTextBlock"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "plain",
+              "markdown"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "version_id",
+          "title",
+          "format",
+          "created_at",
+          "block_count",
+          "text",
+          "blocks"
+        ],
+        "title": "WorkspaceTextVersion",
+        "type": "object"
+      },
+      "WorkspaceTranscriptResponse": {
+        "properties": {
+          "cues": {
+            "items": {
+              "$ref": "#/components/schemas/TranscriptCueResponse"
+            },
+            "title": "Cues",
+            "type": "array"
+          },
+          "retrieval_units": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalUnitResponse"
+            },
+            "title": "Retrieval Units",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceVideoSourceResponse"
+          },
+          "transcription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscriptionRunResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "cues",
+          "retrieval_units",
+          "transcription",
+          "source"
+        ],
+        "title": "WorkspaceTranscriptResponse",
+        "type": "object"
+      },
+      "WorkspaceVideoMatch": {
+        "properties": {
+          "cues": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSearchCue"
+            },
+            "minItems": 1,
+            "title": "Cues",
+            "type": "array"
+          },
+          "end_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "video",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceVideoSourceResponse"
+          },
+          "start_ms": {
+            "minimum": 0.0,
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "unit_id": {
+            "title": "Unit Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "text",
+          "unit_id",
+          "start_ms",
+          "end_ms",
+          "cues"
+        ],
+        "title": "WorkspaceVideoMatch",
+        "type": "object"
+      },
+      "WorkspaceVideoSourceResponse": {
+        "properties": {
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Url"
+          },
+          "duration_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "source_kind": {
+            "$ref": "#/components/schemas/VideoSourceKind"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "source_kind",
+          "title",
+          "duration_ms",
+          "canonical_url"
+        ],
+        "title": "WorkspaceVideoSourceResponse",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "WorkspaceBearer": {
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -6575,6 +8447,3373 @@
         "summary": "Get Transcript",
         "tags": [
           "videos"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks": {
+      "get": {
+        "operationId": "list_notebooks_v1_workspace_notebooks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotebookListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "List Notebooks",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "create_notebook_v1_workspace_notebooks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotebookDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notebook"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Create Notebook",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}": {
+      "get": {
+        "operationId": "get_notebook_v1_workspace_notebooks__notebook_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notebook"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Get Notebook",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_notebook_v1_workspace_notebooks__notebook_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotebookDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notebook"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Rename Notebook",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/answers": {
+      "post": {
+        "operationId": "answer_notebook_question_v1_workspace_notebooks__notebook_id__answers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceAnswerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Answer Notebook Question",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/chats": {
+      "get": {
+        "operationId": "list_chats_v1_workspace_notebooks__notebook_id__chats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceChatList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "List Chats",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "create_chat_v1_workspace_notebooks__notebook_id__chats_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceChatCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceChat"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Create Chat",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}": {
+      "get": {
+        "operationId": "get_chat_v1_workspace_notebooks__notebook_id__chats__chat_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chat_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Chat Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceChat"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Get Chat",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_chat_v1_workspace_notebooks__notebook_id__chats__chat_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chat_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Chat Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceChatName"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceChatSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Rename Chat",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/draft": {
+      "put": {
+        "operationId": "save_draft_v1_workspace_notebooks__notebook_id__chats__chat_id__draft_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chat_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Chat Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspacePromptDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePromptDraft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Save Draft",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/documents": {
+      "get": {
+        "operationId": "list_notebook_documents_v1_workspace_notebooks__notebook_id__documents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceDocumentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "List Notebook Documents",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "import_notebook_document_v1_workspace_notebooks__notebook_id__documents_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filename",
+            "required": true,
+            "schema": {
+              "maxLength": 160,
+              "minLength": 1,
+              "title": "Filename",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceDocumentSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Import Notebook Document",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/documents/{source_id}/versions/{version_id}/pages/{page_number}/image": {
+      "get": {
+        "operationId": "get_document_page_image_v1_workspace_notebooks__notebook_id__documents__source_id__versions__version_id__pages__page_number__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "page_number",
+            "required": true,
+            "schema": {
+              "maximum": 80,
+              "minimum": 1,
+              "title": "Page Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Get Document Page Image",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/documents/{source_id}/versions/{version_id}/pages/{page_number}/ocr": {
+      "get": {
+        "operationId": "get_page_ocr_v1_workspace_notebooks__notebook_id__documents__source_id__versions__version_id__pages__page_number__ocr_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "page_number",
+            "required": true,
+            "schema": {
+              "maximum": 80,
+              "minimum": 1,
+              "title": "Page Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePageOCR"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Get Page Ocr",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "start_page_ocr_v1_workspace_notebooks__notebook_id__documents__source_id__versions__version_id__pages__page_number__ocr_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "page_number",
+            "required": true,
+            "schema": {
+              "maximum": 80,
+              "minimum": 1,
+              "title": "Page Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspacePageOCRConsent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePageOCR"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Start Page Ocr",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/documents/{source_id}/versions/{version_id}/sections/{section_number}": {
+      "get": {
+        "operationId": "get_document_section_v1_workspace_notebooks__notebook_id__documents__source_id__versions__version_id__sections__section_number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "section_number",
+            "required": true,
+            "schema": {
+              "maximum": 80,
+              "minimum": 1,
+              "title": "Section Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceDocumentSection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Get Document Section",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/search": {
+      "post": {
+        "operationId": "search_notebook_sources_v1_workspace_notebooks__notebook_id__search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSearchQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Search Notebook Sources",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-cloud-confirm": {
+      "post": {
+        "operationId": "confirm_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudEmbeddingConfirmation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "index": "#/components/schemas/CloudIndexResult",
+                      "search": "#/components/schemas/CloudSearchResult"
+                    },
+                    "propertyName": "kind"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CloudIndexResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CloudSearchResult"
+                    }
+                  ],
+                  "title": "Response Confirm Cloud Embedding V1 Workspace Notebooks  Notebook Id  Semantic Cloud Confirm Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Confirm Cloud Embedding",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-cloud-preview": {
+      "post": {
+        "operationId": "preview_cloud_embedding_v1_workspace_notebooks__notebook_id__semantic_cloud_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "discriminator": {
+                  "mapping": {
+                    "index": "#/components/schemas/CloudEmbeddingIndex",
+                    "search": "#/components/schemas/CloudEmbeddingSearch"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CloudEmbeddingIndex"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CloudEmbeddingSearch"
+                  }
+                ],
+                "title": "Action"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudEmbeddingPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Preview Cloud Embedding",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-index": {
+      "get": {
+        "operationId": "semantic_index_status_v1_workspace_notebooks__notebook_id__semantic_index_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSemanticStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Semantic Index Status",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "build_semantic_index_v1_workspace_notebooks__notebook_id__semantic_index_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSemanticBuild"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSemanticBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Build Semantic Index",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/semantic-search": {
+      "post": {
+        "operationId": "semantic_search_v1_workspace_notebooks__notebook_id__semantic_search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSemanticQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSemanticResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Semantic Search",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/sources": {
+      "get": {
+        "operationId": "list_notebook_sources_v1_workspace_notebooks__notebook_id__sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSourceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "List Notebook Sources",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/frames": {
+      "get": {
+        "operationId": "list_notebook_frames_v1_workspace_notebooks__notebook_id__sources__video_id__frames_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceFrameResponse"
+                  },
+                  "title": "Response List Notebook Frames V1 Workspace Notebooks  Notebook Id  Sources  Video Id  Frames Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "List Notebook Frames",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/frames/{sequence}/image": {
+      "get": {
+        "operationId": "read_notebook_frame_image_v1_workspace_notebooks__notebook_id__sources__video_id__frames__sequence__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sequence",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "title": "Sequence",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {}
+            },
+            "description": "Private JPEG preview."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Read Notebook Frame Image",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/sources/{video_id}/transcript": {
+      "get": {
+        "operationId": "read_notebook_transcript_v1_workspace_notebooks__notebook_id__sources__video_id__transcript_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTranscriptResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Read Notebook Transcript",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/text-sources": {
+      "get": {
+        "operationId": "list_notebook_text_v1_workspace_notebooks__notebook_id__text_sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTextSourceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "List Notebook Text",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "paste_notebook_text_v1_workspace_notebooks__notebook_id__text_sources_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "format": {
+                    "enum": [
+                      "plain",
+                      "markdown"
+                    ],
+                    "title": "Format",
+                    "type": "string"
+                  },
+                  "text": {
+                    "maxLength": 65536,
+                    "minLength": 1,
+                    "title": "Text",
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "pattern": "^[^\\x00]+$",
+                    "title": "Title",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "format",
+                  "text"
+                ],
+                "title": "WorkspaceTextDraft",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTextVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Paste Notebook Text",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/text-sources/{source_id}/versions/{version_id}": {
+      "get": {
+        "operationId": "get_notebook_text_version_v1_workspace_notebooks__notebook_id__text_sources__source_id__versions__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTextVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Get Notebook Text Version",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/session": {
+      "get": {
+        "operationId": "workspace_session_v1_workspace_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Workspace Session",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/status": {
+      "get": {
+        "operationId": "workspace_status_v1_workspace_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Workspace Status",
+        "tags": [
+          "workspace"
         ]
       }
     }

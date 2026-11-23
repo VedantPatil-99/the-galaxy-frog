@@ -1,6 +1,10 @@
 "use client"
 
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react"
+import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp"
+import { PlayIcon } from "@phosphor-icons/react/dist/csr/Play"
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
+import { VideoCameraIcon } from "@phosphor-icons/react/dist/csr/VideoCamera"
 
 import { IngestionProgress } from "@/components/ingestion-progress"
 import { ProviderRun } from "@/components/provider-run"
@@ -9,6 +13,9 @@ import { MomentPlayer } from "@/components/moment-player"
 import { StudyWorkspace } from "@/components/study-workspace"
 import { TranscriptionEvidence } from "@/components/transcription-evidence"
 import { RetrievalEvidence } from "@/components/retrieval-evidence"
+import { Button } from "@/components/ui/button"
+import { Disclosure } from "@/components/ui/disclosure"
+import { WorkspaceShell, type WorkspacePane } from "@/components/workspace-shell"
 import {
   ApiClientError,
   askVideoQuestion,
@@ -30,7 +37,6 @@ import type {
   RetrievalMode,
 } from "@/lib/api/contracts"
 import { getImportConsent } from "@/lib/api/providers"
-import { seekCommands, YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 import { timestamp } from "@/lib/timestamp"
 
 function errorMessage(error: unknown): string {
@@ -63,7 +69,10 @@ function rememberJob(jobId: string | null) {
 }
 
 export function TranscriptWorkspace() {
-  const player = useRef<HTMLIFrameElement>(null)
+  const previewTitle = useRef<HTMLHeadingElement>(null)
+  const importField = useRef<HTMLInputElement>(null)
+  const [pane, setPane] = useState<WorkspacePane>("work")
+  const [seekRequest, setSeekRequest] = useState<{ milliseconds: number } | null>(null)
   const [sourceUrl, setSourceUrl] = useState("")
   const [question, setQuestion] = useState("")
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null)
@@ -76,6 +85,7 @@ export function TranscriptWorkspace() {
   const [events, setEvents] = useState<IngestionEventsResponse["events"]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [sourceError, setSourceError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [jobActionPending, setJobActionPending] = useState(false)
   const [asking, setAsking] = useState(false)
@@ -85,6 +95,7 @@ export function TranscriptWorkspace() {
   const setImportGrant = importPolicy.setGrantId
 
   const restoreRequest = useRef<AbortController | null>(null)
+  const [resultMode, setResultMode] = useState<"search" | "question">("question")
 
   useEffect(() => {
     const params = new URL(window.location.href).searchParams
@@ -117,11 +128,16 @@ export function TranscriptWorkspace() {
   }, [setImportGrant])
 
   function seekTo(milliseconds: number) {
-    for (const command of seekCommands(milliseconds)) {
-      player.current?.contentWindow?.postMessage(command, YOUTUBE_PLAYER_ORIGIN)
-    }
-    player.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    setPane("sources")
+    setSeekRequest({ milliseconds })
   }
+
+  useEffect(() => {
+    if (!seekRequest) return
+    const target = previewTitle.current
+    target?.focus({ preventScroll: true })
+    target?.scrollIntoView({ block: "nearest" })
+  }, [seekRequest])
 
   async function refreshJobProgress(nextJob: IngestionJobResponse) {
     setJob(nextJob)
@@ -138,7 +154,7 @@ export function TranscriptWorkspace() {
       onUpdate: refreshJobProgress,
     })
     if (completed.status === "failed") {
-      setError(completed.last_error_message ?? "The ingestion job could not continue.")
+      setSourceError(completed.last_error_message ?? "The ingestion job could not continue.")
       return
     }
     if (completed.status === "cancelled") {
@@ -175,10 +191,12 @@ export function TranscriptWorkspace() {
     setStoredJobId(null)
     setImporting(true)
     setError(null)
+    setSourceError(null)
     setNotice(null)
     setAnswer(null)
     setRetrieval(null)
     setTranscript(null)
+    setSeekRequest(null)
     setJob(null)
     setEvents([])
     try {
@@ -196,7 +214,7 @@ export function TranscriptWorkspace() {
       )
       await monitorIngestion(imported.job, imported.reused)
     } catch (caught) {
-      setError(errorMessage(caught))
+      setSourceError(errorMessage(caught))
     } finally {
       setImporting(false)
     }
@@ -205,7 +223,7 @@ export function TranscriptWorkspace() {
   async function handleCancel() {
     if (job === null) return
     setJobActionPending(true)
-    setError(null)
+    setSourceError(null)
     try {
       const updated = await cancelIngestionJob(job.job_id)
       await refreshJobProgress(updated)
@@ -215,7 +233,7 @@ export function TranscriptWorkspace() {
           : "Cancellation requested. The worker will stop at a safe checkpoint.",
       )
     } catch (caught) {
-      setError(errorMessage(caught))
+      setSourceError(errorMessage(caught))
     } finally {
       setJobActionPending(false)
     }
@@ -225,7 +243,7 @@ export function TranscriptWorkspace() {
     if (job === null) return
     setJobActionPending(true)
     setImporting(true)
-    setError(null)
+    setSourceError(null)
     setNotice(null)
     try {
       const selected = await importPolicy.selection(job.external_id) ?? {
@@ -236,7 +254,7 @@ export function TranscriptWorkspace() {
       setNotice(`Retry queued from the ${retried.stage.replaceAll("_", " ")} checkpoint.`)
       await monitorIngestion(retried, true)
     } catch (caught) {
-      setError(errorMessage(caught))
+      setSourceError(errorMessage(caught))
     } finally {
       setJobActionPending(false)
       setImporting(false)
@@ -248,20 +266,20 @@ export function TranscriptWorkspace() {
     await submitQuery()
   }
 
-  function clearResults() {
-    setAnswer(null)
-    setRetrieval(null)
-    setFailedQuery(null)
-    setError(null)
+  function clearPendingAnchor() {
+    if (retrieval?.status === "anchor_selection_required" || retrieval?.status === "anchor_unresolved") {
+      setRetrieval(null)
+    }
   }
 
   async function submitQuery(selectedAnchor?: string) {
-    if (transcript === null) return
+    if (transcript === null || !question.trim()) return
     setAsking(true)
     setError(null)
     setAnswer(null)
     setRetrieval(null)
     setFailedQuery(null)
+    setResultMode(evidenceOnly ? "search" : "question")
     try {
       const options = { mode: retrievalMode, selected_anchor: selectedAnchor, limit: 8, allow_fallback: true, allow_external_frames: false }
       if (evidenceOnly) {
@@ -289,85 +307,138 @@ export function TranscriptWorkspace() {
     }
   }
 
-  return (
-    <section aria-labelledby="workspace-title" className="mx-auto w-full max-w-7xl px-5 pb-16 sm:px-7 lg:px-10">
-      <div className="mb-7 max-w-3xl">
-        <p className="mb-3 font-mono text-xs tracking-[0.22em] text-primary uppercase">Phase 3 · Temporal evidence</p>
-        <h1 id="workspace-title" className="font-heading text-4xl leading-tight font-semibold tracking-[-0.04em] sm:text-5xl">Ask the video. Keep the receipts.</h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Import a public YouTube video. Galaxy Frog uses viable captions first and transcribes locally by default. Answers link to the original evidence.</p>
-      </div>
+  const video = transcript?.video
+  const originalVideo = video ? new URL(video.canonical_url) : null
+  if (seekRequest) originalVideo?.searchParams.set("t", String(Math.floor(seekRequest.milliseconds / 1000)))
 
-      <form onSubmit={handleImport} className="rounded-2xl border bg-card p-3 shadow-sm sm:flex sm:items-center sm:gap-3">
-        <label htmlFor="source-url" className="sr-only">Public YouTube URL</label>
-        <input id="source-url" type="url" required value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=…" className="h-11 w-full rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
-        <button type="submit" disabled={importing || asking} className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0 sm:w-auto">{importing ? "Following durable job…" : "Queue video"}</button>
-      </form>
-      <div className="mt-3">
-        <ProviderSelectionFields control={importPolicy} busy={importing} />
-      </div>
-
-      <div aria-live="polite" className="min-h-12 py-3 text-sm">
-        {notice ? <p className="text-chart-4 dark:text-chart-2">{notice}</p> : null}
-        {error ? <p role="alert" className="text-destructive">{error}</p> : null}
-      </div>
-
-      {job ? (
-        <IngestionProgress
-          job={job}
-          events={events}
-          actionPending={jobActionPending}
-          onCancel={handleCancel}
-          onRetry={handleRetry}
+  const importForm = (
+    <div className="space-y-3">
+      <form onSubmit={handleImport} className="space-y-2">
+        <label htmlFor="source-url" className="block text-sm font-medium">YouTube link</label>
+        <input
+          ref={importField}
+          id="source-url"
+          type="url"
+          required
+          value={sourceUrl}
+          onChange={(event) => setSourceUrl(event.target.value)}
+          placeholder="https://youtu.be/…"
+          className="min-h-11 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
         />
-      ) : null}
-      {job || storedJobId ? (
-        <ProviderRun operation="import" runId={job?.job_id ?? storedJobId ?? ""} refresh={events.length} />
-      ) : null}
+        <Button type="submit" disabled={importing || asking} className="min-h-11 w-full">
+          <PlusIcon aria-hidden="true" /> {importing ? "Adding video…" : "Add video"}
+        </Button>
+      </form>
+      <Disclosure label="Import settings">
+        <ProviderSelectionFields control={importPolicy} busy={importing} />
+      </Disclosure>
+    </div>
+  )
 
-      {transcript === null ? (
-        <div className="grid min-h-80 place-items-center rounded-3xl border border-dashed bg-muted/30 px-6 text-center">
-          <div className="max-w-md">
-            <p className="font-heading text-xl font-semibold">Your evidence workspace is ready.</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Caption-first by default. When captions cannot produce usable evidence, the worker acquires bounded local audio and records exactly why ASR was selected.</p>
+  return (
+    <WorkspaceShell
+      title="Local workspace"
+      pane={pane}
+      onPaneChange={setPane}
+      galaxy={
+        <div className="space-y-2">
+          <h2 className="px-2 text-sm font-semibold">Notebooks</h2>
+          <Button variant="secondary" className="min-h-11 w-full justify-start px-2" onClick={() => setPane("work")} aria-current="page">Local workspace</Button>
+        </div>
+      }
+      sources={
+        <div className="space-y-3">
+          <h2 ref={previewTitle} tabIndex={-1} className="rounded text-base font-semibold">{video ? "Source preview" : "Sources"}</h2>
+          {video && transcript ? (
+            <Fragment key={video.video_id}>
+              <div>
+                <p className="font-semibold leading-snug">{video.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{video.channel_name ?? "YouTube"} · {timestamp(video.duration_ms)}</p>
+              </div>
+              {seekRequest ? <p role="status" className="text-sm text-primary">Cited moment · {timestamp(seekRequest.milliseconds)}</p> : null}
+              <MomentPlayer video={video} seekRequest={seekRequest} />
+              {originalVideo ? <a href={originalVideo.href} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center text-sm text-primary underline underline-offset-4">Open {seekRequest ? "cited moment" : "video"} on YouTube</a> : null}
+              <Disclosure label="Full transcript" details={`${transcript.cues.length} cues`} keepMounted={false}>
+                <div className="max-h-96 divide-y overflow-y-auto">
+                  {transcript.cues.map((cue) => (
+                    <button key={cue.cue_id} type="button" onClick={() => seekTo(cue.start_ms)} className="grid min-h-11 w-full grid-cols-[3.25rem_minmax(0,1fr)] gap-2 rounded px-2 py-2.5 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                      <span className="font-mono text-xs font-semibold text-primary">{timestamp(cue.start_ms)}</span>
+                      <span className="text-sm leading-6">
+                        {cue.text}
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {timestamp(cue.start_ms)}–{timestamp(cue.end_ms)} · {cue.origin === "asr"
+                            ? `ASR${cue.confidence === null ? "" : ` · ${Math.round(cue.confidence * 100)}% confidence`}`
+                            : `${cue.caption_kind ?? "Source"} caption`}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Disclosure>
+              {transcript.transcription ? <Disclosure label="Transcription details"><TranscriptionEvidence transcription={transcript.transcription} /></Disclosure> : null}
+              <Disclosure label="Replace video">{importForm}</Disclosure>
+            </Fragment>
+          ) : importForm}
+          <div aria-live="polite" className="space-y-1 text-sm">
+            {notice ? <p className="text-muted-foreground">{notice}</p> : null}
+            {sourceError ? <p role="alert" className="text-destructive">{sourceError}</p> : null}
           </div>
+          {job ? (
+            <IngestionProgress job={job} events={events} actionPending={jobActionPending} onCancel={handleCancel} onRetry={handleRetry} />
+          ) : null}
+          {job || storedJobId ? <ProviderRun operation="import" runId={job?.job_id ?? storedJobId ?? ""} refresh={events.length} /> : null}
+        </div>
+      }
+      lab={video ? <StudyWorkspace key={video.video_id} videoId={video.video_id} onSeek={seekTo} /> : undefined}
+    >
+      {!video ? (
+        <div className="max-w-[50ch] py-5 sm:py-10">
+          <span className="mb-5 inline-grid size-12 place-items-center rounded-lg bg-secondary text-primary"><VideoCameraIcon aria-hidden="true" className="size-6" /></span>
+          <h1 className="text-3xl leading-tight font-semibold tracking-tight sm:text-4xl">Start with a video</h1>
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground">Add a YouTube video to ask questions and check answers at the moments they came from.</p>
+          <Button type="button" onClick={() => {
+            setPane("sources")
+            requestAnimationFrame(() => importField.current?.focus())
+          }} className="workspace-empty-import mt-6 min-h-11 gap-2 px-4"><PlusIcon aria-hidden="true" /> Add a video</Button>
+          {importing ? <p role="status" className="mt-4 text-sm text-muted-foreground">Preparing your video. See Sources for progress.</p> : null}
+          {error ? <p role="alert" className="mt-4 text-sm text-destructive">{error}</p> : null}
         </div>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
-          <div className="space-y-5">
-            <article className="overflow-hidden rounded-3xl border bg-card shadow-sm">
-              <MomentPlayer key={transcript.video.video_id} video={transcript.video} iframeRef={player} />
-              <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="font-heading text-xl font-semibold">{transcript.video.title}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">{transcript.video.channel_name ?? "YouTube"}</p>
-                </div>
-                <div className="flex gap-2 text-xs">
-                  <span className="rounded-full border px-2.5 py-1">Transcript ready</span>
-                  <span className="rounded-full border px-2.5 py-1">{transcript.video.index_ready ? "Dense index ready" : "Lexical evidence available"}</span>
-                </div>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl leading-tight font-semibold tracking-tight">Ask about this video</h1>
+            <Button variant="ghost" onClick={() => setPane("sources")} className="mt-1.5 min-h-11 max-w-full justify-start px-1 text-muted-foreground">
+              <VideoCameraIcon aria-hidden="true" /><span className="truncate">{video.title}</span>
+            </Button>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-input bg-card focus-within:border-ring">
+            <form onSubmit={handleQuestion}>
+              <label htmlFor="question" className="sr-only">Question about this video</label>
+              <textarea
+                id="question"
+                required
+                rows={3}
+                disabled={asking}
+                maxLength={2000}
+                value={question}
+                onChange={(event) => { setQuestion(event.target.value); clearPendingAnchor() }}
+                placeholder="What does the speaker say about…?"
+                className="block min-h-24 w-full resize-y bg-transparent px-4 pt-3 text-base leading-relaxed focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+                <Button variant={evidenceOnly ? "secondary" : "ghost"} type="button" disabled={asking} aria-pressed={evidenceOnly} className="min-h-11" onClick={() => { setEvidenceOnly(!evidenceOnly); clearPendingAnchor() }}>
+                  Evidence only
+                </Button>
+                <Button type="submit" disabled={asking || !question.trim()} className="min-h-11 gap-2 px-4">
+                  {asking ? "Checking…" : evidenceOnly ? "Find evidence" : "Ask"} <ArrowUpIcon aria-hidden="true" />
+                </Button>
               </div>
-            </article>
-
-            <TranscriptionEvidence transcription={transcript.transcription} />
-            <StudyWorkspace key={transcript.video.video_id} videoId={transcript.video.video_id} onSeek={seekTo} />
-
-            <article className="rounded-3xl border bg-card p-5 shadow-sm sm:p-6">
-              <div className="mb-4">
-                <p className="font-mono text-[0.68rem] tracking-[0.18em] text-primary uppercase">Grounded question</p>
-                <h2 className="mt-1 font-heading text-xl font-semibold">What do you want to verify?</h2>
-              </div>
-              <form onSubmit={handleQuestion} className="flex flex-col gap-3 sm:flex-row">
-                <label htmlFor="question" className="sr-only">Question about this video</label>
-                <input id="question" required disabled={asking} maxLength={2000} value={question} onChange={(event) => { setQuestion(event.target.value); clearResults() }} placeholder="What does the speaker say about…?" className="h-11 min-w-0 flex-1 rounded-xl border bg-background px-4 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15" />
-                <button type="submit" disabled={asking} className="h-11 rounded-xl bg-foreground px-5 text-sm font-semibold text-background disabled:opacity-60">{asking ? "Checking evidence…" : evidenceOnly ? "Find evidence" : "Ask"}</button>
-              </form>
-              <div className="mt-3">
+            </form>
+            <Disclosure label="Question settings" details={evidenceOnly ? "Search only" : undefined}>
+              <div className="space-y-3 px-3">
                 <ProviderSelectionFields control={questionPolicy} busy={asking} evidenceOnly={evidenceOnly} />
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
-                <label className="flex items-center gap-2"><input type="checkbox" checked={evidenceOnly} disabled={asking} onChange={event => { setEvidenceOnly(event.target.checked); clearResults() }} />Evidence only · no answer generation</label>
-                <label className="flex items-center gap-2">Retrieval method
-                  <select value={retrievalMode} disabled={asking} onChange={event => { setRetrievalMode(event.target.value as RetrievalMode); clearResults() }} className="rounded-lg border bg-background p-2 text-xs">
+                <label className="flex flex-wrap items-center gap-2 text-sm">Retrieval method
+                  <select value={retrievalMode} disabled={asking} onChange={event => { setRetrievalMode(event.target.value as RetrievalMode); clearPendingAnchor() }} className="min-h-10 rounded-md border bg-background p-2 text-sm">
                     <option value="reranked">Hybrid + reranking</option>
                     <option value="hybrid">Hybrid</option>
                     <option value="lexical">Exact terms</option>
@@ -375,69 +446,48 @@ export function TranscriptWorkspace() {
                   </select>
                 </label>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">Try a name, a quoted phrase, “before 02:30”, or “after the introduction”.</p>
-              {asking ? <p role="status" className="mt-3 text-sm text-muted-foreground">Retrieving evidence. This can take a few minutes.</p> : null}
-              {error ? (
-                <div role="alert" className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-                  <p className="font-semibold">Unable to complete request</p>
-                  <p className="mt-1 leading-6">{error}</p>
-                </div>
-              ) : null}
-
-              {answer ? (
-                <div className="mt-6 border-t pt-6">
-                  <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">{answer.confidence} confidence</span>
-                    <span>{answer.evidence.length + (answer.visual_evidence?.length ?? 0)} citations</span>
-                  </div>
-                  <p className="text-base leading-7">{answer.answer}</p>
-                  {answer.warnings.map((warning) => <p key={warning} className="mt-3 text-sm text-muted-foreground">{warning}</p>)}
-                  <div className="mt-5 space-y-3">
-                    {answer.visual_evidence?.map(frame => <button key={frame.frame_id} type="button" onClick={() => seekTo(frame.capture_ms ?? frame.start_ms)} className="block w-full rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left hover:border-primary/45">
-                      <span className="font-mono text-xs font-semibold text-primary">{timestamp(frame.start_ms)}–{timestamp(frame.end_ms)} · visual citation{frame.capture_ms != null ? ` · captured ${timestamp(frame.capture_ms)}` : ""}</span>
-                      <span className="mt-2 block break-all text-xs">Frame {frame.frame_id}</span>
-                    </button>)}
-                    {answer.evidence.map((item) => (
-                      <button key={item.retrieval_unit_id} type="button" onClick={() => seekTo(item.start_ms)} className="block w-full rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left transition hover:border-primary/45 hover:bg-primary/10">
-                        <span className="font-mono text-xs font-semibold text-primary">{timestamp(item.start_ms)}–{timestamp(item.end_ms)} · transcript</span>
-                        <span className="mt-2 block text-sm leading-6">“{item.quote}”</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {retrieval ? <RetrievalEvidence key={retrieval.trace_id} result={retrieval} pending={asking} onSelectAnchor={submitQuery} onSeek={seekTo} /> : null}
-              {retrieval ? <ProviderRun operation={evidenceOnly ? "search" : "question"} runId={retrieval.trace_id} /> : null}
-              {failedQuery ? <ProviderRun operation={failedQuery.operation} runId={failedQuery.traceId} /> : null}
-            </article>
+            </Disclosure>
           </div>
+          {asking ? <p role="status" className="text-sm text-muted-foreground">Checking the video for relevant evidence…</p> : null}
+          {error ? <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{error}</p> : null}
 
-          <aside className="rounded-3xl border bg-card shadow-sm lg:sticky lg:top-6 lg:flex lg:max-h-[calc(100vh-3rem)] lg:flex-col">
-            <div className="border-b p-5">
-              <p className="font-mono text-[0.68rem] tracking-[0.18em] text-primary uppercase">Source cues</p>
-              <div className="mt-1 flex items-end justify-between">
-                <h2 className="font-heading text-xl font-semibold">Transcript</h2>
-                <span className="text-xs text-muted-foreground">{transcript.cues.length} cues</span>
+          {answer ? (
+            <article aria-label="Answer" className="space-y-4 border-t pt-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-xl font-semibold">Answer</h2>
+                <span className="text-sm text-muted-foreground">{answer.confidence} confidence</span>
               </div>
-            </div>
-            <div className="divide-y overflow-y-auto">
-              {transcript.cues.map((cue) => (
-                <button key={cue.cue_id} type="button" onClick={() => seekTo(cue.start_ms)} className="grid w-full grid-cols-[3.5rem_1fr] gap-3 p-4 text-left transition hover:bg-muted/60">
-                  <span className="font-mono text-xs font-semibold text-primary">{timestamp(cue.start_ms)}</span>
-                  <span>
-                    <span className="block text-sm leading-6">{cue.text}</span>
-                    <span className="mt-1 block text-[0.68rem] text-muted-foreground uppercase">
-                      {cue.origin === "asr"
-                        ? `ASR${cue.confidence === null ? "" : ` · ${Math.round(cue.confidence * 100)}% confidence`}`
-                        : `${cue.caption_kind ?? "source"} caption`}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </aside>
+              <p className="max-w-[72ch] whitespace-pre-line text-base leading-[1.65]">{answer.answer}</p>
+              {answer.warnings.map((warning) => <p key={warning} className="text-sm text-muted-foreground">{warning}</p>)}
+              {answer.evidence.length > 0 || Boolean(answer.visual_evidence?.length) ? (
+                <div>
+                  <h3 className="mb-1 text-sm font-semibold">Citations</h3>
+                  <ul className="divide-y">
+                    {answer.evidence.map((item) => (
+                      <li key={item.retrieval_unit_id} className="flex flex-wrap items-baseline gap-x-3 py-2">
+                        <Button variant="secondary" type="button" className="min-h-11 font-mono" onClick={() => seekTo(item.start_ms)}>
+                          <PlayIcon aria-hidden="true" /> {timestamp(item.start_ms)}–{timestamp(item.end_ms)}
+                        </Button>
+                        <p className="min-w-0 flex-1 basis-48 text-sm leading-6 text-muted-foreground">“{item.quote}”</p>
+                      </li>
+                    ))}
+                    {answer.visual_evidence?.map(frame => (
+                      <li key={frame.frame_id} className="py-2">
+                        <Button variant="secondary" type="button" className="min-h-11" onClick={() => seekTo(frame.capture_ms ?? frame.start_ms)}>
+                          <PlayIcon aria-hidden="true" /> <span className="font-mono">{timestamp(frame.start_ms)}–{timestamp(frame.end_ms)}</span> On-screen evidence
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </article>
+          ) : null}
+          {retrieval ? <RetrievalEvidence key={retrieval.trace_id} result={retrieval} pending={asking} onSelectAnchor={submitQuery} onSeek={seekTo} showMatches={resultMode === "search"} /> : null}
+          {retrieval ? <ProviderRun operation={resultMode} runId={retrieval.trace_id} /> : null}
+          {failedQuery ? <ProviderRun operation={failedQuery.operation} runId={failedQuery.traceId} /> : null}
         </div>
       )}
-    </section>
+    </WorkspaceShell>
   )
 }

@@ -91,13 +91,18 @@ class RetrievalUnitResponse(BaseModel):
     cue_ids: list[str]
 
 
-class TranscriptResponse(BaseModel):
-    """Complete transcript projection used by the Phase 1 UI."""
+class TranscriptEvidenceResponse(BaseModel):
+    """Transcript intervals and original citation provenance."""
 
-    video: VideoResponse
     cues: list[TranscriptCueResponse]
     retrieval_units: list[RetrievalUnitResponse]
     transcription: TranscriptionRunResponse | None
+
+
+class TranscriptResponse(TranscriptEvidenceResponse):
+    """Complete transcript projection used by the Phase 1 UI."""
+
+    video: VideoResponse
 
 
 class QuestionRequest(RetrievalOptions):

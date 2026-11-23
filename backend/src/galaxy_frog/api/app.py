@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from galaxy_frog.adapters.dispatch.local import LocalJobDispatcher
@@ -15,6 +15,8 @@ from galaxy_frog.adapters.reranking.bge import BgeTranscriptReranker
 from galaxy_frog.adapters.video_sources.youtube import YouTubeSource
 from galaxy_frog.adapters.vision.reasoning import GeminiVisualReasoner, OllamaQwenVisualReasoner
 from galaxy_frog.adapters.vision.siglip import SiglipEmbeddingProvider
+from galaxy_frog.adapters.workspace_documents import WorkspaceDocumentProcessor
+from galaxy_frog.adapters.workspace_page_ocr import LlamaParsePageOCR
 from galaxy_frog.api.errors import register_error_handlers
 from galaxy_frog.api.middleware import correlation_id_middleware
 from galaxy_frog.api.routes.health import router as health_router
@@ -24,6 +26,13 @@ from galaxy_frog.api.routes.providers import router as providers_router
 from galaxy_frog.api.routes.retrieval import router as retrieval_router
 from galaxy_frog.api.routes.study import router as study_router
 from galaxy_frog.api.routes.videos import router as videos_router
+from galaxy_frog.api.routes.workspace import router as workspace_router
+from galaxy_frog.api.routes.workspace_chats import router as workspace_chats_router
+from galaxy_frog.api.routes.workspace_semantic import router as workspace_semantic_router
+from galaxy_frog.api.routes.workspace_semantic_cloud import (
+    router as workspace_semantic_cloud_router,
+)
+from galaxy_frog.api.workspace_auth import require_legacy_resource_access
 from galaxy_frog.application.provider_registry import local_ollama_origin
 from galaxy_frog.config import Settings
 from galaxy_frog.db.engine import create_database_engine
@@ -137,11 +146,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_error_handlers(application)
     application.include_router(health_router)
     application.include_router(internal_dispatch_router)
-    application.include_router(jobs_router)
-    application.include_router(providers_router)
-    application.include_router(videos_router)
-    application.include_router(retrieval_router)
-    application.include_router(study_router)
+    legacy = APIRouter(dependencies=[Depends(require_legacy_resource_access)])
+    legacy.include_router(jobs_router)
+    legacy.include_router(providers_router)
+    legacy.include_router(videos_router)
+    legacy.include_router(retrieval_router)
+    legacy.include_router(study_router)
+    application.include_router(legacy)
+    application.state.workspace_document_processor = WorkspaceDocumentProcessor()
+    key = resolved_settings.llama_cloud_api_key
+    application.state.workspace_page_ocr_provider = (
+        LlamaParsePageOCR(key, resolved_settings.llama_cloud_base_url)
+        if resolved_settings.workspace_document_ocr_enabled
+        and key is not None
+        and resolved_settings.llama_cloud_base_url.startswith("https://")
+        else None
+    )
+    application.include_router(workspace_router)
+    application.include_router(workspace_chats_router)
+    application.include_router(workspace_semantic_router)
+    application.include_router(workspace_semantic_cloud_router)
     return application
 
 

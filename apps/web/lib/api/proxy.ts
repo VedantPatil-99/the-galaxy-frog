@@ -1,4 +1,5 @@
 import type { ApiErrorResponse } from "@/lib/api/contracts"
+import { workspaceAccountHeader } from "@/lib/workspace-session-marker"
 
 const DEFAULT_FASTAPI_BASE_URL = "http://127.0.0.1:8000"
 const CORRELATION_ID_HEADER = "X-Correlation-ID"
@@ -13,6 +14,8 @@ const RESPONSE_HEADERS = [
   "content-disposition",
   "content-type",
   "retry-after",
+  "www-authenticate",
+  "x-content-type-options",
   "x-correlation-id",
 ] as const
 const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD"])
@@ -154,6 +157,7 @@ export async function proxyRequest(
   path: readonly string[],
   fetcher: Fetcher = fetch,
   baseUrl = process.env.FASTAPI_BASE_URL ?? DEFAULT_FASTAPI_BASE_URL,
+  workspaceToken?: string,
 ): Promise<Response> {
   let upstreamUrl: URL
   try {
@@ -178,14 +182,32 @@ export async function proxyRequest(
     path[1] === "videos"
   const isRetrievalRequest = isVideoPost &&
     (path[3] === "search" || path[3] === "questions" || path[3] === "explain-moment")
+  const isDocumentProcessing = path[0] === "v1" && path[1] === "workspace" &&
+    path[2] === "notebooks" && path[4] === "documents" &&
+    (request.method === "POST" || (request.method === "GET" && path[10] === "image"))
+  const isPageOcr = isDocumentProcessing && request.method === "POST" && path[10] === "ocr"
+  const isWorkspaceAnswer = request.method === "POST" && path[0] === "v1" && path[1] === "workspace"
+    && path[2] === "notebooks" && path[4] === "answers" && path.length === 5
+  const isWorkspaceSemantic = request.method === "POST" && path[0] === "v1" && path[1] === "workspace"
+    && path[2] === "notebooks" && path.length === 5
+    && (path[4] === "semantic-index" || path[4] === "semantic-search" || path[4] === "semantic-cloud-confirm")
   const timeoutMs = isRetrievalRequest ? 300_000 :
-    isVideoPost && path[2] === "import" ? 120_000 : 10_000
+    isVideoPost && path[2] === "import" ? 120_000 : isWorkspaceAnswer ? 100_000 : isPageOcr ? 95_000 : isWorkspaceSemantic ? 75_000 :
+    isDocumentProcessing ? 60_000 : 10_000
+  const headers = forwardedRequestHeaders(request)
+  const privateWorkspace = path[0] === "v1" && path[1] === "workspace" && path[2] !== "status"
+  const expectedAccount = privateWorkspace ? request.headers.get(workspaceAccountHeader) : null
+  if (expectedAccount !== null) headers.set(workspaceAccountHeader, expectedAccount)
+  if (workspaceToken) headers.set("Authorization", `Bearer ${workspaceToken}`)
+
   const init: StreamingRequestInit = {
     method: request.method,
-    headers: forwardedRequestHeaders(request),
+    headers,
     cache: "no-store",
     redirect: "manual",
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: privateWorkspace
+      ? AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs),
   }
 
   if (!METHODS_WITHOUT_BODY.has(request.method) && request.body !== null) {

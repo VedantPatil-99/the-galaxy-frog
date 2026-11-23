@@ -139,9 +139,13 @@ class SqlAlchemyVideoRepository:
         return self._video_record(row) if row is not None else None
 
     async def get_transcript(self, video_id: UUID) -> TranscriptRecord | None:
-        video = await self.get_video(video_id)
-        if video is None:
-            return None
+        row = await self._session.get(VideoRow, video_id)
+        return await self.read_transcript(row) if row is not None else None
+
+    async def read_transcript(self, video_row: VideoRow) -> TranscriptRecord:
+        """Read evidence for a video already selected by the caller."""
+        video = self._video_record(video_row)
+        video_id = video.video_id
         cue_rows = tuple(
             (
                 await self._session.scalars(

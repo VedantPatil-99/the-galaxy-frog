@@ -14,6 +14,7 @@ function ThemeToggle() {
       type="button"
       variant="outline"
       size="icon"
+      className="relative min-h-11 min-w-11"
       aria-label="Toggle color theme"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >

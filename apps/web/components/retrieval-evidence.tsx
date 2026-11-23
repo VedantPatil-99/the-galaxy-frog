@@ -3,6 +3,7 @@
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { Disclosure } from "@/components/ui/disclosure"
 import { ApiClientError, getRetrievalTrace } from "@/lib/api/client"
 import type { RetrievalTraceResponse, SearchResponse } from "@/lib/api/contracts"
 import { timestamp } from "@/lib/timestamp"
@@ -12,9 +13,10 @@ interface Props {
   pending: boolean
   onSelectAnchor: (anchorId: string) => void
   onSeek: (milliseconds: number) => void
+  showMatches?: boolean
 }
 
-export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: Props) {
+export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek, showMatches }: Props) {
   const [trace, setTrace] = useState<RetrievalTraceResponse | null>(null)
   const [loadingTrace, setLoadingTrace] = useState(false)
   const [traceError, setTraceError] = useState<string | null>(null)
@@ -32,14 +34,17 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
   }
 
   const keptFrames = (result.visual_frames ?? []).filter((frame) => !frame.is_duplicate)
+  const needsMoment = result.status === "anchor_selection_required" || result.status === "anchor_unresolved"
 
   return (
-    <section aria-label="Retrieved evidence" className="mt-6 space-y-4 border-t pt-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-heading text-lg font-semibold">Evidence for your query</h3>
-        <span className="rounded-full border px-2.5 py-1 text-xs">{result.degraded ? "Degraded retrieval" : result.status === "anchor_selection_required" ? "Choose a moment" : result.status === "anchor_unresolved" ? "Event unresolved" : "Retrieval complete"}</span>
-      </div>
-      <p className="break-words text-sm text-muted-foreground">{result.analysis.original}</p>
+    <section aria-label="Retrieved evidence" className="space-y-4">
+      {showMatches || needsMoment ? (
+        <div className="border-t pt-4">
+          {showMatches ? <h3 className="text-lg font-semibold">Matching evidence</h3> : null}
+          <p className="mt-1 text-sm text-muted-foreground">{result.analysis.original}</p>
+        </div>
+      ) : null}
+      {result.degraded ? <p role="status" className="text-sm font-medium text-muted-foreground">Degraded retrieval</p> : null}
       {result.warnings.length > 0 ? <div role="status" className="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
         {result.warnings.map((warning, index) => <p key={`${warning.code}-${index}`}>{warning.message}</p>)}
       </div> : null}
@@ -59,6 +64,22 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
       {result.status === "anchor_unresolved" ? <p role="status" className="rounded-xl border p-4 text-sm">No matching event was found. Try a phrase spoken in the video or an explicit timestamp such as “before 02:30”.</p> : null}
       {result.status === "resolved" && result.evidence.length === 0 && keptFrames.length === 0 && !result.ocr_evidence?.length ? <p className="text-sm text-muted-foreground">No transcript evidence matched this query and time range.</p> : null}
 
+      {showMatches && result.evidence.length > 0 ? (
+        <ul className="divide-y border-y">
+          {result.evidence.map((group) => (
+            <li key={`${group.start_ms}-${group.end_ms}`} className="py-3">
+              <Button type="button" variant="secondary" className="min-h-11 font-mono" onClick={() => onSeek(group.start_ms)}>{timestamp(group.start_ms)}–{timestamp(group.end_ms)}</Button>
+              <p className="mt-2 line-clamp-3 leading-relaxed">{group.cues.map(cue => cue.text).join(" ")}</p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {showMatches && (keptFrames.length > 0 || Boolean(result.ocr_evidence?.length)) ? (
+        <p className="text-sm text-muted-foreground">On-screen matches are available in evidence details.</p>
+      ) : null}
+
+      <Disclosure label="Evidence details">
+      <div className="space-y-4 px-2 pt-2">
       {result.visual_decisions?.length ? <div className="rounded-xl border p-3 text-sm space-y-2" aria-label="Visual processing decisions">
         {result.visual_decisions.map((decision, index) => <p key={index}>{decision.decision.replaceAll("_", " ")} · {decision.reason.replaceAll("_", " ")}</p>)}
         {result.visual_reasoning ? <p className="text-xs text-muted-foreground">Reasoning: {result.visual_reasoning.provider?.model ?? "unavailable"} · {result.visual_reasoning.provider?.location ?? "disabled"} · {result.visual_reasoning.cache_hit ? "cached result" : `${Math.round(result.visual_reasoning.elapsed_ms)} ms`} · {result.visual_reasoning.examined_frame_ids.length} frame examined</p> : null}
@@ -175,6 +196,8 @@ export function RetrievalEvidence({ result, pending, onSelectAnchor, onSeek }: P
         {traceError ? <p role="alert" className="text-sm text-destructive">{traceError}</p> : null}
         {trace ? <details open className="rounded-xl border p-3 text-xs"><summary className="cursor-pointer font-medium">Saved retrieval trace · version {trace.version}</summary><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(trace.payload, null, 2)}</pre></details> : null}
       </div>
+      </div>
+      </Disclosure>
     </section>
   )
 }

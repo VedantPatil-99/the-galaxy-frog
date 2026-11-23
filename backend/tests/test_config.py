@@ -1,11 +1,43 @@
 """Behavior tests for typed application settings."""
 
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from galaxy_frog.config import Settings
+
+
+@pytest.mark.parametrize(
+    ("enabled", "key", "environment", "mode", "rate", "expected"),
+    [
+        (False, "fixture", "test", "trial", None, None),
+        (True, " ", "test", "trial", None, None),
+        (True, "fixture", "test", "trial", None, Decimal(0)),
+        (True, "fixture", "production", "trial", None, None),
+        (True, "fixture", "test", "production", None, None),
+        (True, "fixture", "production", "production", "0.13", Decimal("0.13")),
+    ],
+)
+def test_cohere_profile_requires_access_and_the_matching_price_basis(
+    enabled: bool,
+    key: str,
+    environment: str,
+    mode: str,
+    rate: str | None,
+    expected: Decimal | None,
+) -> None:
+    settings = Settings.model_validate(
+        {
+            "workspace_cohere_embedding_enabled": enabled,
+            "cohere_embedding_api_key": key,
+            "app_env": environment,
+            "cohere_embedding_mode": mode,
+            "cohere_embedding_usd_per_million_tokens": rate,
+        },
+    )
+    assert settings.cohere_embedding_rate == expected
 
 
 @pytest.mark.parametrize("limit", [0, 31])
