@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from tests.test_workspace_auth import AUTH_URL, KEY, auth_settings
 from tests.test_workspace_documents import sample_pdf
@@ -32,6 +32,7 @@ from galaxy_frog.db.engine import create_database_engine
 from galaxy_frog.db.workspace import WorkspaceAccountRow, WorkspaceNotebookRow
 from galaxy_frog.db.workspace_documents import WorkspaceDocumentRepository, WorkspaceDocumentRow
 from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRow
+from galaxy_frog.db.workspace_runs import WorkspaceChatRunRow
 from galaxy_frog.db.workspace_text import WorkspaceTextSourceRow
 from galaxy_frog.domain.workspace import NotebookNotFound
 from galaxy_frog.domain.workspace_documents import (
@@ -229,7 +230,7 @@ async def _grounded_chat(
 
 
 @pytest.mark.asyncio
-async def test_chat_submission_replays_after_a_dropped_response_without_clearing_a_newer_draft(
+async def test_chat_submission_replays_without_clearing_a_newer_draft(
     workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
 ) -> None:
     client, _ = workspace_http
@@ -275,8 +276,36 @@ async def test_chat_submission_replays_after_a_dropped_response_without_clearing
 
 
 @pytest.mark.asyncio
+async def test_notebook_ownership_change_cannot_reveal_an_existing_run_on_replay(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    client, owners = workspace_http
+    path, body = await _grounded_chat(client, _DURABLE_OWNER)
+    assert (
+        await client.post(f"{path}/turns", headers=_DURABLE_OWNER, json=body)
+    ).status_code == 202
+    other = {"authorization": "Bearer other-token"}
+    assert (await client.get("/v1/workspace/session", headers=other)).status_code == 200
+    engine = create_database_engine(Settings())
+    try:
+        async with async_sessionmaker(engine).begin() as session:
+            await session.execute(
+                update(WorkspaceNotebookRow)
+                .where(WorkspaceNotebookRow.id == UUID(path.split("/")[4]))
+                .values(owner_id=owners["other-token"])
+            )
+    finally:
+        await engine.dispose()
+    assert (await client.get(f"{path}/turns", headers=other)).json()["turns"] == []
+    assert (await client.get(f"{path}/turns", headers=_DURABLE_OWNER)).status_code == 404
+    assert (await client.post(f"{path}/turns", headers=other, json=body)).status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("interruption", ["none", "before_dispatch", "lease_lost", "source_lost"])
 async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outside_the_transaction(
     workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+    interruption: str,
 ) -> None:
     from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
     from galaxy_frog.entrypoints.workspace_chat_worker import WorkspaceChatWorker
@@ -290,6 +319,7 @@ async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outs
         database_url=Settings().database_url, workspace_creator_emails=["owner@example.com"]
     )
     answer = '{"blocks":[{"text":"Ice moves downhill.","citations":[{"reference":"E1","quote":"Ice flows downhill."}]}]}'
+    first_probe = True
 
     async def respond(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/generate"
@@ -301,6 +331,11 @@ async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outs
         )
 
     async def installed(_origin: str) -> dict[str, str]:
+        nonlocal first_probe
+        if interruption == "before_dispatch" and first_probe:
+            first_probe = False
+            entered.set()
+            await release.wait()
         return {settings.generation_model: "test-model-digest"}
 
     engine = create_database_engine(settings)
@@ -320,15 +355,43 @@ async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outs
                     f"{path}/draft", headers=owner, json={"text": "Next question", "revision": 2}
                 )
                 assert newer_draft.status_code == 200
+                if interruption in {"lease_lost", "before_dispatch"}:
+                    async with async_sessionmaker(engine).begin() as session:
+                        await session.execute(
+                            update(WorkspaceChatRunRow)
+                            .where(WorkspaceChatRunRow.id == UUID(queued["run"]["run_id"]))
+                            .values(lease_until=datetime.now(UTC) - timedelta(seconds=1))
+                        )
+                    if interruption == "lease_lost":
+                        assert not await worker.run_once()
+                if interruption == "source_lost":
+                    async with async_sessionmaker(engine).begin() as session:
+                        await session.execute(
+                            delete(WorkspaceTextSourceRow).where(
+                                WorkspaceTextSourceRow.id == UUID(queued["passage"]["source_id"])
+                            )
+                        )
             finally:
                 release.set()
                 await execution
+            if interruption == "before_dispatch":
+                assert await worker.run_once()
     finally:
         await engine.dispose()
 
     saved = (await client.get(f"{path}/turns", headers=owner)).json()["turns"][0]
     assert saved["turn_id"] == queued["turn_id"]
     assert saved["run"]["run_id"] == queued["run"]["run_id"]
+    if interruption in {"lease_lost", "source_lost"}:
+        result = saved["run"]
+        expected = (
+            ("uncertain", "dispatch_unknown")
+            if interruption == "lease_lost"
+            else ("failed", "evidence_unavailable")
+        )
+        assert (result["status"], result["failure"]) == expected
+        assert result["answer"] is None and result["evidence"] is None
+        return
     assert saved["run"]["status"] == "completed"
     assert saved["run"]["answer"]["blocks"][0]["citations"] == [
         {"reference": "E1", "quote": "Ice flows downhill."}
@@ -371,6 +434,10 @@ async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outs
         ("forged", "failed", "answer_unverified"),
         ("lost", "uncertain", "dispatch_unknown"),
         ("revision_changed", "failed", "model_unavailable"),
+        ("probe_timeout", "failed", "model_unavailable"),
+        ("model_changed", "failed", "model_unavailable"),
+        ("revision_pin", "failed", "model_unavailable"),
+        ("version_edited", "failed", "evidence_unavailable"),
     ],
 )
 async def test_chat_worker_surfaces_fail_closed_outcomes_without_replaying(
@@ -391,6 +458,10 @@ async def test_chat_worker_surfaces_fail_closed_outcomes_without_replaying(
     settings = auth_settings(
         database_url=Settings().database_url,
         supabase_url=None if scenario == "missing_auth" else AUTH_URL,
+        generation_model="different:4b"
+        if scenario == "model_changed"
+        else Settings().generation_model,
+        generation_model_revision="required-digest" if scenario == "revision_pin" else None,
         workspace_creator_emails=["other@example.com"]
         if scenario == "revoked"
         else ["owner@example.com"],
@@ -416,6 +487,8 @@ async def test_chat_worker_surfaces_fail_closed_outcomes_without_replaying(
         )
 
     async def installed(_origin: str) -> dict[str, str]:
+        if scenario == "probe_timeout":
+            raise TimeoutError
         if scenario == "unavailable":
             return {}
         digest = "different" if scenario == "revision_changed" and dispatches else "fixture-digest"
@@ -429,6 +502,13 @@ async def test_chat_worker_surfaces_fail_closed_outcomes_without_replaying(
                     delete(WorkspaceTextSourceRow).where(
                         WorkspaceTextSourceRow.id == UUID(pin["source_id"])
                     )
+                )
+        if scenario == "version_edited":
+            async with sessions.begin() as session:
+                await session.execute(
+                    update(WorkspaceTextSourceRow)
+                    .where(WorkspaceTextSourceRow.id == UUID(pin["source_id"]))
+                    .values(text="Ice melts downhill.")
                 )
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as transport:
             provider = OllamaGenerationProvider(
@@ -448,6 +528,54 @@ async def test_chat_worker_surfaces_fail_closed_outcomes_without_replaying(
     assert dispatches == int(scenario in {"lost", "forged", "revision_changed"})
     replay = await client.post(f"{path}/turns", headers=owner, json=body)
     assert replay.json()["run"] == outcome
+
+
+@pytest.mark.asyncio
+async def test_workspace_worker_resumes_polling_after_a_database_connection_fails(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    from galaxy_frog.entrypoints.workspace_chat_worker import run_workspace_chat_worker
+
+    client, _ = workspace_http
+    path, body = await _grounded_chat(client, _DURABLE_OWNER)
+    assert (
+        await client.post(f"{path}/turns", headers=_DURABLE_OWNER, json=body)
+    ).status_code == 202
+    settings = auth_settings(
+        database_url=Settings().database_url,
+        ingestion_poll_seconds=0.01,
+        ollama_base_url="http://127.0.0.1:1",
+    )
+    engine = create_database_engine(settings)
+    stop = asyncio.Event()
+    unavailable = True
+
+    def fail_once(*_args: object) -> None:
+        nonlocal unavailable
+        if unavailable:
+            unavailable = False
+            raise ConnectionRefusedError("Synthetic database outage")
+
+    event.listen(engine.sync_engine, "do_connect", fail_once)
+    task = asyncio.create_task(
+        run_workspace_chat_worker(settings, async_sessionmaker(engine), stop)
+    )
+    await run_workspace_chat_worker(
+        auth_settings(workspace_auth_enabled=False), async_sessionmaker(engine), stop
+    )
+    try:
+        async with asyncio.timeout(15):
+            while True:
+                response = await client.get(f"{path}/turns", headers=_DURABLE_OWNER)
+                run = response.json()["turns"][0]["run"]
+                if run["status"] == "failed":
+                    assert run["failure"] == "model_unavailable"
+                    break
+                await asyncio.sleep(0.05)
+    finally:
+        stop.set()
+        await task
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

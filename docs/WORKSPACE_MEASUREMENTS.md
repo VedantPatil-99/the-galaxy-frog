@@ -365,13 +365,14 @@ Ollama responses. The API tests exercise duplicate admission, draft revision con
 cross-account access, provider failure and validation of the saved excerpt. The provider
 receives one question and at most 1,200 Unicode characters from the pinned block.
 
-Use the browser regression to verify draft recovery, a lost 202 response after admission,
+The browser regression passed with draft recovery, a lost 202 response after admission,
 same-key replay after refresh, saved-answer reload, exact citation navigation, and the
-existing quick-question path. It runs headless Chrome at 1440 × 960 against a production
-Next.js build and the actual FastAPI and worker code. The controlled provider stays
-pending until the browser has reopened the run. This checks behavior with one notebook,
-one pasted-text source and one named chat. It does not measure the W4.2 latency budgets
-or exercise hosted Supabase, a live Ollama model or paid generation.
+existing quick-question path. It used a 1440 × 960 headless Chrome window against a
+production Next.js build and the actual FastAPI and worker code. One notebook, one
+pasted-text source and one named chat produced one durable dispatch and one separate
+quick-question dispatch. The controlled provider stayed pending until the browser
+reopened the run. These checks used synthetic Auth and generation. W4.2 latency budgets
+and live-provider acceptance have their own gates.
 
 From the repository root, point `DATABASE_URL` at a disposable loopback PostgreSQL
 database, then run:

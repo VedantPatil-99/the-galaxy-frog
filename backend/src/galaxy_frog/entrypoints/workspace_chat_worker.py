@@ -89,7 +89,10 @@ class WorkspaceChatWorker:
         except TimeoutError:
             return None
         revision = installed.get(model) or installed.get(f"{model}:latest")
-        if claim.settings.required_revision not in (None, revision):
+        required = {claim.settings.required_revision, self.settings.generation_model_revision} - {
+            None
+        }
+        if not required.issubset({revision}):
             return None
         return revision
 
@@ -112,7 +115,7 @@ async def run_workspace_chat_worker(
         try:
             if await worker.run_once():
                 continue
-        except SQLAlchemyError as exc:
+        except (SQLAlchemyError, OSError) as exc:
             logger.warning(
                 "Workspace run polling needs PostgreSQL and migration 0028 (%s).",
                 type(exc).__name__,

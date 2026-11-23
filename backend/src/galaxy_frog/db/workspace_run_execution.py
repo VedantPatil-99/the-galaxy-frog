@@ -80,12 +80,10 @@ class WorkspaceRunExecution:
         claim: WorkspaceRunClaim,
         model_revision: str | None,
     ) -> WorkspaceRunEvidence | None:
-        owned = await self._fenced(claim)
+        owned = await self._fenced(claim, dispatched=False)
         if owned is None:
             return None
         run, turn, notebook_id = owned
-        if run.dispatch_at is not None:
-            return None
         if model_revision is None:
             self._settle(run, "model_unavailable")
             return None
@@ -106,16 +104,12 @@ class WorkspaceRunExecution:
         answer: WorkspaceAnswerDraft | None,
         failure: RunFailure | None,
     ) -> None:
-        owned = await self._fenced(claim)
+        owned = await self._fenced(claim, dispatched=True)
         if owned is None:
             return
         run, turn, notebook_id = owned
         if answer is not None:
-            evidence, failure = await self._authorized_evidence(run, turn, notebook_id)
-            if failure is None and (
-                evidence is None or evidence.model_dump(mode="json") != run.evidence
-            ):
-                failure = "evidence_unavailable"
+            _, failure = await self._authorized_evidence(run, turn, notebook_id)
             if failure is None:
                 run.answer = answer.model_dump(mode="json")
         self._settle(run, failure)
@@ -123,6 +117,8 @@ class WorkspaceRunExecution:
     async def _fenced(
         self,
         claim: WorkspaceRunClaim,
+        *,
+        dispatched: bool,
     ) -> tuple[WorkspaceChatRunRow, WorkspaceChatTurnRow, UUID] | None:
         run, turn, chat = WorkspaceChatRunRow, WorkspaceChatTurnRow, WorkspaceChatRow
         row = (
@@ -135,6 +131,7 @@ class WorkspaceRunExecution:
                     run.status == "running",
                     run.lease == claim.lease,
                     run.lease_until > datetime.now(UTC),
+                    run.dispatch_at.is_not(None) if dispatched else run.dispatch_at.is_(None),
                 )
                 .with_for_update(of=run)
             )
