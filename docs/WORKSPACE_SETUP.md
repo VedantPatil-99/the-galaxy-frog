@@ -327,8 +327,10 @@ session-only path. [Verification](WORKSPACE_MEASUREMENTS.md#w42-first-saved-olla
 Apply `20261123_0028` and then `20261124_0029` before starting the updated API and
 worker. Pause old workspace workers for the migration. Start the matching API and
 worker before serving the matching web build. The second migration extends existing
-runs and their active-run constraint. Retain both revisions and the saved data if
-rolling back application code. A hosted rollout requires its own verification.
+runs and their active-run constraint. Older builds cannot interpret `preparing` or
+`stopped` rows. Recover with a compatible app build, or plan and verify a data
+conversion before rolling back across this boundary. A hosted rollout requires its
+own verification.
 
 Open the same chat after reconnecting to read the current run. **Stop** ends an active
 run and may report that local Ollama already received the question. **Retry run**

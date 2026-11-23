@@ -1,10 +1,10 @@
 """Short, fenced transactions around the local worker's possible dispatch."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import DateTime, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from galaxy_frog.db.workspace_chats import WorkspaceChatRow
@@ -25,6 +25,10 @@ from galaxy_frog.domain.workspace_text import WorkspaceTextNotFound
 
 LOCAL_LEASE = timedelta(seconds=30)
 MAX_PREPARATION_CLAIMS = 3
+
+
+class WorkspaceRunLeaseExpired(Exception):
+    """The claim expired while waiting for the evidence fence."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +75,7 @@ class WorkspaceRunExecution:
             settle_workspace_run(current, "failed", "recovery_exhausted")
             return None
         lease = uuid4()
-        now = (await self.session.execute(select(func.now()))).scalar_one()
+        now = await self._clock()
         current.status = "preparing"
         current.lease = lease
         current.lease_until = now + LOCAL_LEASE
@@ -111,14 +115,17 @@ class WorkspaceRunExecution:
         if model_revision is None:
             settle_workspace_run(run, "failed", "model_unavailable")
             return None
-        evidence, reason = await self._authorized_evidence(run, turn, notebook_id)
+        try:
+            evidence, reason, now = await self._authorized_evidence(run, turn, notebook_id)
+        except WorkspaceRunLeaseExpired:
+            return None
         if reason is not None:
             settle_workspace_run(run, "failed", reason)
             return None
         assert evidence is not None
         run.evidence = evidence.model_dump(mode="json")
         run.model_revision_at_dispatch = model_revision
-        run.dispatch_at = datetime.now(UTC)
+        run.dispatch_at = now
         run.status = "running"
         run.revision += 1
         return evidence
@@ -134,7 +141,10 @@ class WorkspaceRunExecution:
             return
         run, turn, notebook_id = owned
         if answer is not None:
-            _, failure = await self._authorized_evidence(run, turn, notebook_id)
+            try:
+                _, failure, _ = await self._authorized_evidence(run, turn, notebook_id)
+            except WorkspaceRunLeaseExpired:
+                return
             if failure is None:
                 run.answer = answer.model_dump(mode="json")
         status = (
@@ -169,24 +179,41 @@ class WorkspaceRunExecution:
         current, saved, notebook_id = row
         return current, saved, notebook_id
 
+    async def _clock(self) -> datetime:
+        return (
+            await self.session.execute(select(func.clock_timestamp(type_=DateTime(timezone=True))))
+        ).scalar_one()
+
     async def _authorized_evidence(
         self,
         run: WorkspaceChatRunRow,
         turn: WorkspaceChatTurnRow,
         notebook_id: UUID,
-    ) -> tuple[WorkspaceRunEvidence | None, RunFailure | None]:
-        if (
-            run.authorization_expires_at <= datetime.now(UTC)
-            or run.creator_email not in self.allowed_creators
-        ):
-            return None, "access_changed"
-        pin = WorkspacePassagePin.model_validate(turn.pin)
-        try:
-            evidence, digest = await load_pinned_evidence(
-                self.session, run.owner_id, notebook_id, pin, lock=True
-            )
-        except WorkspaceTextNotFound:
-            return None, "evidence_unavailable"
-        if digest != turn.passage_digest:
-            return None, "evidence_unavailable"
-        return evidence, None
+    ) -> tuple[WorkspaceRunEvidence | None, RunFailure | None, datetime]:
+        evidence = None
+        failure: RunFailure | None = None
+        if run.creator_email not in self.allowed_creators:
+            failure = "access_changed"
+        else:
+            try:
+                evidence, digest = await load_pinned_evidence(
+                    self.session,
+                    run.owner_id,
+                    notebook_id,
+                    WorkspacePassagePin.model_validate(turn.pin),
+                    lock=True,
+                )
+            except WorkspaceTextNotFound:
+                failure = "evidence_unavailable"
+            else:
+                if digest != turn.passage_digest:
+                    failure = "evidence_unavailable"
+        # The evidence read can block on row locks. Fence both the lease and the grant
+        # using the database clock after those locks are in hand.
+        now = await self._clock()
+        assert run.lease_until is not None  # The fenced query requires a live lease.
+        if run.lease_until <= now:
+            raise WorkspaceRunLeaseExpired
+        if run.authorization_expires_at <= now:
+            failure = "access_changed"
+        return evidence, failure, now

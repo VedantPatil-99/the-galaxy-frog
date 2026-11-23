@@ -177,12 +177,32 @@ try {
   await tab.type(editor, nextDraft)
   await tab.visible("Draft saved")
 
+  const proxy = "/api/proxy/v1/workspace/notebooks"
+  const pageReads = `performance.getEntriesByName(location.origin + ${JSON.stringify(proxy + recoveryPath)}).length`
+  const runReads = `performance.getEntriesByName(location.origin + ${JSON.stringify(proxy + `${base}/chats/${recoveryChat.chat_id}/runs/${activeRun.run.run_id}`)}).length`
+  const readsBeforeOffline = await tab.evaluate(pageReads)
   await tab.command("Network.enable")
   const connection = { latency: 0, downloadThroughput: -1, uploadThroughput: -1 }
   await tab.command("Network.emulateNetworkConditions", { ...connection, offline: true })
   await tab.visible("Offline. Run status will refresh when you reconnect.")
   await tab.command("Network.emulateNetworkConditions", { ...connection, offline: false })
-  await until("reconnected Stop control", () => tab.evaluate(`document.querySelector('[aria-label="Saved conversation"] button')?.getAttribute('aria-disabled') === 'false'`))
+  await until("reconnected history from FastAPI", () => tab.evaluate(`${pageReads} > ${readsBeforeOffline}`))
+
+  await until("visible conversation polls the active run", () => tab.evaluate(`${runReads} > 0`))
+  await tab.command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
+  const clickPanel = (label: string) => tab.evaluate(`[...document.querySelectorAll('[aria-label="Workspace panels"] button')]
+    .find(button => button.textContent.trim() === ${JSON.stringify(label)}).click()`)
+  await clickPanel("Sources")
+  await until("mobile Sources hides the conversation", () => tab.evaluate(`document.querySelector('[aria-label="Saved conversation"]').getClientRects().length === 0`))
+  await Bun.sleep(250)
+  const readsWhileHidden = await tab.evaluate(runReads)
+  await Bun.sleep(2_600)
+  assert.equal(await tab.evaluate(runReads), readsWhileHidden)
+  const readsBeforeReturn = await tab.evaluate(pageReads)
+  await clickPanel("Workspace")
+  await until("mobile Workspace refreshes the conversation", () => tab.evaluate(`${pageReads} > ${readsBeforeReturn}`))
+  await tab.command("Emulation.clearDeviceMetricsOverride")
+
   await tab.evaluate(`(() => {
     const stop = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Stop');
     stop.focus(); stop.click();
@@ -218,8 +238,14 @@ try {
   assert.equal(history[1].run.status, "completed")
   assert.deepEqual(history[1].passage, activeRun.passage)
   assert.equal(await tab.evaluate(`${field}?.value`), nextDraft)
+  await tab.evaluate(`(() => { const editor = ${field}; editor.focus(); editor.select() })()`)
+  await tab.command("Input.dispatchKeyEvent", { type: "keyDown", key: "Backspace", windowsVirtualKeyCode: 8 })
+  await tab.command("Input.dispatchKeyEvent", { type: "keyUp", key: "Backspace", windowsVirtualKeyCode: 8 })
+  await until("empty draft is saved", async () => (await api(`${base}/chats/${recoveryChat.chat_id}`)).draft.text === "")
+  await tab.click("Restore question")
+  await until("stopped question restored with composer focus", () => tab.evaluate(`${field}?.value === ${JSON.stringify(recoveryQuestion)} && document.activeElement === ${field}`))
   assert.equal(recoveryDispatches, 2)
-  console.log("PASS: offline/reconnect, Stop and focus, refresh and Back/Forward, preserved draft, and explicit linked retry")
+  console.log("PASS: offline/reconnect, mobile polling suspension, Stop and focus, refresh and Back/Forward, preserved and restored drafts, and explicit linked retry")
 } finally {
   release.resolve()
   releaseStopped.resolve()

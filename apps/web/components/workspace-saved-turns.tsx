@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { ApiClientError } from "@/lib/api/client"
@@ -33,9 +33,11 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
   const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine)
   const [acting, setActing] = useState(false)
   const [refresh, setRefresh] = useState(0)
+  const pollTargetId = useId()
   const action = useRef<AbortController | null>(null)
   const retryKeys = useRef(new Map<string, string>())
   const mostRecentPageSequence = useRef(0)
+  const knownActiveRun = useRef<string | null>(null)
 
   useEffect(() => () => action.current?.abort(), [])
 
@@ -45,26 +47,38 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
     let pending: AbortController | null = null
     let timer = 0
     let delay = 750
-    let activeRunId: string | null = null
-    const visible = () => document.visibilityState === "visible" && navigator.onLine
+    let activeRunId = knownActiveRun.current
+    const pollTarget = document.getElementById(pollTargetId)
+    const paneVisible = () => Boolean(pollTarget?.getClientRects().length)
+    const visible = () => document.visibilityState === "visible" && navigator.onLine && paneVisible()
     function pause() {
       window.clearTimeout(timer)
       pending?.abort()
       pending = null
     }
-    function schedule() {
-      if (!activeRunId || !visible()) return
-      timer = window.setTimeout(() => { void read(false) }, delay)
+    function schedule(full = false, reconciliationAttempts = 0) {
+      if ((!activeRunId && reconciliationAttempts === 0) || !visible()) return
+      timer = window.setTimeout(() => { void read(full, reconciliationAttempts) }, delay)
       delay = Math.min(delay + 350, 2_500)
     }
-    async function read(full: boolean) {
+    async function readRun(runId: string, signal: AbortSignal) {
+      try {
+        return [await getWorkspaceRun(notebookId, id, runId, signal)]
+      } catch (caught) {
+        if (!(caught instanceof ApiClientError) || caught.status !== 404) throw caught
+        if (!signal.aborted) setTurns(turns => turns.filter(turn => turn.run.run_id !== runId))
+        return []
+      }
+    }
+    async function read(full: boolean, reconciliationAttempts = 0) {
       if (pending || !visible()) return
       const controller = new AbortController()
       pending = controller
       try {
         let current: WorkspaceTurn[]
-        if (!full && activeRunId) {
-          current = [await getWorkspaceRun(notebookId, id, activeRunId, controller.signal)]
+        const pointRunId = full ? null : activeRunId
+        if (pointRunId) {
+          current = await readRun(pointRunId, controller.signal)
         } else {
           const page = await listWorkspaceTurns(notebookId, id, null, controller.signal)
           if (controller.signal.aborted) return
@@ -74,16 +88,22 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
           setNext(cursor => cursor === undefined || gap ? page.next_before : cursor)
           mostRecentPageSequence.current = Math.max(previous, page.turns.at(-1)?.sequence ?? 0)
           current = page.turns
+          if (activeRunId && !current.some(turn => turn.run.run_id === activeRunId)) {
+            const missed = await readRun(activeRunId, controller.signal)
+            current = [...current, ...missed]
+          }
         }
         if (controller.signal.aborted) return
         setTurns(turns => mergeTurns(turns, current))
         activeRunId = current.find(active)?.run.run_id ?? null
+        knownActiveRun.current = activeRunId
         setError("")
-        schedule()
+        if (pointRunId && !activeRunId) schedule(true, 3)
+        else schedule()
       } catch (caught) {
         if (!controller.signal.aborted && session.isCurrent()) {
           setError(caught instanceof Error ? caught.message : "Could not load the saved conversation.")
-          schedule()
+          schedule(full, Math.max(0, reconciliationAttempts - 1))
         }
       } finally {
         if (pending === controller) pending = null
@@ -99,15 +119,25 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
     window.addEventListener("offline", resume)
     window.addEventListener("focus", resume)
     document.addEventListener("visibilitychange", resume)
+    let wasVisible = paneVisible()
+    const panes = new ResizeObserver(() => {
+      const nowVisible = paneVisible()
+      if (wasVisible !== nowVisible) {
+        wasVisible = nowVisible
+        resume()
+      }
+    })
+    if (pollTarget) panes.observe(pollTarget)
     void read(true)
     return () => {
       pause()
+      panes.disconnect()
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", resume)
       window.removeEventListener("focus", resume)
       document.removeEventListener("visibilitychange", resume)
     }
-  }, [chatId, getWorkspaceRun, listWorkspaceTurns, notebookId, refresh, session])
+  }, [chatId, getWorkspaceRun, listWorkspaceTurns, notebookId, pollTargetId, refresh, session])
 
   async function loadEarlier() {
     if (!chatId || next == null || readingOlder) return
@@ -125,6 +155,8 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
   }
 
   function accepted(turn: WorkspaceTurn) {
+    if (active(turn)) knownActiveRun.current = turn.run.run_id
+    else if (knownActiveRun.current === turn.run.run_id) knownActiveRun.current = null
     setTurns(current => mergeTurns(current, [turn]))
     setRefresh(current => current + 1)
   }
@@ -139,12 +171,8 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
       const current = retryKeys.current.get(runId) ?? crypto.randomUUID()
       let key = current
       try {
-        const saved = window.sessionStorage.getItem(scope)
-        if (saved) {
-          const [expiry, previous] = saved.split(":")
-          if (previous && Number(expiry) > Date.now()) key = previous
-        }
-        window.sessionStorage.setItem(scope, `${Date.now() + 600_000}:${key}`)
+        key = window.sessionStorage.getItem(scope) ?? current
+        window.sessionStorage.setItem(scope, key)
       } catch { /* The current chat can still retry with its in-memory key. */ }
       retryKeys.current.set(runId, key)
       return key
@@ -178,7 +206,7 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
   }
 
   return {
-    turns, error, actionError, offline, acting, act, hasEarlier: next != null, readingOlder, loadEarlier,
+    turns, error, actionError, offline, acting, act, pollTargetId, hasEarlier: next != null, readingOlder, loadEarlier,
     active: turns.some(active),
     retry: () => setRefresh(current => current + 1),
     accepted,
@@ -200,7 +228,7 @@ export function WorkspaceSavedTurns({ history, onOpen, onRestore }: {
   onRestore: (question: string) => void
 }) {
   const latest = history.turns.at(-1)
-  return <div className="space-y-3 px-2 pt-3" aria-label="Saved conversation">
+  return <div id={history.pollTargetId} className="space-y-3 px-2 pt-3" aria-label="Saved conversation">
     {history.offline && <p role="status" className="text-sm text-muted-foreground">Offline. Run status will refresh when you reconnect.</p>}
     {history.actionError && <p role="alert" className="text-sm text-destructive">{history.actionError}</p>}
     {history.error && <div className="space-y-1">

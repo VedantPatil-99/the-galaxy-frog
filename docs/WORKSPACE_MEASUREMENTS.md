@@ -392,13 +392,17 @@ after the possible-dispatch marker, stale-worker fencing, and both orders of Sto
 and publication. The pre-dispatch fixture reaches three claims and sends zero
 questions. The expired-dispatch and Stop fixtures keep at most one possible send.
 
-The production Chrome regression ran at 1440 × 960 against real FastAPI and
-PostgreSQL with controlled Auth and Ollama. One held run exercised offline and
-reconnect, Stop and status focus, refresh, Back and Forward, and protection of a
-newer draft. One explicit retry reopened a validated answer with the original pin.
-The first run stayed stopped and the fixture made exactly two dispatches across the
-original run and its linked retry. The existing lost-acknowledgement, exact citation,
-and quick-question regression passed in the same browser session.
+One production Chrome session ran at 1440 × 960 and 390 × 844 against real FastAPI
+and PostgreSQL with controlled Auth and Ollama. A held run exercised a fresh
+history read after reconnect, Stop and status focus, refresh, and Back and Forward.
+At the mobile width, the hidden conversation made no run-detail reads during the
+2.6-second observation window. Returning to the conversation refreshed history.
+One linked retry reopened a validated answer with the original pin. The original
+run stayed stopped. The fixture made exactly two dispatches across the original
+run and its retry. Restore preserved a newer draft and returned focus to the
+composer when restoring into an empty draft. The lost-acknowledgement, exact
+citation, and quick-question regression passed in the same session. The separate
+two-account, two-tab isolation regression also passed.
 
 Use `bun scripts/workspace-durable-ollama.ts` after migrating a disposable local
 database and running `bun run build`. Timing in these controlled-worker tests uses

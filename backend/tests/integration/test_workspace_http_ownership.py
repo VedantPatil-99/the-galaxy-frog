@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, event, select, update
+from sqlalchemy import delete, event, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from tests.test_workspace_auth import AUTH_URL, KEY, auth_settings
 from tests.test_workspace_documents import sample_pdf
@@ -171,6 +171,10 @@ async def test_stop_is_idempotent_and_keeps_the_newer_draft(
     other = {"authorization": "Bearer other-token"}
     assert (await client.post(f"{run_path}/stop", headers=other)).status_code == 404
     assert (await client.get(run_path, headers=other)).status_code == 404
+    wrong_notebook, _ = await _grounded_chat(client, _DURABLE_OWNER)
+    wrong_scope = f"{wrong_notebook.split('/chats/')[0]}/chats/{run_path.split('/chats/')[1]}"
+    assert (await client.post(f"{wrong_scope}/stop", headers=_DURABLE_OWNER)).status_code == 404
+    assert (await client.get(wrong_scope, headers=_DURABLE_OWNER)).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -217,7 +221,14 @@ async def test_explicit_retry_is_linked_and_does_not_write_the_current_draft(
     earlier = (await client.get(f"{path}/turns?before=2&limit=1", headers=_DURABLE_OWNER)).json()
     assert earlier["next_before"] is None
     assert [turn["turn_id"] for turn in earlier["turns"]] == [accepted["turn_id"]]
-    wrong_chat, _ = await _grounded_chat(client, _DURABLE_OWNER)
+    notebook_path = path.split("/chats/")[0]
+    another_chat = await client.post(
+        f"{notebook_path}/chats",
+        headers=_DURABLE_OWNER,
+        json={"chat_id": str(uuid4()), "title": "Another chat in this notebook"},
+    )
+    assert another_chat.status_code == 201, another_chat.text
+    wrong_chat = f"{notebook_path}/chats/{another_chat.json()['chat_id']}"
     assert (
         await client.get(f"{wrong_chat}/runs/{original}", headers=_DURABLE_OWNER)
     ).status_code == 404
@@ -789,6 +800,125 @@ async def test_pre_dispatch_crashes_can_reclaim_a_run_only_a_bounded_number_of_t
     reopened = (await client.get(run_path, headers=_DURABLE_OWNER)).json()["run"]
     assert (reopened["status"], reopened["failure"]) == ("failed", "recovery_exhausted")
     assert reopened["execution"] == {"claims": 3, "possible_dispatch_at": None}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scenario", ["prepare_lease", "publish_lease", "prepare_grant"])
+async def test_evidence_lock_wait_cannot_outlive_the_dispatch_or_publication_fence(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]], scenario: str
+) -> None:
+    from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
+    from galaxy_frog.entrypoints.workspace_chat_worker import WorkspaceChatWorker
+
+    client, _ = workspace_http
+    path, body = await _grounded_chat(client, _DURABLE_OWNER)
+    turn = (await client.post(f"{path}/turns", headers=_DURABLE_OWNER, json=body)).json()
+    run_id = UUID(turn["run"]["run_id"])
+    source_id = UUID(turn["passage"]["source_id"])
+    run_path = f"{path}/runs/{run_id}"
+    settings = auth_settings(database_url=Settings().database_url)
+    engine = create_database_engine(settings)
+    sessions = async_sessionmaker(engine)
+    ready, advance = asyncio.Event(), asyncio.Event()
+    publishing = scenario == "publish_lease"
+    dispatches = 0
+
+    async def probe(_origin: str) -> dict[str, str]:
+        if not publishing:
+            ready.set()
+            await advance.wait()
+        return {settings.generation_model: "fixture"}
+
+    async def respond(_request: httpx.Request) -> httpx.Response:
+        nonlocal dispatches
+        dispatches += 1
+        ready.set()
+        await advance.wait()
+        return httpx.Response(
+            200,
+            json={
+                "model": settings.generation_model,
+                "done": True,
+                "response": '{"blocks":[{"text":"Ice moves down.","citations":[{"reference":"E1","quote":"Ice flows downhill."}]}]}',
+            },
+        )
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as transport:
+            provider = OllamaGenerationProvider(
+                base_url=settings.ollama_base_url, model=settings.generation_model, client=transport
+            )
+            first = WorkspaceChatWorker(settings, sessions, provider, probe, heartbeat_seconds=15)
+            replacement = WorkspaceChatWorker(settings, sessions, provider, probe)
+            execution = asyncio.create_task(first.run_once())
+            try:
+                await asyncio.wait_for(ready.wait(), timeout=5)
+                async with sessions.begin() as blocker:
+                    await blocker.execute(
+                        select(WorkspaceTextSourceRow.id)
+                        .where(WorkspaceTextSourceRow.id == source_id)
+                        .with_for_update()
+                    )
+                    blocker_pid = (
+                        await blocker.execute(text("SELECT pg_backend_pid()"))
+                    ).scalar_one()
+                    async with engine.connect() as observer:
+                        field = (
+                            WorkspaceChatRunRow.authorization_expires_at
+                            if scenario == "prepare_grant"
+                            else WorkspaceChatRunRow.lease_until
+                        )
+                        async with sessions.begin() as session:
+                            deadline = (
+                                await session.execute(
+                                    update(WorkspaceChatRunRow)
+                                    .where(WorkspaceChatRunRow.id == run_id)
+                                    .values({field: func.clock_timestamp() + timedelta(seconds=5)})
+                                    .returning(field)
+                                )
+                            ).scalar_one()
+                        advance.set()
+                        for _ in range(250):
+                            waiting = await observer.execute(
+                                text(
+                                    "SELECT EXISTS (SELECT 1 FROM pg_locks "
+                                    "WHERE NOT granted AND :blocker = ANY(pg_blocking_pids(pid)))"
+                                ),
+                                {"blocker": blocker_pid},
+                            )
+                            if waiting.scalar_one():
+                                break
+                            if execution.done():
+                                await execution
+                                pytest.fail("The worker finished before the source lock released")
+                            await asyncio.sleep(0.01)
+                        else:
+                            pytest.fail("The worker did not wait on the pinned source row")
+                        assert deadline is not None
+                        await observer.execute(
+                            select(func.pg_sleep_until(deadline + timedelta(milliseconds=25)))
+                        )
+                assert await asyncio.wait_for(execution, timeout=5)
+            finally:
+                execution.cancel()
+                await asyncio.gather(execution, return_exceptions=True)
+
+            outcome = (await client.get(run_path, headers=_DURABLE_OWNER)).json()["run"]
+            assert outcome["answer"] is None
+            assert dispatches == int(publishing)
+            if publishing:
+                assert not await replacement.run_once()
+                outcome = (await client.get(run_path, headers=_DURABLE_OWNER)).json()["run"]
+                assert (outcome["status"], outcome["failure"]) == ("uncertain", "dispatch_unknown")
+            elif scenario == "prepare_grant":
+                assert (outcome["status"], outcome["failure"]) == ("failed", "access_changed")
+            else:
+                assert outcome["status"] == "preparing"
+                assert outcome["execution"]["possible_dispatch_at"] is None
+                assert await replacement.run_once()
+                assert dispatches == 1
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
