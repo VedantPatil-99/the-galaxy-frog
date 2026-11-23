@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
+from galaxy_frog.domain.generation.models import GenerationProviderError
 from galaxy_frog.domain.generation.workspace_answer import (
     WorkspaceAnswerDraftInvalid,
     WorkspaceAnswerPassage,
@@ -77,3 +78,38 @@ async def test_workspace_ollama_rejects_invalid_draft_or_replacement_model(
         )
         with pytest.raises(WorkspaceAnswerDraftInvalid):
             await provider.generate_workspace_answer("Question", ())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure",
+    ["connect-refused", "rejected", "response-lost", "read-timeout"],
+)
+async def test_workspace_ollama_uses_one_attempt_and_exposes_a_generic_transport_failure(
+    failure: str,
+) -> None:
+    calls = 0
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        match failure:
+            case "connect-refused":
+                raise httpx.ConnectError("fixture refused before connection", request=request)
+            case "rejected":
+                return httpx.Response(404, json={"error": "fixture model missing"})
+            case "response-lost":
+                raise httpx.ReadError("fixture lost a response", request=request)
+            case _:
+                raise httpx.ReadTimeout("fixture read timed out", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        provider = OllamaGenerationProvider(
+            base_url="http://localhost:11434", model="fixture", client=client
+        )
+        with pytest.raises(GenerationProviderError, match="provider is unavailable"):
+            await provider.generate_workspace_answer(
+                "What colour is the seed?",
+                (WorkspaceAnswerPassage("E1", "document", "A green seed."),),
+            )
+    assert calls == 1

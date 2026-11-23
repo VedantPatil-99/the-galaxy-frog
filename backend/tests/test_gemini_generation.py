@@ -171,11 +171,13 @@ async def test_incomplete_unsafe_and_invalid_output_is_rejected(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [httpx2.ConnectError, httpx2.ReadError, httpx2.ReadTimeout])
 async def test_unknown_network_outcome_does_not_leak(
     sdk: tuple[genai.Client, list[httpx2.Request], list[httpx2.Response | Exception]],
+    failure: type[Exception],
 ) -> None:
     client, requests, responses = sdk
-    responses[0] = httpx2.ReadTimeout("synthetic-private-credential")
+    responses[0] = failure("synthetic-private-credential")
     with pytest.raises(ProviderFailure, match="PROVIDER_OUTCOME_UNKNOWN") as caught:
         await GeminiJSON("key", MODEL, client=client).generate("prompt", ANSWER_SCHEMA)
     assert len(requests) == 1

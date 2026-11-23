@@ -226,3 +226,133 @@ RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-c
 Reproduce the browser check from the repository root after `bun run build` with
 `bun scripts/workspace-account-isolation.ts`. The fixture uses local transports
 and synthetic Auth responses, without live sign-in or provider requests.
+
+## W4.2 evidence and provider feasibility
+
+Verification for [#28](https://github.com/VedantPatil-99/the-galaxy-frog/issues/28) on
+2026-11-23. The fixture tests use synthetic notebook content and provider transports.
+The feasibility gate covers the local launch slice and records where later routes must
+stay disabled. It does not introduce a durable run, new storage, or provider routing.
+
+| Decision | Evidence and safe default | Ticket |
+| --- | --- | --- |
+| Start with a pasted-text passage | FastAPI exposes an owner-scoped lookup by notebook, source and exact version. A save with changed text creates a second source/version, even with the same title. The prior pasted text and Unicode character spans can be recovered by its original version and block ID. Pin the tuple at acceptance, recheck the exact version and slice before dispatch, and fail closed for missing or mismatched identities. Store the bounded excerpt that was actually sent and validate quotes against it. | [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29) |
+| Gate other source types | Existing document section APIs carry version IDs. OCR adds separate processing lineage. Notebook video reads expose the current transcript by video ID, with original intervals and cues, without a notebook-scoped historical transcript-version read. A cue ID and current URL alone cannot prove exact reconstruction after change. Keep PDFs, OCR, and video outside #29. In #31, enable each source type only after exact content identity, replay, and withdrawal tests pass. | [#31](https://github.com/VedantPatil-99/the-galaxy-frog/issues/31), [#34](https://github.com/VedantPatil-99/the-galaxy-frog/issues/34) |
+| Distinguish source removal from withdrawal | Current FastAPI requests verify the bearer and workspace invitation before checking notebook ownership. Version reads deny missing or inaccessible versions, and private responses use `no-store`. An invalid bearer returns 401. A verified email outside the invitation list returns 403 before source lookup. There is no workspace route that removes or permanently deletes a source, and no chat dependency notification to reuse. These HTTP checks do not signal an in-flight worker. | [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29), [#31](https://github.com/VedantPatil-99/the-galaxy-frog/issues/31) |
+| Treat ambiguous dispatch as unknown | Controlled HTTP distinguishes what the transport experienced. The Ollama caller sees the same `GenerationProviderError` for refusal, HTTP rejection, read timeout and response loss. Gemini emits structured auth, rate, quota, invalid-input and setup outcomes for applicable HTTP responses. Unclassified HTTP and network failures stay unknown. A completed response with invalid output, safety refusal or a model mismatch is a different outcome from no dispatch and does not permit fallback. | [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29), [#30](https://github.com/VedantPatil-99/the-galaxy-frog/issues/30), [#37](https://github.com/VedantPatil-99/the-galaxy-frog/issues/37) |
+| Protect a possible dispatch across worker loss | Existing Gemini embeddings commit the receipt claim and quota reservation before dispatch. Existing Study verifies lease and consent before a call. These are precedents for committing a possible-dispatch marker behind a live fence before I/O. A lost worker before that marker can be reclaimed. At or after the marker without conclusive completion, record unknown, suppress automatic retries or substitutions, and retain possible usage. The chat-specific state machine, publication fence and Stop races still need their own tests. | [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29), [#30](https://github.com/VedantPatil-99/the-galaxy-frog/issues/30), [#36](https://github.com/VedantPatil-99/the-galaxy-frog/issues/36) |
+| Gate Gemini on verified project eligibility | The local interactive Gemini configuration has generation disabled and no configured interactive key/project pair or selected model. Public rates and terms establish a basis for a review. They do not establish this workspace's billing tier, active quotas, or applicable private-data terms. Keep Manual Gemini and Automatic cloud fallback ineligible for real notebook data until those are verified for the interactive project. A separate embedding or Study project cannot satisfy the gate. | [#35](https://github.com/VedantPatil-99/the-galaxy-frog/issues/35), [#36](https://github.com/VedantPatil-99/the-galaxy-frog/issues/36), [#37](https://github.com/VedantPatil-99/the-galaxy-frog/issues/37) |
+
+### Required evidence lifecycle
+
+- At acceptance record every source the provider could see, including uncited input, and its
+  version and locator. For the first local slice, require the notebook and pinned text
+  dependency to be authorized at read, dispatch and publish. Reject stale references rather
+  than reconstructing from a new search or the current source. Workspace account rows
+  retain the verified subject ID and creation time. An existing row alone does not
+  prove current invitation eligibility. The worker needs an authoritative authorization
+  check or a revocable server-owned grant. Keep bearer tokens out of run storage and
+  block dispatch if current authorization cannot be established.
+- #31 needs one transactional signal for dependency changes. Source removal should stop
+  future retrieval while allowing still-authorized historical reads. A permanent deletion
+  or owner-access loss must make dependent runs immediately unreadable and unpublishable.
+  Recheck under the same database fence at dispatch claim and publication. An already
+  dispatched request may still reach the provider.
+- Retain bounded private evidence for authorized replay while its dependency is available.
+  Scrub materialized excerpts, prepared payloads, and whole affected answer blocks on
+  permanent erasure, including when the source was never cited. Keep content-free status
+  and identifiers only where needed to deny replay or explain withdrawal. Access loss
+  immediately denies reads and writes. Permanent erasure also requires physical purge.
+  Keep a source type disabled if its lifecycle cannot supply these guarantees. The
+  user-facing permanent deletion flow and impact preview remain later work.
+
+### Dispatch and quota constraints
+
+- A failed local readiness check or lease/consent/permission check before I/O establishes
+  that the attempt did not dispatch. For #29, map the existing generic Ollama transport
+  exception after the marker to unknown. Its message does not justify retrying or switching.
+  For #37, allow an observed rejection only if the provider contract establishes that
+  execution did not occur. Treat response loss, timeout, unclassified 5xx, and abandoned
+  marked attempts as unknown. A rate-limit or quota code is useful for recovery. Any
+  fallback still needs the specific documented rejection and approved transition policy.
+- The Ollama adapter issues one POST and its owned HTTPX client uses the default zero
+  connection retries, with redirects disabled. Gemini's owned SDK client sets one attempt,
+  disables redirects, and uses a stateless Interactions call with storage and continuation
+  off. Controlled response tests count actual dispatches at the transport seam. Do not rely
+  on defaults when injecting a new transport or inferring that an interrupted call was free.
+- Google's unpaid terms can allow product-improvement use and prohibit sensitive,
+  confidential or personal inputs. Google's paid terms limit prompt/response logging to
+  specified purposes. Verify what applies to the interactive project and prepared content
+  before enabling it. Google publishes project-level request/token limits and tier-specific
+  rates. Capture the actual project's active limits and the exact model, endpoint,
+  service tier, unit, currency and rate effective date. A zero estimate and
+  `store=False` do not establish approved data use. [Google terms](https://ai.google.dev/gemini-api/terms)
+  · [Google rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)
+- A bounded local estimate can combine the existing UTF-8 prompt bytes, JSON schema bytes
+  and explicit overhead reserve with a defensible billed-output bound for the chosen
+  model/endpoint, including thinking tokens. As a worked example, the published Standard
+  paid text rate for Gemini 3.5 Flash-Lite was USD 0.30 per million input tokens and USD
+  2.50 per million output tokens including thinking on the verification date. Applying
+  those rates to a synthetic 6,144 input-token reservation and 4,096 billable output
+  tokens gives an estimated USD 0.0120832. This confirms the arithmetic and the
+  feasibility of a local estimate. It does not guarantee tokenization, billing, or
+  the billed-output bound for the interactive project. Apply a local input size bound,
+  verify the billed-output bound before enabling paid dispatch, version the reviewed rate,
+  and block stale or missing estimates. Do not call cloud token counting during preflight.
+  [Google pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite)
+  · [Google token guidance](https://ai.google.dev/gemini-api/docs/tokens)
+- Reuse the existing PostgreSQL project quota reservation and its atomic RPM, input TPM
+  and RPD checks. Those counters track local admission. A separate app spending limit and
+  reservation for the approved payload and model must be bound to a single run. Record
+  observed usage separately from the estimate and leave an ambiguous reservation open
+  until reconciled. Report the privacy and pricing gate in both execution modes.
+
+### Local verification
+
+- The version pin fixture reopens the exact 10-character excerpt at offsets `[7, 17)`
+  after a changed paste with the same title. Pasted text is append-only through the
+  current API. There is no in-place replacement. A crossed source/version pair and
+  another account receive 404. The invalid session receives 401 and the same account
+  with a verified email outside the allowlist receives 403. After removing the
+  original fixture row, the previously valid pin returns 404, with the new copy still
+  available. The successful response is marked `no-store`.
+- Controlled Ollama and Gemini tests submit one transport attempt per failure case.
+  The embedding interruption fixture exercises cancellation after an existing receipt
+  is claimed. It checks that retries are blocked inside and after the pending-claim
+  window, and that another confirmation still hits the reserved daily quota. This
+  approximates interruption at the provider boundary. It does not exercise a W4.2
+  worker or a live provider.
+- The controlled provider, routing and ingestion regression group passed 99 tests.
+  The complete frontend suite passed 61 tests. Backend typechecking and both generated
+  API checks passed.
+- Headless Chrome on Windows ran the current Next.js client with simulated workspace
+  Auth, source, draft and answer responses. One draft opened at each of 1440 and 390 CSS
+  px. One selected-passage answer opened the original second PDF page, and refresh
+  restored the same draft. A separate initial-load fixture used a 25-byte draft,
+  one two-page PDF, and a 27-byte hit from page 2. It checked reflow and draft
+  restoration on three direct notebook/chat URL visits per width at 320, 390, 768 and
+  1440 CSS px. Elapsed time was the browser's navigation-relative timer at the first
+  sample with the expected draft in the composer. It took 3.57–4.50 s on 11 repeats and
+  12.63 s on the first development-server visit, which included compilation.
+  These are fixture diagnostics,
+  outside the W4.2 performance gates. No provider requests or charges were involved.
+
+To repeat the browser journey, run the existing workspace client against a local test API
+with a simulated creator session, a chat with a seeded draft, and one two-page PDF fixture.
+Return a keyword hit on page 2 and a deterministic local answer that cites an exact quote
+from that hit. At desktop and narrow mobile widths, open the chat, check the seeded draft
+and absence of horizontal overflow, search for the quote, select the hit, and use **Ask
+with Ollama**. Open the resulting citation, confirm page 2, and refresh to recover the
+same draft. Use controlled responses for the answer and page preview.
+
+Reproduce the focused API and transport checks against an already migrated **local**
+PostgreSQL database. The real-model and media integrations remain disabled.
+
+```bash
+RUN_DATABASE_INTEGRATION=1 uv run --no-sync --directory backend python -m pytest --no-cov \
+  tests/integration/test_workspace_http_ownership.py::test_pinned_pasted_passage_survives_a_new_copy_and_rejects_an_invalid_session \
+  tests/integration/test_workspace_sources.py::test_interrupted_cloud_embedding_dispatch_leaves_the_receipt_claimed \
+  tests/integration/test_provider_quota_postgres.py \
+  tests/integration/test_study_provider_fencing.py \
+  tests/test_workspace_answer_provider.py tests/test_gemini_generation.py
+```

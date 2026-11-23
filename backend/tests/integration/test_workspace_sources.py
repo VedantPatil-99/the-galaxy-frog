@@ -34,8 +34,10 @@ from galaxy_frog.api.routes import workspace as workspace_routes
 from galaxy_frog.api.routes import workspace_semantic, workspace_semantic_cloud
 from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
 from galaxy_frog.application.provider_policy import ProviderCode, ProviderFailure
+from galaxy_frog.application.provider_registry import gemini_quota
 from galaxy_frog.config import Settings
 from galaxy_frog.db.models import VideoFrameRow, VideoRow
+from galaxy_frog.db.provider_quota import ProviderQuotaReservationRow
 from galaxy_frog.db.video_repository import SqlAlchemyVideoRepository
 from galaxy_frog.db.workspace import WorkspaceAccountRow, WorkspaceNotebookRow, WorkspaceRepository
 from galaxy_frog.db.workspace_documents import (
@@ -622,6 +624,75 @@ async def test_gemini_embeddings_require_current_once_only_cloud_confirmation(
     assert (
         await client.post(confirm_path, headers=OWN, json=consent(await preview(search), search))
     ).json()["error"]["code"] == "WORKSPACE_CLOUD_EMBEDDING_BUSY"
+
+
+@pytest.mark.asyncio
+async def test_interrupted_cloud_embedding_dispatch_leaves_the_receipt_claimed(
+    workspace: tuple[httpx.AsyncClient, AsyncEngine, UUID, UUID, tuple[UUID, ...], UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, engine, _, _, _, _ = workspace
+    created = await client.post(
+        "/v1/workspace/notebooks", headers=OWN, json={"title": "Interrupted dispatch"}
+    )
+    assert created.status_code == 201
+    base = f"/v1/workspace/notebooks/{created.json()['notebook_id']}"
+    pasted = await client.post(
+        f"{base}/text-sources",
+        headers=OWN,
+        json={"title": "Fixture", "format": "plain", "text": "Test passage for recovery."},
+    )
+    assert pasted.status_code == 200
+    project = f"embeddings-{uuid4().hex[:12]}"
+    settings = auth_settings(
+        workspace_gemini_embedding_enabled=True,
+        gemini_embedding_api_key="fixture-key",
+        gemini_embedding_project_id=project,
+        gemini_requests_per_day=1,
+    )
+    monkeypatch.setattr(workspace_semantic_cloud, "workspace_settings", Mock(return_value=settings))
+    embed = AsyncMock(side_effect=asyncio.CancelledError)
+    monkeypatch.setattr(GeminiEmbeddingProvider, "embed", embed)
+
+    action = {"kind": "index", "expected_collection": None, "replace": False}
+    quote = await client.post(f"{base}/semantic-cloud-preview", headers=OWN, json=action)
+    assert quote.status_code == 200
+    embed.assert_not_awaited()
+    confirmed = {"preview_id": quote.json()["preview_id"], "action": action, "allow_cloud": True}
+    path = f"{base}/semantic-cloud-confirm"
+    try:
+        interrupted = await client.post(path, headers=OWN, json=confirmed)
+        assert interrupted.status_code == 500
+        embed.assert_awaited_once()
+
+        replay = await client.post(path, headers=OWN, json=confirmed)
+        assert replay.status_code == 409
+        assert replay.json()["error"]["code"] == "WORKSPACE_CLOUD_EMBEDDING_BUSY"
+
+        # Advance past the pending-claim window while the original preview would still be valid.
+        clock = Mock(wraps=datetime)
+        clock.now.return_value = datetime.now(UTC) + timedelta(minutes=3)
+        monkeypatch.setattr(workspace_semantic_cloud, "datetime", clock)
+        spent = await client.post(path, headers=OWN, json=confirmed)
+        assert spent.status_code == 409
+        assert spent.json()["error"]["code"] == "WORKSPACE_CLOUD_PREVIEW_CHANGED"
+
+        fresh = await client.post(f"{base}/semantic-cloud-preview", headers=OWN, json=action)
+        assert fresh.status_code == 200
+        limited = await client.post(
+            path, headers=OWN, json={**confirmed, "preview_id": fresh.json()["preview_id"]}
+        )
+        assert limited.status_code == 429
+        assert limited.json()["error"]["code"] == ProviderCode.QUOTA_EXHAUSTED.value
+        embed.assert_awaited_once()
+    finally:
+        group = gemini_quota(settings, project)["quota_group"]
+        async with async_sessionmaker(engine).begin() as session:
+            await session.execute(
+                delete(ProviderQuotaReservationRow).where(
+                    ProviderQuotaReservationRow.group_id == group
+                )
+            )
 
 
 @pytest.mark.asyncio

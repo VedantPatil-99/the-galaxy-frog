@@ -26,6 +26,7 @@ from galaxy_frog.api.routes import workspace
 from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
 from galaxy_frog.config import Settings
 from galaxy_frog.db import workspace_page_ocr
+from galaxy_frog.db.engine import create_database_engine
 from galaxy_frog.db.workspace import WorkspaceAccountRow, WorkspaceNotebookRow
 from galaxy_frog.db.workspace_documents import WorkspaceDocumentRepository, WorkspaceDocumentRow
 from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRow
@@ -64,8 +65,14 @@ async def workspace_http(
 
     def authenticated_user(request: httpx.Request) -> httpx.Response:
         token = request.headers["authorization"].removeprefix("Bearer ")
-        account = owners[token]
-        email = "owner@example.com" if token == "owner-token" else "other@example.com"
+        account = owners.get("owner-token" if token == "former-owner-token" else token)
+        if account is None:
+            return httpx.Response(401, json={"message": "Invalid session"})
+        email = {
+            "owner-token": "owner@example.com",
+            "other-token": "other@example.com",
+            "former-owner-token": "former@example.com",
+        }[token]
         return httpx.Response(
             200,
             json={
@@ -233,6 +240,80 @@ async def test_pasted_text_is_idempotent_versioned_and_owner_scoped(
         path, headers={**own, "content-type": "application/json"}, content=b" " * (512 * 1024 + 1)
     )
     assert oversized.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_pinned_pasted_passage_survives_a_new_copy_and_rejects_an_invalid_session(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    client, _ = workspace_http
+    owner = {"authorization": "Bearer owner-token"}
+    notebook = await client.post(
+        "/v1/workspace/notebooks", headers=owner, json={"title": "Version evidence"}
+    )
+    assert notebook.status_code == 201
+    path = f"/v1/workspace/notebooks/{notebook.json()['notebook_id']}/text-sources"
+    original = await client.post(
+        path,
+        headers=owner,
+        json={"title": "Field notes", "format": "markdown", "text": "# Ice\r\n\r\nIce flows."},
+    )
+    assert original.status_code == 200
+    source = original.json()
+    passage = source["blocks"][1]
+    assert (passage["start_char"], passage["end_char"], passage["text"]) == (7, 17, "Ice flows.")
+    pin = f"{path}/{source['source_id']}/versions/{source['version_id']}"
+
+    changed = await client.post(
+        path,
+        headers=owner,
+        json={"title": "Field notes", "format": "markdown", "text": "# Ice\n\nIce melts."},
+    )
+    assert changed.status_code == 200
+    new_source = changed.json()
+    assert new_source["source_id"] != source["source_id"]
+    assert new_source["version_id"] != source["version_id"]
+    assert new_source["blocks"][1]["block_id"] != passage["block_id"]
+
+    reopened = await client.get(pin, headers=owner)
+    assert reopened.status_code == 200
+    assert reopened.json()["blocks"][1] == passage
+    assert reopened.json()["text"][7:17] == "Ice flows."
+    assert reopened.headers["cache-control"] == "no-store"
+
+    wrong_version = f"{path}/{source['source_id']}/versions/{new_source['version_id']}"
+    assert (await client.get(wrong_version, headers=owner)).status_code == 404
+    assert (
+        await client.get(pin, headers={"authorization": "Bearer other-token"})
+    ).status_code == 404
+    denied = await client.get(pin, headers={"authorization": "Bearer invalidated-token"})
+    assert denied.status_code == 401
+    assert "Ice flows." not in denied.text
+    outside_allowlist = await client.get(
+        pin, headers={"authorization": "Bearer former-owner-token"}
+    )
+    assert outside_allowlist.status_code == 403
+    assert outside_allowlist.json()["error"]["code"] == "WORKSPACE_INVITATION_REQUIRED"
+    assert "Ice flows." not in outside_allowlist.text
+
+    # Simulate loss of this test's exact pin. The workspace has no source-erasure route.
+    engine = create_database_engine(Settings())
+    try:
+        async with async_sessionmaker(engine).begin() as session:
+            await session.execute(
+                delete(WorkspaceTextSourceRow).where(
+                    WorkspaceTextSourceRow.id == UUID(source["source_id"]),
+                    WorkspaceTextSourceRow.version_id == UUID(source["version_id"]),
+                    WorkspaceTextSourceRow.notebook_id == UUID(notebook.json()["notebook_id"]),
+                )
+            )
+    finally:
+        await engine.dispose()
+    missing = await client.get(pin, headers=owner)
+    assert missing.status_code == 404
+    assert "Ice flows." not in missing.text
+    new_path = f"{path}/{new_source['source_id']}/versions/{new_source['version_id']}"
+    assert (await client.get(new_path, headers=owner)).json()["blocks"][1]["text"] == "Ice melts."
 
 
 @pytest.mark.asyncio
