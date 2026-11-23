@@ -64,7 +64,9 @@ async def workspace_http(
 
     def authenticated_user(request: httpx.Request) -> httpx.Response:
         token = request.headers["authorization"].removeprefix("Bearer ")
-        account = owners[token]
+        account = owners.get(token)
+        if account is None:
+            return httpx.Response(401, json={"message": "Invalid session"})
         email = "owner@example.com" if token == "owner-token" else "other@example.com"
         return httpx.Response(
             200,
@@ -211,6 +213,55 @@ async def test_pasted_text_is_idempotent_versioned_and_owner_scoped(
         path, headers={**own, "content-type": "application/json"}, content=b" " * (512 * 1024 + 1)
     )
     assert oversized.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_pinned_pasted_passage_survives_a_new_copy_and_rejects_an_invalid_session(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    client, _ = workspace_http
+    owner = {"authorization": "Bearer owner-token"}
+    notebook = await client.post(
+        "/v1/workspace/notebooks", headers=owner, json={"title": "Version evidence"}
+    )
+    assert notebook.status_code == 201
+    path = f"/v1/workspace/notebooks/{notebook.json()['notebook_id']}/text-sources"
+    original = await client.post(
+        path,
+        headers=owner,
+        json={"title": "Field notes", "format": "markdown", "text": "# Ice\r\n\r\nIce flows."},
+    )
+    assert original.status_code == 200
+    source = original.json()
+    passage = source["blocks"][1]
+    assert (passage["start_char"], passage["end_char"], passage["text"]) == (7, 17, "Ice flows.")
+    pin = f"{path}/{source['source_id']}/versions/{source['version_id']}"
+
+    changed = await client.post(
+        path,
+        headers=owner,
+        json={"title": "Field notes", "format": "markdown", "text": "# Ice\n\nIce melts."},
+    )
+    assert changed.status_code == 200
+    new_source = changed.json()
+    assert new_source["source_id"] != source["source_id"]
+    assert new_source["version_id"] != source["version_id"]
+    assert new_source["blocks"][1]["block_id"] != passage["block_id"]
+
+    reopened = await client.get(pin, headers=owner)
+    assert reopened.status_code == 200
+    assert reopened.json()["blocks"][1] == passage
+    assert reopened.json()["text"][7:17] == "Ice flows."
+    assert reopened.headers["cache-control"] == "no-store"
+
+    wrong_version = f"{path}/{source['source_id']}/versions/{new_source['version_id']}"
+    assert (await client.get(wrong_version, headers=owner)).status_code == 404
+    assert (
+        await client.get(pin, headers={"authorization": "Bearer other-token"})
+    ).status_code == 404
+    denied = await client.get(pin, headers={"authorization": "Bearer invalidated-token"})
+    assert denied.status_code == 401
+    assert "Ice flows." not in denied.text
 
 
 @pytest.mark.asyncio
