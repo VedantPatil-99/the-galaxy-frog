@@ -27,10 +27,13 @@ approach to mixed sources, using exact pages or stable, versioned text blocks wh
 
 ## Operating Context
 
-People work in private notebooks, move between search and source inspection, and choose evidence
-for an answer. The current workspace supports mixed-source search, one-shot answers from selected
-passages, and recoverable chat drafts. Saved grounded turns and recoverable generation runs are
-planned. [Workspace checkpoints](../../PLANS.md#active-program--workspace-redesign)
+Conversation is the main reading surface. A **Sources** action near the end of an answer lists
+its citations, each linked to the original location. The intended default searches eligible
+notebook sources automatically. Readers can narrow the scope to specific sources or passages.
+
+The current workspace supports mixed-source search, one-shot answers from selected passages,
+and recoverable chat drafts. Saved grounded turns and recoverable generation runs are planned.
+[Workspace checkpoints](../../PLANS.md#active-program--workspace-redesign)
 
 ## Capabilities and Constraints
 
@@ -42,6 +45,14 @@ planned. [Workspace checkpoints](../../PLANS.md#active-program--workspace-redesi
 - Validate citation references and exact quotes against the evidence supplied to the model.
   Give readers access to the source so they can assess the claim itself.
   [Selected-passage answer decision](../../docs/adr/0013-answers-from-selected-passages.md)
+- The redesigned conversation must support local Ollama and configured Gemini answer-generation
+  models. Put the model choice and common run controls in the composer. Keep connection settings,
+  processing models, and provider administration in advanced settings.
+- When a provider call may have started, explain the uncertain outcome and require an explicit
+  decision before a new call. Reconnecting resumes observation of the existing run.
+- Keep source removal and permanent deletion distinct. Show the deletion impact before
+  confirmation and remove or invalidate private content that depends on deleted material.
+  [Domain glossary](../../GLOSSARY.md)
 
 ## Brand Commitments
 
