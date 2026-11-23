@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { ApiClientError } from "@/lib/api/client"
 import type { WorkspaceSearchHit, WorkspaceTurn } from "@/lib/api/workspace"
 import { useWorkspaceSession } from "@/lib/workspace-session-context"
 
@@ -10,64 +11,133 @@ function mergeTurns(current: WorkspaceTurn[], updates: WorkspaceTurn[]) {
   const index = new Map(current.map(turn => [turn.turn_id, turn]))
   for (const turn of updates) {
     const saved = index.get(turn.turn_id)
+    if (saved?.run.revision === turn.run.revision && saved.run.failure === "evidence_unavailable"
+      && turn.run.status === "completed") continue
     if (!saved || turn.run.revision >= saved.run.revision) index.set(turn.turn_id, turn)
   }
   return [...index.values()].sort((first, second) => first.sequence - second.sequence)
 }
 
 function active(turn: WorkspaceTurn) {
-  return turn.run.status === "queued" || turn.run.status === "running"
+  return turn.run.status === "queued" || turn.run.status === "preparing" || turn.run.status === "running"
 }
 
 export function useWorkspaceTurns(notebookId: string, chatId?: string) {
   const session = useWorkspaceSession()
-  const { listWorkspaceTurns } = session.api
+  const { listWorkspaceTurns, getWorkspaceRun, stopWorkspaceRun, retryWorkspaceRun } = session.api
   const [turns, setTurns] = useState<WorkspaceTurn[]>([])
   const [next, setNext] = useState<number | null>()
   const [readingOlder, setReadingOlder] = useState(false)
   const [error, setError] = useState("")
+  const [actionError, setActionError] = useState("")
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine)
+  const [acting, setActing] = useState(false)
   const [refresh, setRefresh] = useState(0)
+  const pollTargetId = useId()
+  const action = useRef<AbortController | null>(null)
+  const retryKeys = useRef(new Map<string, string>())
+  const mostRecentPageSequence = useRef(0)
+  const knownActiveRun = useRef<string | null>(null)
+
+  useEffect(() => () => action.current?.abort(), [])
 
   useEffect(() => {
     if (!chatId) return
     const id = chatId
-    const controller = new AbortController()
+    let pending: AbortController | null = null
     let timer = 0
-    let pending = false
     let delay = 750
-    async function read() {
-      if (pending || controller.signal.aborted) return
+    let activeRunId = knownActiveRun.current
+    const pollTarget = document.getElementById(pollTargetId)
+    const paneVisible = () => Boolean(pollTarget?.getClientRects().length)
+    const visible = () => document.visibilityState === "visible" && navigator.onLine && paneVisible()
+    function pause() {
       window.clearTimeout(timer)
-      pending = true
+      pending?.abort()
+      pending = null
+    }
+    function schedule(full = false, reconciliationAttempts = 0) {
+      if ((!activeRunId && reconciliationAttempts === 0) || !visible()) return
+      timer = window.setTimeout(() => { void read(full, reconciliationAttempts) }, delay)
+      delay = Math.min(delay + 350, 2_500)
+    }
+    async function readRun(runId: string, signal: AbortSignal) {
       try {
-        const page = await listWorkspaceTurns(notebookId, id, null, controller.signal)
-        if (controller.signal.aborted) return
-        setTurns(current => mergeTurns(current, page.turns))
-        setNext(current => current === undefined ? page.next_before : current)
-        setError("")
-        if (page.turns.some(active) && document.visibilityState === "visible") {
-          timer = window.setTimeout(read, delay)
-          delay = Math.min(delay + 350, 2_500)
+        return [await getWorkspaceRun(notebookId, id, runId, signal)]
+      } catch (caught) {
+        if (!(caught instanceof ApiClientError) || caught.status !== 404) throw caught
+        if (!signal.aborted) setTurns(turns => turns.filter(turn => turn.run.run_id !== runId))
+        return []
+      }
+    }
+    async function read(full: boolean, reconciliationAttempts = 0) {
+      if (pending || !visible()) return
+      const controller = new AbortController()
+      pending = controller
+      try {
+        let current: WorkspaceTurn[]
+        const pointRunId = full ? null : activeRunId
+        if (pointRunId) {
+          current = await readRun(pointRunId, controller.signal)
+        } else {
+          const page = await listWorkspaceTurns(notebookId, id, null, controller.signal)
+          if (controller.signal.aborted) return
+          const previous = mostRecentPageSequence.current
+          const gap = previous > 0 && (page.turns[0]?.sequence ?? 0) > previous + 1
+          // A new page can start after a gap if the chat advanced while this tab was away.
+          setNext(cursor => cursor === undefined || gap ? page.next_before : cursor)
+          mostRecentPageSequence.current = Math.max(previous, page.turns.at(-1)?.sequence ?? 0)
+          current = page.turns
+          if (activeRunId && !current.some(turn => turn.run.run_id === activeRunId)) {
+            const missed = await readRun(activeRunId, controller.signal)
+            current = [...current, ...missed]
+          }
         }
+        if (controller.signal.aborted) return
+        setTurns(turns => mergeTurns(turns, current))
+        activeRunId = current.find(active)?.run.run_id ?? null
+        knownActiveRun.current = activeRunId
+        setError("")
+        if (pointRunId && !activeRunId) schedule(true, 3)
+        else schedule()
       } catch (caught) {
         if (!controller.signal.aborted && session.isCurrent()) {
           setError(caught instanceof Error ? caught.message : "Could not load the saved conversation.")
+          schedule(full, Math.max(0, reconciliationAttempts - 1))
         }
       } finally {
-        pending = false
+        if (pending === controller) pending = null
       }
     }
-    const resume = () => { if (document.visibilityState === "visible") void read() }
+    function resume() {
+      setOffline(!navigator.onLine)
+      pause()
+      delay = 750
+      if (visible()) void read(true)
+    }
     window.addEventListener("online", resume)
+    window.addEventListener("offline", resume)
+    window.addEventListener("focus", resume)
     document.addEventListener("visibilitychange", resume)
-    void read()
+    let wasVisible = paneVisible()
+    const panes = new ResizeObserver(() => {
+      const nowVisible = paneVisible()
+      if (wasVisible !== nowVisible) {
+        wasVisible = nowVisible
+        resume()
+      }
+    })
+    if (pollTarget) panes.observe(pollTarget)
+    void read(true)
     return () => {
-      controller.abort()
-      window.clearTimeout(timer)
+      pause()
+      panes.disconnect()
       window.removeEventListener("online", resume)
+      window.removeEventListener("offline", resume)
+      window.removeEventListener("focus", resume)
       document.removeEventListener("visibilitychange", resume)
     }
-  }, [chatId, listWorkspaceTurns, notebookId, refresh, session])
+  }, [chatId, getWorkspaceRun, listWorkspaceTurns, notebookId, pollTargetId, refresh, session])
 
   async function loadEarlier() {
     if (!chatId || next == null || readingOlder) return
@@ -75,7 +145,7 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
     try {
       const page = await listWorkspaceTurns(notebookId, chatId, next, session.signal)
       setTurns(current => mergeTurns(current, page.turns))
-      setNext(page.next_before)
+      setNext(cursor => cursor === next ? page.next_before : cursor)
       setError("")
     } catch (caught) {
       if (session.isCurrent()) setError(caught instanceof Error ? caught.message : "Could not load earlier turns.")
@@ -84,14 +154,62 @@ export function useWorkspaceTurns(notebookId: string, chatId?: string) {
     }
   }
 
+  function accepted(turn: WorkspaceTurn) {
+    if (active(turn)) knownActiveRun.current = turn.run.run_id
+    else if (knownActiveRun.current === turn.run.run_id) knownActiveRun.current = null
+    setTurns(current => mergeTurns(current, [turn]))
+    setRefresh(current => current + 1)
+  }
+
+  async function act(kind: "stop" | "retry", turn: WorkspaceTurn) {
+    if (!chatId || action.current || !session.isCurrent()) return false
+    const controller = new AbortController()
+    action.current = controller
+    const runId = turn.run.run_id
+    const scope = `galaxy-frog:run-retry:${session.accountId}:${notebookId}:${chatId}:${runId}`
+    function retryKey() {
+      const current = retryKeys.current.get(runId) ?? crypto.randomUUID()
+      let key = current
+      try {
+        key = window.sessionStorage.getItem(scope) ?? current
+        window.sessionStorage.setItem(scope, key)
+      } catch { /* The current chat can still retry with its in-memory key. */ }
+      retryKeys.current.set(runId, key)
+      return key
+    }
+    function forgetRetry() {
+      retryKeys.current.delete(runId)
+      try { window.sessionStorage.removeItem(scope) } catch { /* Storage can be disabled. */ }
+    }
+    setActing(true)
+    setActionError("")
+    try {
+      const result = kind === "stop"
+        ? await stopWorkspaceRun(notebookId, chatId, runId, controller.signal)
+        : await retryWorkspaceRun(notebookId, chatId, runId, retryKey(), controller.signal)
+      if (kind === "retry") forgetRetry()
+      accepted(result)
+      return true
+    } catch (caught) {
+      if (controller.signal.aborted || !session.isCurrent()) return false
+      const unknown = caught instanceof ApiClientError && (caught.status === 0 || caught.status >= 500
+        || (caught.status >= 200 && caught.status < 300))
+      if (kind === "retry" && !unknown) forgetRetry()
+      setActionError(unknown ? "The request could not be confirmed. Reload the conversation or try the same action again."
+        : caught instanceof Error ? caught.message : "The run action could not finish.")
+      setRefresh(current => current + 1)
+      return false
+    } finally {
+      action.current = null
+      if (!controller.signal.aborted) setActing(false)
+    }
+  }
+
   return {
-    turns, error, hasEarlier: next != null, readingOlder, loadEarlier,
+    turns, error, actionError, offline, acting, act, pollTargetId, hasEarlier: next != null, readingOlder, loadEarlier,
     active: turns.some(active),
     retry: () => setRefresh(current => current + 1),
-    accepted: (turn: WorkspaceTurn) => {
-      setTurns(current => mergeTurns(current, [turn]))
-      setRefresh(current => current + 1)
-    },
+    accepted,
   }
 }
 
@@ -101,14 +219,18 @@ const failures = {
   model_unavailable: "The configured local Ollama model is unavailable. Check the model and try a new question.",
   answer_unverified: "Ollama returned an answer whose evidence could not be verified.",
   dispatch_unknown: "Ollama may have received this request. Review the run before sending a new question.",
+  recovery_exhausted: "The worker could not prepare this run after three claims. You can retry it.",
 } satisfies Record<NonNullable<WorkspaceTurn["run"]["failure"]>, string>
 
-export function WorkspaceSavedTurns({ history, onOpen }: {
+export function WorkspaceSavedTurns({ history, onOpen, onRestore }: {
   history: ReturnType<typeof useWorkspaceTurns>
   onOpen: (hit: WorkspaceSearchHit) => void
+  onRestore: (question: string) => void
 }) {
   const latest = history.turns.at(-1)
-  return <div className="space-y-3 px-2 pt-3" aria-label="Saved conversation">
+  return <div id={history.pollTargetId} className="space-y-3 px-2 pt-3" aria-label="Saved conversation">
+    {history.offline && <p role="status" className="text-sm text-muted-foreground">Offline. Run status will refresh when you reconnect.</p>}
+    {history.actionError && <p role="alert" className="text-sm text-destructive">{history.actionError}</p>}
     {history.error && <div className="space-y-1">
       <p role="alert" className="text-sm text-destructive">{history.error}</p>
       <Button type="button" variant="outline" className="min-h-11" onClick={history.retry}>Reload conversation</Button>
@@ -119,12 +241,29 @@ export function WorkspaceSavedTurns({ history, onOpen }: {
         const { run } = turn
         const evidence = run.evidence
         const status = run.status === "queued" ? "Queued for Ollama"
+          : run.status === "preparing" ? "Preparing the pinned passage"
           : run.status === "running" ? "Running in Ollama"
           : run.status === "completed" ? `Saved answer · ${run.settings.model}`
+          : run.status === "stopped" ? "Run stopped"
           : run.failure ? failures[run.failure] : "The run ended without a saved answer."
+        const recoverable = run.status === "stopped" || run.status === "failed" || run.status === "uncertain"
+        const retried = history.turns.some(previous => previous.run.retry_of_run_id === run.run_id)
         return <li key={turn.turn_id} className="space-y-2 border-s-2 border-border ps-3">
           <p className="text-sm font-medium whitespace-pre-wrap wrap-anywhere">{turn.question}</p>
-          <p role={latest?.turn_id === turn.turn_id ? "status" : undefined} className="text-sm text-muted-foreground wrap-anywhere">{status}</p>
+          <p id={`run-status-${run.run_id}`} tabIndex={-1} role={latest?.turn_id === turn.turn_id ? "status" : undefined} className="text-sm text-muted-foreground wrap-anywhere">{status}</p>
+          {run.status === "stopped" && run.execution.possible_dispatch_at && <p className="text-sm text-muted-foreground">Ollama may already have received this question.</p>}
+          {active(turn) && <Button type="button" variant="outline" className="min-h-11" aria-disabled={history.acting || history.offline} onClick={async event => {
+            if (history.acting || history.offline) return
+            const button = event.currentTarget
+            const focusStartedHere = document.activeElement === button
+            if (await history.act("stop", turn) && focusStartedHere && (document.activeElement === button || document.activeElement === document.body)) {
+              document.getElementById(`run-status-${run.run_id}`)?.focus()
+            }
+          }}>Stop</Button>}
+          {recoverable && <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="ghost" className="min-h-11" onClick={() => onRestore(turn.question)}>Restore question</Button>
+            {!retried && run.failure !== "evidence_unavailable" && <Button type="button" variant="outline" className="min-h-11" disabled={history.acting || history.active || history.offline} onClick={() => { void history.act("retry", turn) }}>Retry run</Button>}
+          </div>}
           {run.answer?.blocks.length === 0 && <p className="text-sm">The pinned passage could not establish an answer.</p>}
           {evidence && run.answer?.blocks.map((block, index) => <div key={index} className="space-y-1">
             <p className="text-sm leading-6 whitespace-pre-wrap wrap-anywhere">{block.text}</p>

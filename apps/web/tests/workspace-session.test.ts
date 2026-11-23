@@ -67,7 +67,8 @@ test("a durable send posts only the pinned intent and reads it back through the 
   const turn: WorkspaceTurn = { turn_id: "turn", sequence: 1, question: intent.question, created_at: "2026-11-23T00:00:00Z", passage,
     run: { run_id: "run", status: "queued", revision: 0, failure: null, evidence: null, answer: null,
       settings: { model: "qwen3:4b", provider: "ollama", policy: "local-pasted-text-v1", required_revision: null },
-      model_revision_at_dispatch: null } }
+      model_revision_at_dispatch: null, retry_of_run_id: null,
+      execution: { claims: 0, possible_dispatch_at: null } } }
   const session = createWorkspaceSession(first, "legacy", () => {}, () => "legacy", async (path, init) => {
     expect(path).toBe("/api/proxy/v1/workspace/notebooks/notebook/chats/chat/turns")
     expect(new Headers(init?.headers).get("x-workspace-account")).toBe(first)
@@ -79,4 +80,30 @@ test("a durable send posts only the pinned intent and reads it back through the 
   })
   await expect(session.api.submitWorkspaceTurn("notebook", "chat", intent, session.signal)).resolves.toEqual(turn)
   await expect(session.api.listWorkspaceTurns("notebook", "chat", null, session.signal)).resolves.toEqual({ turns: [turn], next_before: null })
+})
+
+test("reconnect, Stop and explicit retry use the account-bound run endpoints", async () => {
+  const stopped: WorkspaceTurn = { turn_id: "turn", sequence: 1, question: "What moves?", created_at: "2026-11-24T00:00:00Z",
+    passage: { source_id: "source", version_id: "version", block_id: "block" }, run: {
+      run_id: "run", status: "stopped", revision: 2, failure: null, evidence: null, answer: null,
+      retry_of_run_id: null, execution: { claims: 1, possible_dispatch_at: "2026-11-24T00:00:01Z" },
+      settings: { provider: "ollama", policy: "local-pasted-text-v1", model: "qwen3:4b", required_revision: null },
+      model_revision_at_dispatch: "fixture",
+    } }
+  const linked: WorkspaceTurn = { ...stopped, turn_id: "next-turn", sequence: 2, run: {
+    ...stopped.run, run_id: "next-run", status: "queued", revision: 0, retry_of_run_id: "run",
+    model_revision_at_dispatch: null, execution: { claims: 0, possible_dispatch_at: null },
+  } }
+  const observed: Array<[string, string, unknown]> = []
+  const session = createWorkspaceSession(first, "legacy", () => {}, () => "legacy", async (path, init) => {
+    expect(new Headers(init?.headers).get("x-workspace-account")).toBe(first)
+    observed.push([String(path), init?.method ?? "GET", init?.body ? JSON.parse(String(init.body)) : null])
+    return Response.json(String(path).endsWith("/retry") ? linked : stopped)
+  })
+  const base = "/api/proxy/v1/workspace/notebooks/notebook/chats/chat/runs/run"
+  const signal = session.signal
+  await expect(session.api.getWorkspaceRun("notebook", "chat", "run", signal)).resolves.toEqual(stopped)
+  await expect(session.api.stopWorkspaceRun("notebook", "chat", "run", signal)).resolves.toEqual(stopped)
+  await expect(session.api.retryWorkspaceRun("notebook", "chat", "run", "retry-key", signal)).resolves.toEqual(linked)
+  expect(observed).toEqual([[base, "GET", null], [`${base}/stop`, "POST", null], [`${base}/retry`, "POST", { submission_key: "retry-key" }]])
 })

@@ -15,6 +15,8 @@ from galaxy_frog.db.workspace_chats import WorkspaceChatRepository
 from galaxy_frog.db.workspace_runs import (
     WorkspaceActiveRun,
     WorkspaceRunAuthorizationExpired,
+    WorkspaceRunNotFound,
+    WorkspaceRunNotRetryable,
     WorkspaceRunRepository,
     WorkspaceSubmissionConflict,
     WorkspaceTemporalQuestion,
@@ -31,6 +33,7 @@ from galaxy_frog.domain.workspace_chat import (
 )
 from galaxy_frog.domain.workspace_run import (
     WorkspaceLocalRunSettings,
+    WorkspaceRunRetry,
     WorkspaceTurnsPage,
     WorkspaceTurnSubmit,
     WorkspaceTurnView,
@@ -64,6 +67,13 @@ async def _authorized_chats(
             status_code=404,
             code="WORKSPACE_CHAT_NOT_FOUND",
             message="The requested chat is unavailable.",
+            retryable=False,
+        ) from None
+    except WorkspaceRunNotFound:
+        raise ApiError(
+            status_code=404,
+            code="WORKSPACE_RUN_NOT_FOUND",
+            message="The requested run is unavailable.",
             retryable=False,
         ) from None
 
@@ -115,25 +125,11 @@ async def save_draft(
     return saved
 
 
-@router.post("/{chat_id}/turns", status_code=202, responses={409: {"model": ErrorResponse}})
-async def submit_workspace_turn(
-    chat_id: UUID,
-    body: WorkspaceTurnSubmit,
-    chats: Chats,
-    identity: Creator,
-    request: Request,
-) -> WorkspaceTurnView:
-    settings = workspace_settings(request)
-    runs = WorkspaceRunRepository(chats.session, chats.notebook_id, identity)
+async def _authorized_runs(
+    chats: Chats, identity: Creator
+) -> AsyncGenerator[WorkspaceRunRepository]:
     try:
-        turn = await runs.submit(
-            chat_id,
-            body,
-            WorkspaceLocalRunSettings(
-                model=settings.generation_model,
-                required_revision=settings.generation_model_revision,
-            ),
-        )
+        yield WorkspaceRunRepository(chats.session, chats.notebook_id, identity)
     except WorkspaceSubmissionConflict:
         raise _turn_conflict(
             "WORKSPACE_SUBMISSION_CONFLICT",
@@ -161,12 +157,35 @@ async def submit_workspace_turn(
         raise _turn_conflict(
             "WORKSPACE_RUN_ACTIVE", "An answer is already in progress in this chat."
         ) from None
+    except WorkspaceRunNotRetryable:
+        raise _turn_conflict(
+            "WORKSPACE_RUN_NOT_RETRYABLE",
+            "Only a stopped, failed, or uncertain run can be retried.",
+        ) from None
     except WorkspaceTextNotFound:
         raise _turn_conflict(
             "WORKSPACE_EVIDENCE_SELECTION_STALE",
             "This pasted-text passage is unavailable. Select an available passage.",
         ) from None
-    await chats.session.commit()
+
+
+Runs = Annotated[WorkspaceRunRepository, Depends(_authorized_runs)]
+
+
+@router.post("/{chat_id}/turns", status_code=202, responses={409: {"model": ErrorResponse}})
+async def submit_workspace_turn(
+    chat_id: UUID, body: WorkspaceTurnSubmit, runs: Runs, request: Request
+) -> WorkspaceTurnView:
+    settings = workspace_settings(request)
+    turn = await runs.submit(
+        chat_id,
+        body,
+        WorkspaceLocalRunSettings(
+            model=settings.generation_model,
+            required_revision=settings.generation_model_revision,
+        ),
+    )
+    await runs.session.commit()
     return turn
 
 
@@ -177,11 +196,31 @@ def _turn_conflict(code: str, message: str) -> ApiError:
 @router.get("/{chat_id}/turns")
 async def list_workspace_turns(
     chat_id: UUID,
-    chats: Chats,
-    identity: Creator,
+    runs: Runs,
     before: Annotated[int | None, Query(gt=0, le=9_007_199_254_740_991)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> WorkspaceTurnsPage:
-    return await WorkspaceRunRepository(chats.session, chats.notebook_id, identity).list(
-        chat_id, before, limit
-    )
+    return await runs.list(chat_id, before, limit)
+
+
+@router.get("/{chat_id}/runs/{run_id}")
+async def get_workspace_run(chat_id: UUID, run_id: UUID, runs: Runs) -> WorkspaceTurnView:
+    return await runs.get_run(chat_id, run_id)
+
+
+@router.post("/{chat_id}/runs/{run_id}/stop")
+async def stop_workspace_run(chat_id: UUID, run_id: UUID, runs: Runs) -> WorkspaceTurnView:
+    turn = await runs.stop_run(chat_id, run_id)
+    await runs.session.commit()
+    return turn
+
+
+@router.post(
+    "/{chat_id}/runs/{run_id}/retry", status_code=202, responses={409: {"model": ErrorResponse}}
+)
+async def retry_workspace_run(
+    chat_id: UUID, run_id: UUID, body: WorkspaceRunRetry, runs: Runs
+) -> WorkspaceTurnView:
+    turn = await runs.retry_run(chat_id, run_id, body.submission_key)
+    await runs.session.commit()
+    return turn

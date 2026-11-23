@@ -32,11 +32,14 @@ class WorkspaceChatWorker:
         sessions: async_sessionmaker[AsyncSession],
         provider: WorkspaceAnswerProvider,
         probe: Callable[[str], Awaitable[dict[str, str]]] = probe_ollama_models,
+        *,
+        heartbeat_seconds: float = 5.0,
     ) -> None:
         self.settings = settings
         self.sessions = sessions
         self.provider = provider
         self.probe = probe
+        self.heartbeat_seconds = heartbeat_seconds
         self.allowed_creators = frozenset(
             email.casefold()
             for email in settings.workspace_creator_emails
@@ -49,13 +52,31 @@ class WorkspaceChatWorker:
         if claim is None:
             return False
 
+        execution = asyncio.create_task(self._execute(claim))
+        try:
+            while True:
+                done, _ = await asyncio.wait((execution,), timeout=self.heartbeat_seconds)
+                if done:
+                    await execution
+                    return True
+                async with self.sessions.begin() as session:
+                    renewed = await WorkspaceRunExecution(session, self.allowed_creators).renew(
+                        claim
+                    )
+                if not renewed:
+                    return True
+        finally:
+            execution.cancel()
+            await asyncio.gather(execution, return_exceptions=True)
+
+    async def _execute(self, claim: WorkspaceRunClaim) -> None:
         revision = await self._local_revision(claim)
         async with self.sessions.begin() as session:
             evidence = await WorkspaceRunExecution(session, self.allowed_creators).prepare(
                 claim, revision
             )
         if evidence is None:
-            return True
+            return
 
         passages = (WorkspaceAnswerPassage("E1", "text", evidence.excerpt),)
         answer: WorkspaceAnswerDraft | None = None
@@ -77,7 +98,6 @@ class WorkspaceChatWorker:
             await WorkspaceRunExecution(session, self.allowed_creators).finish(
                 claim, answer, failure
             )
-        return True
 
     async def _local_revision(self, claim: WorkspaceRunClaim) -> str | None:
         model = claim.settings.model
@@ -117,7 +137,7 @@ async def run_workspace_chat_worker(
                 continue
         except (SQLAlchemyError, OSError) as exc:
             logger.warning(
-                "Workspace run polling needs PostgreSQL and migration 0028 (%s).",
+                "Workspace run polling needs PostgreSQL and migration 0029 (%s).",
                 type(exc).__name__,
             )
         with suppress(TimeoutError):

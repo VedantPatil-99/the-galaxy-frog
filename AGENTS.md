@@ -56,7 +56,7 @@ For domain terminology and architecture decisions, read
 3. Implement the smallest coherent work packet.
 4. Run the relevant lint, type, test, and build checks.
 5. Verify behavior, not only command exit codes.
-6. Update `PLANS.md`, ADRs when decisions change, and the matching Notion checkpoint.
+6. Record verification in `PLANS.md`, the workspace measurements, and the relevant GitHub issue. Update ADRs when decisions change. Update Notion only when explicitly requested.
 7. Make small, atomic Conventional Commits and push completed work regularly. Do not create PRs. Provide ready-to-copy PR base, title, and description directly in chat when appropriate. Distinguish local completion from hosted CI and merge status.
 8. Use Git Bash syntax in commands given to the user.
 9. Ask a short questionnaire when a genuine product or implementation decision is unclear, but continue independent work while waiting for an answer.

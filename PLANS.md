@@ -854,14 +854,15 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
       sign-out, and chat switches. Mark chats with drafts and support browser Back and Forward.
   - [ ] W4.2 — Saved grounded turns and idempotent generation runs with recovery and
     replay of validated blocks and their source versions.
-    - Evidence and provider feasibility is tracked in [#28](https://github.com/VedantPatil-99/the-galaxy-frog/issues/28).
-      Start the [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29) local
-      slice with one pinned pasted-text passage. See the
-      [feasibility record](docs/WORKSPACE_MEASUREMENTS.md#w42-evidence-and-provider-feasibility)
+    - Evidence and provider feasibility was verified in [#28](https://github.com/VedantPatil-99/the-galaxy-frog/issues/28).
+      See the [feasibility record](docs/WORKSPACE_MEASUREMENTS.md#w42-evidence-and-provider-feasibility)
       for the evidence-withdrawal, dispatch, and cloud eligibility gates.
-    - [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29) adds the first local
+    - [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29) delivered the first local
       saved-answer path for one pinned pasted-text passage. See the
       [local verification](docs/WORKSPACE_MEASUREMENTS.md#w42-first-saved-ollama-answer).
+    - [#30](https://github.com/VedantPatil-99/the-galaxy-frog/issues/30) adds Stop,
+      reconnect, and bounded worker recovery for the same local path. See the
+      [verification](docs/WORKSPACE_MEASUREMENTS.md#w42-stop-and-run-recovery).
   - [ ] W4.3 — Chat groups and organization, branching, and answer revisions.
   - [ ] W4.4 — Bounded context summaries and chat workflow acceptance.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
