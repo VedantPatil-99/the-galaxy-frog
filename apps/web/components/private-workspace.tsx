@@ -160,7 +160,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
   const preview = selectedVideo
     ? <SourcePreview key={match?.kind === "video" ? match.unit_id : selectedVideo.video_id} notebookId={notebook.notebook_id} source={selectedVideo} match={match?.kind === "video" ? match : null} onExpired={onExpired} />
     : selectedText
-      ? <WorkspaceTextPreview key={match?.kind === "text" ? match.block.block_id : selectedText.version_id} notebookId={notebook.notebook_id} source={selectedText} matchBlockId={match?.kind === "text" ? match.block.block_id : undefined} onExpired={onExpired} />
+      ? <WorkspaceTextPreview key={match?.kind === "text" ? match.block.block_id : selectedText.version_id} notebookId={notebook.notebook_id} source={selectedText} matchBlock={match?.kind === "text" ? match.block : undefined} onExpired={onExpired} />
       : selectedDocument
         ? <WorkspaceDocumentPreview key={match?.kind === "document" || match?.kind === "page_ocr" ? match.block.block_id : selectedDocument.version_id} notebookId={notebook.notebook_id} source={selectedDocument} match={match?.kind === "document" || match?.kind === "page_ocr" ? match : undefined} onExpired={onExpired} />
         : <p className="text-sm text-muted-foreground">{loading ? "Loading sources…" : "Select a source in the workspace to preview it here."}</p>

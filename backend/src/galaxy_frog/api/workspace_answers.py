@@ -8,10 +8,10 @@ from galaxy_frog.api.workspace_schemas import WorkspaceSearchHit, WorkspaceSearc
 from galaxy_frog.domain.generation.workspace_answer import (
     WORKSPACE_ANSWER_MAX_PASSAGE_CHARS,
     WORKSPACE_ANSWER_MAX_PASSAGES,
-    WorkspaceAnswerDraftInvalid,
     WorkspaceAnswerPassage,
     WorkspaceGeneratedDraft,
     WorkspaceModelMetrics,
+    validate_workspace_citations,
 )
 
 
@@ -85,16 +85,17 @@ def validated_workspace_blocks(
     passages: tuple[WorkspaceAnswerPassage, ...],
     evidence: tuple[WorkspaceSearchHit, ...],
 ) -> tuple[WorkspaceAnswerBlock, ...]:
-    by_reference = {
-        passage.reference: (passage, hit) for passage, hit in zip(passages, evidence, strict=True)
-    }
-    blocks: list[WorkspaceAnswerBlock] = []
-    for draft_block in generated.draft.blocks:
-        citations: list[WorkspaceAnswerCitation] = []
-        for citation in draft_block.citations:
-            selected = by_reference.get(citation.reference)
-            if selected is None or citation.quote not in selected[0].text:
-                raise WorkspaceAnswerDraftInvalid("A citation did not match the selected passage.")
-            citations.append(WorkspaceAnswerCitation(quote=citation.quote, evidence=selected[1]))
-        blocks.append(WorkspaceAnswerBlock(text=draft_block.text, citations=tuple(citations)))
-    return tuple(blocks)
+    validate_workspace_citations(generated.draft, passages)
+    by_reference = {passage.reference: hit for passage, hit in zip(passages, evidence, strict=True)}
+    return tuple(
+        WorkspaceAnswerBlock(
+            text=block.text,
+            citations=tuple(
+                WorkspaceAnswerCitation(
+                    quote=citation.quote, evidence=by_reference[citation.reference]
+                )
+                for citation in block.citations
+            ),
+        )
+        for block in generated.draft.blocks
+    )

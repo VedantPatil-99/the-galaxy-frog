@@ -56,6 +56,7 @@ from galaxy_frog.entrypoints.worker_providers import (
     RoutedOCR,
     RoutedTranscription,
 )
+from galaxy_frog.entrypoints.workspace_chat_worker import run_workspace_chat_worker
 
 EngineFactory = Callable[[Settings], AsyncEngine]
 logger = logging.getLogger(__name__)
@@ -280,12 +281,15 @@ async def run_worker(
             study = asyncio.create_task(
                 run_study_worker(resolved_settings, sessions, stop, engine=engine)
             )
+            chat = asyncio.create_task(run_workspace_chat_worker(resolved_settings, sessions, stop))
             try:
                 processed_jobs = await worker.run_until_stopped(stop)
             finally:
-                study.cancel()
-                with suppress(asyncio.CancelledError):
-                    await study
+                for task in (study, chat):
+                    task.cancel()
+                for task in (study, chat):
+                    with suppress(asyncio.CancelledError):
+                        await task
             return processed_jobs
     finally:
         await engine.dispose()

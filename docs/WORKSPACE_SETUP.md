@@ -309,6 +309,19 @@ and select supporting passages before choosing **Ask with Ollama**. The answer i
 session result in this packet. Saved answer history and recoverable runs follow in W4.2.
 [Measurement log](WORKSPACE_MEASUREMENTS.md)
 
+## W4.2 First saved Ollama answer
+
+Apply migration `20261123_0028` to the configured database before starting the API and
+worker. The existing `bun run dev:worker` process now also handles private Ollama turns.
+Run it with the same workspace Auth configuration, creator allowlist, and configured local
+Ollama model and revision as FastAPI.
+
+In a named chat, find and select exactly one pasted-text passage. **Send** saves the
+question and its run. Reopen the chat to see current progress or the saved answer and
+its citation. If the connection ends before acknowledgement, **Check submission**
+checks the same Send. Quick questions and answers from other selections use the existing
+session-only path. [Verification](WORKSPACE_MEASUREMENTS.md#w42-first-saved-ollama-answer)
+
 ## Application dependencies
 
 The [web package manifest](../apps/web/package.json) and Bun lockfile include the later-phase libraries below. Add feature-specific extensions and adapters in the packets that use them.

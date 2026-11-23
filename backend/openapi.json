@@ -4927,6 +4927,24 @@
         "title": "WorkspaceAnswerCitation",
         "type": "object"
       },
+      "WorkspaceAnswerDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceDraftBlock"
+            },
+            "maxItems": 4,
+            "title": "Blocks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "blocks"
+        ],
+        "title": "WorkspaceAnswerDraft",
+        "type": "object"
+      },
       "WorkspaceAnswerRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5365,6 +5383,54 @@
         "title": "WorkspaceDocumentSource",
         "type": "object"
       },
+      "WorkspaceDraftBlock": {
+        "additionalProperties": false,
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceDraftCitation"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Citations",
+            "type": "array"
+          },
+          "text": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "citations"
+        ],
+        "title": "WorkspaceDraftBlock",
+        "type": "object"
+      },
+      "WorkspaceDraftCitation": {
+        "additionalProperties": false,
+        "properties": {
+          "quote": {
+            "maxLength": 280,
+            "minLength": 1,
+            "title": "Quote",
+            "type": "string"
+          },
+          "reference": {
+            "pattern": "^E[1-6]$",
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "quote"
+        ],
+        "title": "WorkspaceDraftCitation",
+        "type": "object"
+      },
       "WorkspaceFrameResponse": {
         "properties": {
           "capture_ms": {
@@ -5404,6 +5470,43 @@
           "capture_ms"
         ],
         "title": "WorkspaceFrameResponse",
+        "type": "object"
+      },
+      "WorkspaceLocalRunSettings": {
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "policy": {
+            "const": "local-pasted-text-v1",
+            "default": "local-pasted-text-v1",
+            "title": "Policy",
+            "type": "string"
+          },
+          "provider": {
+            "const": "ollama",
+            "default": "ollama",
+            "title": "Provider",
+            "type": "string"
+          },
+          "required_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Revision"
+          }
+        },
+        "required": [
+          "model",
+          "required_revision"
+        ],
+        "title": "WorkspaceLocalRunSettings",
         "type": "object"
       },
       "WorkspaceModelMetrics": {
@@ -5591,6 +5694,33 @@
         "title": "WorkspacePageOCRConsent",
         "type": "object"
       },
+      "WorkspacePassagePin": {
+        "additionalProperties": false,
+        "properties": {
+          "block_id": {
+            "format": "uuid",
+            "title": "Block Id",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "version_id",
+          "block_id"
+        ],
+        "title": "WorkspacePassagePin",
+        "type": "object"
+      },
       "WorkspacePromptDraft": {
         "additionalProperties": false,
         "properties": {
@@ -5612,6 +5742,127 @@
           "revision"
         ],
         "title": "WorkspacePromptDraft",
+        "type": "object"
+      },
+      "WorkspaceRunEvidence": {
+        "properties": {
+          "block_id": {
+            "format": "uuid",
+            "title": "Block Id",
+            "type": "string"
+          },
+          "end_char": {
+            "title": "End Char",
+            "type": "integer"
+          },
+          "excerpt": {
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WorkspaceTextSource"
+          },
+          "start_char": {
+            "title": "Start Char",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "block_id",
+          "start_char",
+          "end_char",
+          "excerpt"
+        ],
+        "title": "WorkspaceRunEvidence",
+        "type": "object"
+      },
+      "WorkspaceRunView": {
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceAnswerDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceRunEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "enum": [
+                  "access_changed",
+                  "evidence_unavailable",
+                  "model_unavailable",
+                  "answer_unverified",
+                  "dispatch_unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
+          },
+          "model_revision_at_dispatch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Revision At Dispatch"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/WorkspaceLocalRunSettings"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "uncertain"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "revision",
+          "settings",
+          "model_revision_at_dispatch",
+          "failure",
+          "evidence",
+          "answer"
+        ],
+        "title": "WorkspaceRunView",
         "type": "object"
       },
       "WorkspaceSearchCue": {
@@ -6317,6 +6568,105 @@
           "source"
         ],
         "title": "WorkspaceTranscriptResponse",
+        "type": "object"
+      },
+      "WorkspaceTurnSubmit": {
+        "additionalProperties": false,
+        "properties": {
+          "draft_revision": {
+            "exclusiveMaximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Draft Revision",
+            "type": "integer"
+          },
+          "passage": {
+            "$ref": "#/components/schemas/WorkspacePassagePin"
+          },
+          "question": {
+            "maxLength": 1000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Question",
+            "type": "string"
+          },
+          "submission_key": {
+            "format": "uuid",
+            "title": "Submission Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "submission_key",
+          "question",
+          "draft_revision",
+          "passage"
+        ],
+        "title": "WorkspaceTurnSubmit",
+        "type": "object"
+      },
+      "WorkspaceTurnView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "passage": {
+            "$ref": "#/components/schemas/WorkspacePassagePin"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "run": {
+            "$ref": "#/components/schemas/WorkspaceRunView"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id",
+          "sequence",
+          "question",
+          "passage",
+          "created_at",
+          "run"
+        ],
+        "title": "WorkspaceTurnView",
+        "type": "object"
+      },
+      "WorkspaceTurnsPage": {
+        "properties": {
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceTurnView"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "turns",
+          "next_before"
+        ],
+        "title": "WorkspaceTurnsPage",
         "type": "object"
       },
       "WorkspaceVideoMatch": {
@@ -9456,6 +9806,250 @@
           }
         ],
         "summary": "Save Draft",
+        "tags": [
+          "workspace"
+        ]
+      }
+    },
+    "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/turns": {
+      "get": {
+        "operationId": "list_workspace_turns_v1_workspace_notebooks__notebook_id__chats__chat_id__turns_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chat_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Chat Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTurnsPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "List Workspace Turns",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "submit_workspace_turn_v1_workspace_notebooks__notebook_id__chats__chat_id__turns_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chat_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Chat Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "notebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceTurnSubmit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTurnView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "WorkspaceBearer": []
+          }
+        ],
+        "summary": "Submit Workspace Turn",
         "tags": [
           "workspace"
         ]

@@ -1,10 +1,12 @@
 """Supabase Auth user verification using a bounded, injected HTTP client."""
 
+from base64 import urlsafe_b64decode
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
 import httpx
-from pydantic import AwareDatetime, BaseModel, EmailStr
+from pydantic import AwareDatetime, BaseModel, EmailStr, StrictInt
 
 from galaxy_frog.application.workspace_auth import IdentityVerificationError
 from galaxy_frog.domain.workspace import VerifiedWorkspaceIdentity
@@ -17,6 +19,21 @@ class _SupabaseUser(BaseModel):
     role: Literal["authenticated"]
     email_confirmed_at: AwareDatetime
     is_anonymous: Literal[False] = False
+
+
+class _VerifiedTokenExpiry(BaseModel):
+    exp: StrictInt
+
+
+def _verified_token_expiry(access_token: str) -> datetime | None:
+    try:
+        _, payload, _ = access_token.split(".")
+        claims = _VerifiedTokenExpiry.model_validate_json(
+            urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
+        )
+        return datetime.fromtimestamp(claims.exp, UTC)
+    except ValueError, OverflowError, OSError:
+        return None
 
 
 class SupabaseIdentityVerifier:
@@ -48,4 +65,8 @@ class SupabaseIdentityVerifier:
             user = _SupabaseUser.model_validate_json(body)
         except ValueError:
             raise IdentityVerificationError("invalid") from None
-        return VerifiedWorkspaceIdentity(account_id=user.id, email=user.email.casefold())
+        return VerifiedWorkspaceIdentity(
+            account_id=user.id,
+            email=user.email.casefold(),
+            token_expires_at=_verified_token_expiry(access_token),
+        )

@@ -52,6 +52,16 @@ class WorkspaceAnswerDraftInvalid(ValueError):
     """The local model returned an invalid answer document."""
 
 
+def validate_workspace_citations(
+    draft: WorkspaceAnswerDraft, passages: tuple[WorkspaceAnswerPassage, ...]
+) -> None:
+    excerpts = {passage.reference: passage.text for passage in passages}
+    for block in draft.blocks:
+        for citation in block.citations:
+            if citation.quote not in excerpts.get(citation.reference, ""):
+                raise WorkspaceAnswerDraftInvalid("A citation did not match the selected passage.")
+
+
 class WorkspaceAnswerProvider(Protocol):
     async def generate_workspace_answer(
         self, question: str, passages: tuple[WorkspaceAnswerPassage, ...]

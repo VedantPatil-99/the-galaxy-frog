@@ -20,6 +20,8 @@ export type WorkspaceAnswer = Schema["WorkspaceAnswerResponse"]
 export type WorkspaceChat = Schema["WorkspaceChat"]
 export type WorkspaceChatSummary = Schema["WorkspaceChatSummary"]
 export type WorkspacePromptDraft = Schema["WorkspacePromptDraft"]
+export type WorkspaceTurn = Schema["WorkspaceTurnView"]
+export type WorkspaceTurnIntent = Schema["WorkspaceTurnSubmit"]
 export type WorkspaceSemanticStatus = Schema["WorkspaceSemanticStatus"]
 export type CloudEmbeddingAction = Schema["CloudEmbeddingIndex"] | Schema["CloudEmbeddingSearch"]
 export type CloudEmbeddingPreview = Schema["CloudEmbeddingPreview"]
@@ -115,6 +117,45 @@ export function createWorkspaceApi(request: WorkspaceRequest, requestImage: Work
       promptDraft(value) && value.text === draft.text && value.revision >= draft.revision, {
       method: "PUT", body: JSON.stringify(draft), keepalive: true,
     })
+  }
+
+  function savedTurn(value: unknown): value is WorkspaceTurn {
+    if (!object(value) || typeof value.turn_id !== "string" || typeof value.question !== "string"
+      || typeof value.created_at !== "string" || typeof value.sequence !== "number"
+      || !Number.isSafeInteger(value.sequence) || value.sequence < 1) return false
+    const { passage, run } = value
+    if (!object(passage) || typeof passage.source_id !== "string" || typeof passage.version_id !== "string"
+      || typeof passage.block_id !== "string" || !object(run) || typeof run.run_id !== "string"
+      || typeof run.revision !== "number" || !Number.isInteger(run.revision) || run.revision < 0
+      || !object(run.settings) || run.settings.provider !== "ollama" || typeof run.settings.model !== "string"
+      || !["queued", "running", "completed", "failed", "uncertain"].some(status => status === run.status)) return false
+    if (run.status !== "completed") return run.answer === null && run.evidence === null
+    const { evidence, answer } = run
+    if (!object(evidence) || !textSource(evidence.source) || evidence.source.source_id !== passage.source_id
+      || evidence.source.version_id !== passage.version_id || evidence.block_id !== passage.block_id
+      || typeof evidence.start_char !== "number" || typeof evidence.end_char !== "number"
+      || !Number.isInteger(evidence.start_char) || !Number.isInteger(evidence.end_char)
+      || evidence.start_char < 0 || evidence.end_char <= evidence.start_char) return false
+    const excerpt = evidence.excerpt
+    return typeof excerpt === "string" && object(answer) && Array.isArray(answer.blocks)
+      && answer.blocks.every(block => object(block) && typeof block.text === "string"
+        && Array.isArray(block.citations) && block.citations.length > 0 && block.citations.every(citation =>
+          object(citation) && citation.reference === "E1" && typeof citation.quote === "string"
+          && Boolean(citation.quote) && excerpt.includes(citation.quote)))
+  }
+
+  function submitWorkspaceTurn(notebookId: string, chatId: string, input: WorkspaceTurnIntent, signal: AbortSignal) {
+    return request(`${chatPath(notebookId, chatId)}/turns`, savedTurn, {
+      method: "POST", body: JSON.stringify(input), signal,
+    })
+  }
+
+  function listWorkspaceTurns(notebookId: string, chatId: string, before: number | null, signal: AbortSignal) {
+    const suffix = before === null ? "" : `?before=${before}`
+    return request(`${chatPath(notebookId, chatId)}/turns${suffix}`, (value): value is Schema["WorkspaceTurnsPage"] =>
+      object(value) && Array.isArray(value.turns) && value.turns.every(savedTurn)
+        && (value.next_before === null || (typeof value.next_before === "number" && Number.isSafeInteger(value.next_before))),
+    { signal })
   }
 
   function listSources(notebookId: string, after: string | null, signal: AbortSignal) {
@@ -333,6 +374,8 @@ export function createWorkspaceApi(request: WorkspaceRequest, requestImage: Work
     createWorkspaceChat,
     renameWorkspaceChat,
     saveWorkspaceDraft,
+    submitWorkspaceTurn,
+    listWorkspaceTurns,
     listSources,
     getOwnedTranscript,
     listTextSources,

@@ -3,6 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { openWorkspaceTab, until } from "./workspace-browser-test"
+
 const root = join(import.meta.dir, "..")
 const a = "41abef09-2585-4d88-8001-68a1574a1a3e"
 const b = "79e450bd-b542-4218-9f3b-82574abf9fe7"
@@ -101,6 +103,7 @@ const fixture = Bun.serve({
       const { draft: _draft, ...summary } = chat
       return Response.json({ chats: owner === a ? [summary] : [], next_after: null })
     }
+    if (path.endsWith("/turns")) return Response.json({ turns: [], next_before: null })
     if (path.endsWith(`/chats/${chatId}`)) return Response.json(chat)
     if (path.endsWith("/draft")) return reply("DATABASE_UNAVAILABLE", 503)
     if (path.endsWith("/sections/1")) {
@@ -137,84 +140,23 @@ const chrome = Bun.spawn([chromeBin, "--headless=new", "--remote-debugging-port=
   stdout: "ignore", stderr: "inherit",
 })
 
-async function until<T>(description: string, attempt: () => Promise<T>) {
-  for (let count = 0; count < 160; count++) {
-    const value = await attempt().catch(() => null)
-    if (value) return value
-    await Bun.sleep(125)
-  }
-  throw new Error(`Timed out waiting for ${description}`)
-}
-
 const sockets: WebSocket[] = []
-async function openTab(debuggerOrigin: string) {
-  const response = await fetch(`${debuggerOrigin}/json/new?about:blank`, { method: "PUT" })
-  const socket = new WebSocket((await response.json()).webSocketDebuggerUrl)
-  sockets.push(socket)
-  await new Promise<void>((resolve, reject) => {
-    socket.addEventListener("open", () => resolve(), { once: true })
-    socket.addEventListener("error", () => reject(new Error("Chrome DevTools could not connect")), { once: true })
-  })
-  let sequence = 0
-  async function command(method: string, params: object = {}): Promise<any> {
-    const id = ++sequence
-    return new Promise((resolve, reject) => {
-      const listener = (message: MessageEvent) => {
-        const event = JSON.parse(message.data)
-        if (event.id !== id) return
-        socket.removeEventListener("message", listener)
-        if (event.error) reject(new Error(JSON.stringify(event.error)))
-        else resolve(event.result)
-      }
-      socket.addEventListener("message", listener)
-      socket.send(JSON.stringify({ id, method, params }))
-    })
-  }
-  async function evaluate(expression: string) {
-    const result = await command("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true })
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text)
-    return result.result.value
-  }
-  const button = (label: string, prefix: boolean) =>
-    `Array.from(document.querySelectorAll('button')).find(button => ${prefix
-      ? `button.textContent.trim().startsWith(${JSON.stringify(label)})`
-      : `button.textContent.trim() === ${JSON.stringify(label)}`} && button.checkVisibility() && !button.disabled)`
-  return {
-    command, evaluate,
-    go: (path: string) => command("Page.navigate", { url: origin + path }),
-    visible: (text: string) => until(text, () => evaluate(`document.body.innerText.includes(${JSON.stringify(text)})`)),
-    click: async (label: string, prefix = false) => {
-      await until(label, () => evaluate(`Boolean(${button(label, prefix)})`))
-      await evaluate(`${button(label, prefix)}.click()`)
-    },
-    type: async (selector: string, text: string) => {
-      await command("Page.bringToFront")
-      const field = `document.querySelector(${JSON.stringify(selector)})`
-      await until(selector, () => evaluate(`${field}?.checkVisibility()`))
-      await evaluate(`${field}.focus(); ${field}.select()`)
-      await until("focused editor", () => evaluate(`document.activeElement === ${field} && document.hasFocus()`))
-      await command("Input.insertText", { text })
-      await until("controlled editor accepted the text", () =>
-        evaluate(`${field}?.value === ${JSON.stringify(text)}`))
-    },
-  }
-}
 
 try {
   await until("Next.js", async () => (await fetch(`${origin}/api/proxy/v1/workspace/status`)).ok)
   const debuggerPort = await until("Chrome DevTools", async () =>
     (await Bun.file(join(profile, "DevToolsActivePort")).text()).split(/\r?\n/)[0])
   const debuggerOrigin = `http://127.0.0.1:${debuggerPort}`
-  const first = await openTab(debuggerOrigin)
+  const first = await openWorkspaceTab(debuggerOrigin, origin, sockets)
   const composer = '[aria-label="Chat question"] textarea'
   const draft = `document.querySelector(${JSON.stringify(composer)})?.value`
-  async function requestLink(tab: Awaited<ReturnType<typeof openTab>>) {
+  async function requestLink(tab: Awaited<ReturnType<typeof openWorkspaceTab>>) {
     assert.equal(await tab.evaluate(`(async () => (await fetch('/api/auth', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'email-link', email: 'fixture@example.com' })
     })).status)()`), 200)
   }
-  async function signIn(tab: Awaited<ReturnType<typeof openTab>>, code: string) {
+  async function signIn(tab: Awaited<ReturnType<typeof openWorkspaceTab>>, code: string) {
     await requestLink(tab)
     await tab.go(`/auth/callback?code=${code}`)
   }
@@ -242,7 +184,7 @@ try {
   await until("A's pending mutation", async () => Promise.race([createStarted.promise.then(() => true), Bun.sleep(50).then(() => false)]))
   assert.equal(await first.evaluate(draft), draftText)
 
-  const second = await openTab(debuggerOrigin)
+  const second = await openWorkspaceTab(debuggerOrigin, origin, sockets)
   await second.go("/")
   await second.visible("Owner A notebook")
   const scopeA = await first.evaluate("document.cookie.match(/(?:^|; )gf-workspace-session=([^;]+)/)?.[1]")

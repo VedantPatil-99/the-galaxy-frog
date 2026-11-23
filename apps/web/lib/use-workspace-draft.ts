@@ -38,6 +38,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
     edit: unsaved,
     mounted: false,
     pending: null as Promise<void> | null,
+    submitting: false,
     conflict: stale,
     timer: 0,
   })
@@ -47,6 +48,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
     const draft = state.current
     window.clearTimeout(draft.timer)
     if (!session.isCurrent()) return Promise.resolve()
+    if (draft.submitting) return Promise.resolve()
     if (draft.pending) return draft.pending
     if (!chatId || !draft.saved || !draft.edit || draft.conflict) return Promise.resolve()
 
@@ -154,6 +156,40 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
     }
   }
 
+  async function prepareSubmission(replay?: WorkspacePromptDraft): Promise<WorkspacePromptDraft | null> {
+    await flush()
+    const draft = state.current
+    if (!draft.mounted || !session.isCurrent()) return null
+    const submitted = replay ?? (!draft.conflict && !draft.edit && draft.saved?.text === draft.text ? draft.saved : null)
+    draft.submitting = Boolean(submitted)
+    return submitted
+  }
+
+  function finishSubmission(submitted: WorkspacePromptDraft, accepted: boolean, conflict = false) {
+    const draft = state.current
+    draft.submitting = false
+    if (!draft.mounted || !session.isCurrent()) return
+    if (conflict) {
+      draft.conflict = true
+      setStatus("conflict")
+      return
+    }
+    if (accepted && draft.saved?.revision === submitted.revision && draft.saved.text === submitted.text) {
+      draft.saved = { text: "", revision: submitted.revision + 1 }
+      if (draft.edit) {
+        const rebased = { text: draft.edit.text, revision: draft.saved.revision }
+        const cached = writeDraftRecovery(key, rebased, { previous: draft.edit })
+        draft.edit = rebased
+        setKeptOnDevice(cached)
+      } else {
+        draft.text = ""
+        setText("")
+        setStatus("saved")
+      }
+    }
+    if (draft.edit) void flush()
+  }
+
   function resolve(useSaved: boolean) {
     if (!remote || !session.isCurrent()) return
     const draft = state.current
@@ -180,6 +216,6 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
 
   return {
     text, status, remote, reviewing, reviewError, keptOnDevice, deviceWriteFailed,
-    recovered: Boolean(unsaved?.text), edit, flush, compare, resolve,
+    recovered: Boolean(unsaved?.text), edit, flush, compare, resolve, prepareSubmission, finishSubmission,
   }
 }
