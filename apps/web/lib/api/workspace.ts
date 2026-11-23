@@ -128,7 +128,10 @@ export function createWorkspaceApi(request: WorkspaceRequest, requestImage: Work
       || typeof passage.block_id !== "string" || !object(run) || typeof run.run_id !== "string"
       || typeof run.revision !== "number" || !Number.isInteger(run.revision) || run.revision < 0
       || !object(run.settings) || run.settings.provider !== "ollama" || typeof run.settings.model !== "string"
-      || !["queued", "running", "completed", "failed", "uncertain"].some(status => status === run.status)) return false
+      || (run.retry_of_run_id !== null && typeof run.retry_of_run_id !== "string")
+      || !object(run.execution) || typeof run.execution.claims !== "number" || !Number.isSafeInteger(run.execution.claims)
+      || run.execution.claims < 0 || (run.execution.possible_dispatch_at !== null && typeof run.execution.possible_dispatch_at !== "string")
+      || !["queued", "preparing", "running", "completed", "stopped", "failed", "uncertain"].some(status => status === run.status)) return false
     if (run.status !== "completed") return run.answer === null && run.evidence === null
     const { evidence, answer } = run
     if (!object(evidence) || !textSource(evidence.source) || evidence.source.source_id !== passage.source_id
@@ -156,6 +159,25 @@ export function createWorkspaceApi(request: WorkspaceRequest, requestImage: Work
       object(value) && Array.isArray(value.turns) && value.turns.every(savedTurn)
         && (value.next_before === null || (typeof value.next_before === "number" && Number.isSafeInteger(value.next_before))),
     { signal })
+  }
+
+  function runPath(notebookId: string, chatId: string, runId: string) {
+    return `${chatPath(notebookId, chatId)}/runs/${encodeURIComponent(runId)}`
+  }
+
+  function getWorkspaceRun(notebookId: string, chatId: string, runId: string, signal: AbortSignal) {
+    return request(runPath(notebookId, chatId, runId), savedTurn, { signal })
+  }
+
+  function stopWorkspaceRun(notebookId: string, chatId: string, runId: string, signal: AbortSignal) {
+    return request(`${runPath(notebookId, chatId, runId)}/stop`, savedTurn, { method: "POST", signal })
+  }
+
+  function retryWorkspaceRun(notebookId: string, chatId: string, runId: string, submissionKey: string, signal: AbortSignal) {
+    const body: Schema["WorkspaceRunRetry"] = { submission_key: submissionKey }
+    return request(`${runPath(notebookId, chatId, runId)}/retry`, savedTurn, {
+      method: "POST", body: JSON.stringify(body), signal,
+    })
   }
 
   function listSources(notebookId: string, after: string | null, signal: AbortSignal) {
@@ -376,6 +398,9 @@ export function createWorkspaceApi(request: WorkspaceRequest, requestImage: Work
     saveWorkspaceDraft,
     submitWorkspaceTurn,
     listWorkspaceTurns,
+    getWorkspaceRun,
+    stopWorkspaceRun,
+    retryWorkspaceRun,
     listSources,
     getOwnedTranscript,
     listTextSources,

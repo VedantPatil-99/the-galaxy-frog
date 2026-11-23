@@ -171,7 +171,15 @@ function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, 
         </div>
         {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       </form>
-      {chat ? <WorkspaceSavedTurns history={history} onOpen={onOpen} /> : null}
+      {chat ? <WorkspaceSavedTurns history={history} onOpen={onOpen} onRestore={question => {
+        if (draft.text || draft.status === "conflict" || pending) {
+          setError("Your current draft is still in the editor. Review it before restoring a previous question.")
+          return
+        }
+        setError("")
+        draft.edit(question)
+        document.getElementById(field)?.focus()
+      }} /> : null}
       {result ? (
         <div className="space-y-3 px-2 pt-4">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">

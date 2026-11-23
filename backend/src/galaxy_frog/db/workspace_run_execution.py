@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from galaxy_frog.db.workspace_chats import WorkspaceChatRow
@@ -12,6 +12,7 @@ from galaxy_frog.db.workspace_runs import (
     WorkspaceChatRunRow,
     WorkspaceChatTurnRow,
     load_pinned_evidence,
+    settle_workspace_run,
 )
 from galaxy_frog.domain.generation.workspace_answer import WorkspaceAnswerDraft
 from galaxy_frog.domain.workspace_run import (
@@ -22,7 +23,8 @@ from galaxy_frog.domain.workspace_run import (
 )
 from galaxy_frog.domain.workspace_text import WorkspaceTextNotFound
 
-LOCAL_LEASE = timedelta(seconds=120)
+LOCAL_LEASE = timedelta(seconds=30)
+MAX_PREPARATION_CLAIMS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +43,6 @@ class WorkspaceRunExecution:
     async def claim(self) -> WorkspaceRunClaim | None:
         run = WorkspaceChatRunRow
         turn = WorkspaceChatTurnRow
-        now = datetime.now(UTC)
         row = (
             await self.session.execute(
                 select(run, turn)
@@ -49,7 +50,10 @@ class WorkspaceRunExecution:
                 .where(
                     or_(
                         run.status == "queued",
-                        and_(run.status == "running", run.lease_until <= now),
+                        and_(
+                            run.status.in_(("preparing", "running")),
+                            run.lease_until <= func.clock_timestamp(),
+                        ),
                     )
                 )
                 .order_by(run.queued_at, run.id)
@@ -61,12 +65,17 @@ class WorkspaceRunExecution:
             return None
         current, saved = row
         if current.dispatch_at is not None:
-            self._settle(current, "dispatch_unknown")
+            settle_workspace_run(current, "uncertain", "dispatch_unknown")
+            return None
+        if current.claim_count >= MAX_PREPARATION_CLAIMS:
+            settle_workspace_run(current, "failed", "recovery_exhausted")
             return None
         lease = uuid4()
-        current.status = "running"
+        now = (await self.session.execute(select(func.now()))).scalar_one()
+        current.status = "preparing"
         current.lease = lease
         current.lease_until = now + LOCAL_LEASE
+        current.claim_count += 1
         current.revision += 1
         return WorkspaceRunClaim(
             current.id,
@@ -74,6 +83,21 @@ class WorkspaceRunExecution:
             saved.question,
             WorkspaceLocalRunSettings.model_validate(current.settings),
         )
+
+    async def renew(self, claim: WorkspaceRunClaim) -> bool:
+        run = WorkspaceChatRunRow
+        renewed = await self.session.scalar(
+            update(run)
+            .where(
+                run.id == claim.run_id,
+                run.lease == claim.lease,
+                run.status.in_(("preparing", "running")),
+                run.lease_until > func.clock_timestamp(),
+            )
+            .values(lease_until=func.clock_timestamp() + LOCAL_LEASE)
+            .returning(run.id)
+        )
+        return renewed is not None
 
     async def prepare(
         self,
@@ -85,16 +109,17 @@ class WorkspaceRunExecution:
             return None
         run, turn, notebook_id = owned
         if model_revision is None:
-            self._settle(run, "model_unavailable")
+            settle_workspace_run(run, "failed", "model_unavailable")
             return None
         evidence, reason = await self._authorized_evidence(run, turn, notebook_id)
         if reason is not None:
-            self._settle(run, reason)
+            settle_workspace_run(run, "failed", reason)
             return None
         assert evidence is not None
         run.evidence = evidence.model_dump(mode="json")
         run.model_revision_at_dispatch = model_revision
         run.dispatch_at = datetime.now(UTC)
+        run.status = "running"
         run.revision += 1
         return evidence
 
@@ -112,7 +137,10 @@ class WorkspaceRunExecution:
             _, failure = await self._authorized_evidence(run, turn, notebook_id)
             if failure is None:
                 run.answer = answer.model_dump(mode="json")
-        self._settle(run, failure)
+        status = (
+            "uncertain" if failure == "dispatch_unknown" else "failed" if failure else "completed"
+        )
+        settle_workspace_run(run, status, failure)
 
     async def _fenced(
         self,
@@ -128,9 +156,9 @@ class WorkspaceRunExecution:
                 .join(chat, chat.id == run.chat_id)
                 .where(
                     run.id == claim.run_id,
-                    run.status == "running",
+                    run.status == ("running" if dispatched else "preparing"),
                     run.lease == claim.lease,
-                    run.lease_until > datetime.now(UTC),
+                    run.lease_until > func.clock_timestamp(),
                     run.dispatch_at.is_not(None) if dispatched else run.dispatch_at.is_(None),
                 )
                 .with_for_update(of=run)
@@ -162,15 +190,3 @@ class WorkspaceRunExecution:
         if digest != turn.passage_digest:
             return None, "evidence_unavailable"
         return evidence, None
-
-    @staticmethod
-    def _settle(run: WorkspaceChatRunRow, reason: RunFailure | None) -> None:
-        run.status = (
-            "uncertain" if reason == "dispatch_unknown" else "failed" if reason else "completed"
-        )
-        run.failure = reason
-        if reason is not None:
-            run.evidence = None
-        run.lease = None
-        run.lease_until = None
-        run.revision += 1

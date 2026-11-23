@@ -4,6 +4,7 @@ import asyncio
 import os
 from base64 import urlsafe_b64encode
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
@@ -141,6 +142,109 @@ async def workspace_http(
                     delete(WorkspaceAccountRow).where(WorkspaceAccountRow.id.in_(owners.values()))
                 )
                 await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_stop_is_idempotent_and_keeps_the_newer_draft(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    client, _ = workspace_http
+    path, body = await _grounded_chat(client, _DURABLE_OWNER)
+    accepted = await client.post(f"{path}/turns", headers=_DURABLE_OWNER, json=body)
+    run_path = f"{path}/runs/{accepted.json()['run']['run_id']}"
+    newer = await client.put(
+        f"{path}/draft", headers=_DURABLE_OWNER, json={"text": "My next question", "revision": 2}
+    )
+    stopped = await client.post(f"{run_path}/stop", headers=_DURABLE_OWNER)
+    assert stopped.status_code == 200, stopped.text
+    result = stopped.json()["run"]
+    assert result["status"] == "stopped"
+    assert result["execution"]["possible_dispatch_at"] is None
+    assert result["revision"] > accepted.json()["run"]["revision"]
+    assert result["answer"] is None and result["evidence"] is None
+    assert (await client.post(f"{run_path}/stop", headers=_DURABLE_OWNER)).json() == stopped.json()
+    assert (await client.get(run_path, headers=_DURABLE_OWNER)).json() == stopped.json()
+    assert (await client.get(f"{path}/turns", headers=_DURABLE_OWNER)).json()["turns"] == [
+        stopped.json()
+    ]
+    assert (await client.get(path, headers=_DURABLE_OWNER)).json()["draft"] == newer.json()
+    other = {"authorization": "Bearer other-token"}
+    assert (await client.post(f"{run_path}/stop", headers=other)).status_code == 404
+    assert (await client.get(run_path, headers=other)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_explicit_retry_is_linked_and_does_not_write_the_current_draft(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    client, _ = workspace_http
+    path, intent = await _grounded_chat(client, _DURABLE_OWNER)
+    accepted = (await client.post(f"{path}/turns", headers=_DURABLE_OWNER, json=intent)).json()
+    original = accepted["run"]["run_id"]
+    run_path = f"{path}/runs/{original}"
+    retry = {"submission_key": str(uuid4())}
+    premature = await client.post(f"{run_path}/retry", headers=_DURABLE_OWNER, json=retry)
+    assert (premature.status_code, premature.json()["error"]["code"]) == (
+        409,
+        "WORKSPACE_RUN_NOT_RETRYABLE",
+    )
+    await client.post(f"{run_path}/stop", headers=_DURABLE_OWNER)
+    changed_intent = await client.post(
+        f"{run_path}/retry",
+        headers=_DURABLE_OWNER,
+        json={"submission_key": intent["submission_key"]},
+    )
+    assert (changed_intent.status_code, changed_intent.json()["error"]["code"]) == (
+        409,
+        "WORKSPACE_SUBMISSION_CONFLICT",
+    )
+    later = await client.put(
+        f"{path}/draft", headers=_DURABLE_OWNER, json={"text": "Keep this draft", "revision": 2}
+    )
+
+    result = await client.post(f"{run_path}/retry", headers=_DURABLE_OWNER, json=retry)
+    assert result.status_code == 202, result.text
+    saved = result.json()
+    assert (saved["run"]["status"], saved["run"]["retry_of_run_id"]) == ("queued", original)
+    assert saved["run"]["run_id"] != original and saved["turn_id"] != accepted["turn_id"]
+    assert saved["question"] == accepted["question"] and saved["passage"] == accepted["passage"]
+    assert (
+        await client.post(f"{run_path}/retry", headers=_DURABLE_OWNER, json=retry)
+    ).json() == saved
+    assert (await client.get(path, headers=_DURABLE_OWNER)).json()["draft"] == later.json()
+    latest = (await client.get(f"{path}/turns?limit=1", headers=_DURABLE_OWNER)).json()
+    assert latest == {"turns": [saved], "next_before": 2}
+    earlier = (await client.get(f"{path}/turns?before=2&limit=1", headers=_DURABLE_OWNER)).json()
+    assert earlier["next_before"] is None
+    assert [turn["turn_id"] for turn in earlier["turns"]] == [accepted["turn_id"]]
+    wrong_chat, _ = await _grounded_chat(client, _DURABLE_OWNER)
+    assert (
+        await client.get(f"{wrong_chat}/runs/{original}", headers=_DURABLE_OWNER)
+    ).status_code == 404
+    assert (
+        await client.post(f"{wrong_chat}/runs/{original}/stop", headers=_DURABLE_OWNER)
+    ).status_code == 404
+    assert (
+        await client.post(f"{wrong_chat}/runs/{original}/retry", headers=_DURABLE_OWNER, json=retry)
+    ).status_code == 404
+    await client.post(f"{path}/runs/{saved['run']['run_id']}/stop", headers=_DURABLE_OWNER)
+    engine = create_database_engine(Settings())
+    try:
+        async with async_sessionmaker(engine).begin() as session:
+            await session.execute(
+                update(WorkspaceTextSourceRow)
+                .where(WorkspaceTextSourceRow.id == UUID(accepted["passage"]["source_id"]))
+                .values(text="Ice melts downhill.")
+            )
+    finally:
+        await engine.dispose()
+    mismatched = await client.post(
+        f"{run_path}/retry", headers=_DURABLE_OWNER, json={"submission_key": str(uuid4())}
+    )
+    assert (mismatched.status_code, mismatched.json()["error"]["code"]) == (
+        409,
+        "WORKSPACE_EVIDENCE_SELECTION_STALE",
+    )
 
 
 @pytest.mark.asyncio
@@ -302,7 +406,9 @@ async def test_notebook_ownership_change_cannot_reveal_an_existing_run_on_replay
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("interruption", ["none", "before_dispatch", "lease_lost", "source_lost"])
+@pytest.mark.parametrize(
+    "interruption", ["none", "before_dispatch", "lease_lost", "crash", "source_lost", "stop"]
+)
 async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outside_the_transaction(
     workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
     interruption: str,
@@ -345,25 +451,38 @@ async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outs
                 base_url=settings.ollama_base_url, model=settings.generation_model, client=transport
             )
             worker = WorkspaceChatWorker(settings, async_sessionmaker(engine), provider, installed)
+            replacement = WorkspaceChatWorker(
+                settings, async_sessionmaker(engine), provider, installed
+            )
             execution = asyncio.create_task(worker.run_once())
             try:
                 await asyncio.wait_for(entered.wait(), timeout=5)
                 running = await client.get(f"{path}/turns", headers=owner)
-                assert running.json()["turns"][0]["run"]["status"] == "running"
-                assert not await worker.run_once()
+                active_run = running.json()["turns"][0]["run"]
+                assert active_run["status"] == (
+                    "preparing" if interruption == "before_dispatch" else "running"
+                )
+                assert (active_run["execution"]["possible_dispatch_at"] is None) == (
+                    interruption == "before_dispatch"
+                )
+                assert not await replacement.run_once()
                 newer_draft = await client.put(
                     f"{path}/draft", headers=owner, json={"text": "Next question", "revision": 2}
                 )
                 assert newer_draft.status_code == 200
-                if interruption in {"lease_lost", "before_dispatch"}:
+                if interruption == "crash":
+                    execution.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await execution
+                if interruption in {"lease_lost", "crash", "before_dispatch"}:
                     async with async_sessionmaker(engine).begin() as session:
                         await session.execute(
                             update(WorkspaceChatRunRow)
                             .where(WorkspaceChatRunRow.id == UUID(queued["run"]["run_id"]))
                             .values(lease_until=datetime.now(UTC) - timedelta(seconds=1))
                         )
-                    if interruption == "lease_lost":
-                        assert not await worker.run_once()
+                    if interruption in {"lease_lost", "crash"}:
+                        assert not await replacement.run_once()
                 if interruption == "source_lost":
                     async with async_sessionmaker(engine).begin() as session:
                         await session.execute(
@@ -371,28 +490,38 @@ async def test_chat_worker_saves_one_validated_answer_while_the_provider_is_outs
                                 WorkspaceTextSourceRow.id == UUID(queued["passage"]["source_id"])
                             )
                         )
+                if interruption == "stop":
+                    stopped = await client.post(
+                        f"{path}/runs/{active_run['run_id']}/stop", headers=owner
+                    )
+                    assert stopped.json()["run"]["status"] == "stopped"
+                    assert stopped.json()["run"]["execution"]["possible_dispatch_at"] is not None
             finally:
                 release.set()
-                await execution
+                with suppress(asyncio.CancelledError):
+                    await execution
             if interruption == "before_dispatch":
-                assert await worker.run_once()
+                assert await replacement.run_once()
     finally:
         await engine.dispose()
 
     saved = (await client.get(f"{path}/turns", headers=owner)).json()["turns"][0]
     assert saved["turn_id"] == queued["turn_id"]
     assert saved["run"]["run_id"] == queued["run"]["run_id"]
-    if interruption in {"lease_lost", "source_lost"}:
+    if interruption in {"lease_lost", "crash", "source_lost", "stop"}:
         result = saved["run"]
-        expected = (
-            ("uncertain", "dispatch_unknown")
-            if interruption == "lease_lost"
-            else ("failed", "evidence_unavailable")
-        )
+        expected = {
+            "lease_lost": ("uncertain", "dispatch_unknown"),
+            "crash": ("uncertain", "dispatch_unknown"),
+            "source_lost": ("failed", "evidence_unavailable"),
+            "stop": ("stopped", None),
+        }[interruption]
         assert (result["status"], result["failure"]) == expected
         assert result["answer"] is None and result["evidence"] is None
         return
     assert saved["run"]["status"] == "completed"
+    completed_first = await client.post(f"{path}/runs/{saved['run']['run_id']}/stop", headers=owner)
+    assert completed_first.json() == saved
     assert saved["run"]["answer"]["blocks"][0]["citations"] == [
         {"reference": "E1", "quote": "Ice flows downhill."}
     ]
@@ -528,6 +657,138 @@ async def test_chat_worker_surfaces_fail_closed_outcomes_without_replaying(
     assert dispatches == int(scenario in {"lost", "forged", "revision_changed"})
     replay = await client.post(f"{path}/turns", headers=owner, json=body)
     assert replay.json()["run"] == outcome
+
+
+@pytest.mark.asyncio
+async def test_worker_renews_live_dispatch_and_observes_stop_on_its_heartbeat(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
+    from galaxy_frog.entrypoints.workspace_chat_worker import WorkspaceChatWorker
+
+    client, _ = workspace_http
+    path, body = await _grounded_chat(client, _DURABLE_OWNER)
+    accepted = (await client.post(f"{path}/turns", headers=_DURABLE_OWNER, json=body)).json()
+    run_id = accepted["run"]["run_id"]
+    run_path = f"{path}/runs/{run_id}"
+    settings = auth_settings(database_url=Settings().database_url)
+    engine = create_database_engine(settings)
+    sessions = async_sessionmaker(engine)
+    entered, canceled = asyncio.Event(), asyncio.Event()
+    requests = 0
+
+    async def respond(_request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        entered.set()
+        try:
+            await asyncio.Future[None]()
+        finally:
+            canceled.set()
+        pytest.fail("Stopped worker unexpectedly resumed")
+
+    async def installed(_origin: str) -> dict[str, str]:
+        return {settings.generation_model: "fixture"}
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as transport:
+            provider = OllamaGenerationProvider(
+                base_url=settings.ollama_base_url, model=settings.generation_model, client=transport
+            )
+            first = WorkspaceChatWorker(
+                settings, sessions, provider, installed, heartbeat_seconds=0.03
+            )
+            second = WorkspaceChatWorker(settings, sessions, provider, installed)
+            execution = asyncio.create_task(first.run_once())
+            try:
+                await asyncio.wait_for(entered.wait(), timeout=5)
+                # Shorten the initial lease to exercise actual renewal before a competing claim.
+                async with sessions.begin() as session:
+                    await session.execute(
+                        update(WorkspaceChatRunRow)
+                        .where(WorkspaceChatRunRow.id == UUID(run_id))
+                        .values(lease_until=datetime.now(UTC) + timedelta(milliseconds=350))
+                    )
+                await asyncio.sleep(0.45)
+                assert not await second.run_once()
+                outcome = (await client.post(f"{run_path}/stop", headers=_DURABLE_OWNER)).json()[
+                    "run"
+                ]
+                assert (
+                    outcome["status"] == "stopped" and outcome["execution"]["possible_dispatch_at"]
+                )
+                await asyncio.wait_for(canceled.wait(), timeout=5)
+                assert await asyncio.wait_for(execution, timeout=5)
+            finally:
+                if not execution.done():
+                    execution.cancel()
+                    await asyncio.gather(execution, return_exceptions=True)
+            assert not await second.run_once()
+    finally:
+        await engine.dispose()
+    assert requests == 1
+
+
+@pytest.mark.asyncio
+async def test_pre_dispatch_crashes_can_reclaim_a_run_only_a_bounded_number_of_times(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    from galaxy_frog.adapters.generation.ollama import OllamaGenerationProvider
+    from galaxy_frog.entrypoints.workspace_chat_worker import WorkspaceChatWorker
+
+    client, _ = workspace_http
+    path, body = await _grounded_chat(client, _DURABLE_OWNER)
+    accepted = (await client.post(f"{path}/turns", headers=_DURABLE_OWNER, json=body)).json()
+    run_id = accepted["run"]["run_id"]
+    run_path = f"{path}/runs/{run_id}"
+    settings = auth_settings(database_url=Settings().database_url)
+    engine = create_database_engine(settings)
+    sessions = async_sessionmaker(engine)
+    entered = asyncio.Queue[None]()
+    hold = asyncio.Event()
+
+    def no_dispatch(_request: httpx.Request) -> httpx.Response:
+        pytest.fail("A crashed preparation must not send the question")
+
+    async def preparing(_origin: str) -> dict[str, str]:
+        entered.put_nowait(None)
+        await hold.wait()
+        return {settings.generation_model: "fixture"}
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(no_dispatch)) as transport:
+            provider = OllamaGenerationProvider(
+                base_url=settings.ollama_base_url, model=settings.generation_model, client=transport
+            )
+            workers = [
+                WorkspaceChatWorker(settings, sessions, provider, preparing) for _ in range(2)
+            ]
+            for claim_number in range(1, 4):
+                worker = workers[claim_number % 2]
+                execution = asyncio.create_task(worker.run_once())
+                try:
+                    await asyncio.wait_for(entered.get(), timeout=5)
+                    current = (await client.get(run_path, headers=_DURABLE_OWNER)).json()["run"]
+                    assert (current["status"], current["execution"]["claims"]) == (
+                        "preparing",
+                        claim_number,
+                    )
+                finally:
+                    execution.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await execution
+                async with sessions.begin() as session:
+                    await session.execute(
+                        update(WorkspaceChatRunRow)
+                        .where(WorkspaceChatRunRow.id == UUID(run_id))
+                        .values(lease_until=datetime.now(UTC) - timedelta(seconds=1))
+                    )
+            assert not await workers[0].run_once()
+    finally:
+        await engine.dispose()
+    reopened = (await client.get(run_path, headers=_DURABLE_OWNER)).json()["run"]
+    assert (reopened["status"], reopened["failure"]) == ("failed", "recovery_exhausted")
+    assert reopened["execution"] == {"claims": 3, "possible_dispatch_at": None}
 
 
 @pytest.mark.asyncio

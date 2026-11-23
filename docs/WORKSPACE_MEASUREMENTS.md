@@ -382,3 +382,25 @@ bun run db:migrate
 bun run build
 bun scripts/workspace-durable-ollama.ts
 ```
+
+## W4.2 Stop and run recovery
+
+[Issue #30](https://github.com/VedantPatil-99/the-galaxy-frog/issues/30) uses the same
+local PostgreSQL 17 fixture, with additive migration `20261124_0029` following
+`20261123_0028`. Two controlled workers exercise lease renewal, crashes before and
+after the possible-dispatch marker, stale-worker fencing, and both orders of Stop
+and publication. The pre-dispatch fixture reaches three claims and sends zero
+questions. The expired-dispatch and Stop fixtures keep at most one possible send.
+
+The production Chrome regression ran at 1440 × 960 against real FastAPI and
+PostgreSQL with controlled Auth and Ollama. One held run exercised offline and
+reconnect, Stop and status focus, refresh, Back and Forward, and protection of a
+newer draft. One explicit retry reopened a validated answer with the original pin.
+The first run stayed stopped and the fixture made exactly two dispatches across the
+original run and its linked retry. The existing lost-acknowledgement, exact citation,
+and quick-question regression passed in the same browser session.
+
+Use `bun scripts/workspace-durable-ollama.ts` after migrating a disposable local
+database and running `bun run build`. Timing in these controlled-worker tests uses
+explicit holds and shortened leases. The broad workload and live-provider acceptance
+belong to their separate gates.

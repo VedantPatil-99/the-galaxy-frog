@@ -14,12 +14,15 @@ const account = crypto.randomUUID()
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url")
 const token = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: account, exp: Math.floor(Date.now() / 1_000) + 3600 })}.fixture`
 const release = Promise.withResolvers<void>()
+const releaseStopped = Promise.withResolvers<void>()
 const model = "fixture-local:4b"
 const quote = "Ice flows downhill."
 const exactExcerpt = `${quote} ${"a".repeat(1_200 - quote.length - 1)}`
 const unusedTail = "This part is outside the sent excerpt."
 const answer = "Ice moves downhill under its own weight."
+const recoveryQuestion = "Can this local run be stopped?"
 let generations = 0
+let recoveryDispatches = 0
 const provider = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
   const { pathname } = new URL(request.url)
   if (pathname === "/auth/v1/otp") return Response.json({})
@@ -40,6 +43,7 @@ const provider = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request
     assert.ok(!body.prompt.includes(unusedTail))
     generations++
     await release.promise
+    if (body.prompt.includes(recoveryQuestion) && ++recoveryDispatches === 1) await releaseStopped.promise
     return Response.json({ model, done: true, response: JSON.stringify({ blocks: [
       { text: answer, citations: [{ reference: "E1", quote }] },
     ] }) })
@@ -159,8 +163,66 @@ try {
   assert.equal((await api(turnPath)).turns.length, 1)
   assert.equal(generations, 2)
   console.log("PASS: real FastAPI and PostgreSQL, dropped acknowledgement and same-key replay after refresh, saved answer and original citation, and existing quick question")
+
+  const recoveryChat = await api(`${base}/chats`, { chat_id: crypto.randomUUID(), title: "Recoverable local run" })
+  const recoveryPath = `${base}/chats/${recoveryChat.chat_id}/turns`
+  await tab.go(`/?notebook=${notebook.notebook_id}&chat=${recoveryChat.chat_id}`)
+  await tab.visible("Recoverable local run")
+  await pickPassage()
+  await tab.type(editor, recoveryQuestion)
+  await tab.click("Send")
+  await tab.visible("Running in Ollama")
+  const activeRun = (await api(recoveryPath)).turns[0]
+  const nextDraft = "Keep this newer question."
+  await tab.type(editor, nextDraft)
+  await tab.visible("Draft saved")
+
+  await tab.command("Network.enable")
+  const connection = { latency: 0, downloadThroughput: -1, uploadThroughput: -1 }
+  await tab.command("Network.emulateNetworkConditions", { ...connection, offline: true })
+  await tab.visible("Offline. Run status will refresh when you reconnect.")
+  await tab.command("Network.emulateNetworkConditions", { ...connection, offline: false })
+  await until("reconnected Stop control", () => tab.evaluate(`document.querySelector('[aria-label="Saved conversation"] button')?.getAttribute('aria-disabled') === 'false'`))
+  await tab.evaluate(`(() => {
+    const stop = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Stop');
+    stop.focus(); stop.click();
+  })()`)
+  await tab.visible("Run stopped")
+  assert.equal(await tab.evaluate("document.activeElement?.textContent"), "Run stopped")
+  await tab.visible("Ollama may already have received this question.")
+  releaseStopped.resolve()
+  await tab.command("Page.reload")
+  await tab.visible("Run stopped")
+  await tab.click("Restore question")
+  await tab.visible("Your current draft is still in the editor.")
+  assert.equal(await tab.evaluate(`${field}?.value`), nextDraft)
+
+  await tab.evaluate(`document.querySelector('[aria-label="Open chat"]').click()`)
+  await until("quick-question choice", () => tab.evaluate(`[...document.querySelectorAll('[role=option]')].some(option => option.textContent.includes('Quick question'))`))
+  await tab.evaluate(`[...document.querySelectorAll('[role=option]')].find(option => option.textContent.includes('Quick question')).click()`)
+  await until("quick-question location", () => tab.evaluate(`new URL(location.href).searchParams.get('chat') === 'question'`))
+  await tab.evaluate("history.back()")
+  await tab.visible("Run stopped")
+  await tab.evaluate("history.forward()")
+  await until("Forward reopens quick question", () => tab.evaluate(`new URL(location.href).searchParams.get('chat') === 'question' && !document.body.innerText.includes('Run stopped')`))
+  await tab.evaluate("history.back()")
+  await tab.visible("Run stopped")
+
+  await tab.click("Retry run")
+  await tab.visible(answer)
+  const history = (await api(recoveryPath)).turns
+  assert.equal(history.length, 2)
+  assert.equal(history[0].run.status, "stopped")
+  assert.equal(history[0].run.answer, null)
+  assert.equal(history[1].run.retry_of_run_id, activeRun.run.run_id)
+  assert.equal(history[1].run.status, "completed")
+  assert.deepEqual(history[1].passage, activeRun.passage)
+  assert.equal(await tab.evaluate(`${field}?.value`), nextDraft)
+  assert.equal(recoveryDispatches, 2)
+  console.log("PASS: offline/reconnect, Stop and focus, refresh and Back/Forward, preserved draft, and explicit linked retry")
 } finally {
   release.resolve()
+  releaseStopped.resolve()
   for (const socket of sockets) socket.close()
   for (const process of [web, chrome, backend]) process.kill()
   await Promise.all([web.exited, chrome.exited, backend.exited])

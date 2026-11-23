@@ -62,3 +62,24 @@ and uncertain dispatch are visible. An uncertain dispatch never runs again autom
 The digest is observed at dispatch and checked again before publication. Existing quick
 questions still use their established selected-passage path. Stop, the full withdrawal
 lifecycle, durable video, and interactive Gemini have separate tickets.
+
+## W4.2 Stop and recovery
+
+The worker claims a queued turn into **preparing** and commits the possible-dispatch
+marker with **running**, after evidence and model checks. It renews its 30-second
+PostgreSQL lease every five seconds while it owns the run. A replacement worker may
+reclaim an expired preparation, up to three total claims. A lost lease after the
+dispatch marker settles as **uncertain**. The recovery path never repeats that dispatch.
+
+Stop and publication lock the same run row. The first terminal commit determines the
+visible result. A worker that loses its lease or sees Stop cancels its local wait on
+the next heartbeat when possible. The persisted marker still discloses possible Ollama
+execution. Run reads expose the claim count and marker timestamp separately from
+questions, evidence and validated answer blocks.
+
+An explicit retry creates a new ordered turn with a link to the previous run. The
+server checks the original pin and digest, preserves the requested model and revision,
+and issues fresh authorization. A retry uses its own submission key and leaves the
+current draft revision alone. Restoring a question goes through the existing draft
+revision checks. The web client polls only a visible, connected, active run and
+merges projections by run revision.

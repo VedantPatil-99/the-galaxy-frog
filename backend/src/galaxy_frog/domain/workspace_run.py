@@ -11,13 +11,17 @@ from galaxy_frog.domain.generation.workspace_answer import WorkspaceAnswerDraft
 from galaxy_frog.domain.workspace_chat import PromptText
 from galaxy_frog.domain.workspace_text import WorkspaceTextSource
 
-RunStatus = Literal["queued", "running", "completed", "failed", "uncertain"]
+TerminalRunStatus = Literal["completed", "stopped", "failed", "uncertain"]
+RunStatus = Literal["queued", "preparing", "running", TerminalRunStatus]
+ACTIVE_RUN_STATUSES = ("queued", "preparing", "running")
+RETRYABLE_RUN_STATUSES = ("stopped", "failed", "uncertain")
 RunFailure = Literal[
     "access_changed",
     "evidence_unavailable",
     "model_unavailable",
     "answer_unverified",
     "dispatch_unknown",
+    "recovery_exhausted",
 ]
 
 
@@ -49,6 +53,12 @@ class WorkspaceTurnSubmit(BaseModel):
         return sha256(intent.encode("utf-8")).hexdigest()
 
 
+class WorkspaceRunRetry(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    submission_key: UUID
+
+
 class WorkspaceLocalRunSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -66,12 +76,19 @@ class WorkspaceRunEvidence(BaseModel):
     excerpt: str
 
 
+class WorkspaceRunExecutionView(BaseModel):
+    claims: int
+    possible_dispatch_at: datetime | None
+
+
 class WorkspaceRunView(BaseModel):
     run_id: UUID
     status: RunStatus
     revision: int
     settings: WorkspaceLocalRunSettings
     model_revision_at_dispatch: str | None
+    retry_of_run_id: UUID | None
+    execution: WorkspaceRunExecutionView
     failure: RunFailure | None
     evidence: WorkspaceRunEvidence | None
     answer: WorkspaceAnswerDraft | None

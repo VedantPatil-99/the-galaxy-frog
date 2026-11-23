@@ -862,6 +862,9 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
     - [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29) adds the first local
       saved-answer path for one pinned pasted-text passage. See the
       [local verification](docs/WORKSPACE_MEASUREMENTS.md#w42-first-saved-ollama-answer).
+    - [#30](https://github.com/VedantPatil-99/the-galaxy-frog/issues/30) adds Stop,
+      reconnect, and bounded worker recovery for the same local path. See the
+      [verification](docs/WORKSPACE_MEASUREMENTS.md#w42-stop-and-run-recovery).
   - [ ] W4.3 — Chat groups and organization, branching, and answer revisions.
   - [ ] W4.4 — Bounded context summaries and chat workflow acceptance.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.

@@ -322,6 +322,20 @@ its citation. If the connection ends before acknowledgement, **Check submission*
 checks the same Send. Quick questions and answers from other selections use the existing
 session-only path. [Verification](WORKSPACE_MEASUREMENTS.md#w42-first-saved-ollama-answer)
 
+## W4.2 Stop and recover a run
+
+Apply `20261123_0028` and then `20261124_0029` before starting the updated API and
+worker. Pause old workspace workers for the migration. Start the matching API and
+worker before serving the matching web build. The second migration extends existing
+runs and their active-run constraint. Retain both revisions and the saved data if
+rolling back application code. A hosted rollout requires its own verification.
+
+Open the same chat after reconnecting to read the current run. **Stop** ends an active
+run and may report that local Ollama already received the question. **Retry run**
+starts a linked attempt using the original pinned passage, with current authorization
+and the original model configuration. **Restore question** uses an empty editor and the
+existing revisioned draft save path. It preserves a newer draft. [Verification](WORKSPACE_MEASUREMENTS.md#w42-stop-and-run-recovery)
+
 ## Application dependencies
 
 The [web package manifest](../apps/web/package.json) and Bun lockfile include the later-phase libraries below. Add feature-specific extensions and adapters in the packets that use them.

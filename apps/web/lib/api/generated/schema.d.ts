@@ -637,6 +637,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workspace Run */
+        get: operations["get_workspace_run_v1_workspace_notebooks__notebook_id__chats__chat_id__runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/runs/{run_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Workspace Run */
+        post: operations["retry_workspace_run_v1_workspace_notebooks__notebook_id__chats__chat_id__runs__run_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/runs/{run_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Workspace Run */
+        post: operations["stop_workspace_run_v1_workspace_notebooks__notebook_id__chats__chat_id__runs__run_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/turns": {
         parameters: {
             query?: never;
@@ -3097,14 +3148,32 @@ export interface components {
             /** Start Char */
             start_char: number;
         };
+        /** WorkspaceRunExecutionView */
+        WorkspaceRunExecutionView: {
+            /** Claims */
+            claims: number;
+            /** Possible Dispatch At */
+            possible_dispatch_at: string | null;
+        };
+        /** WorkspaceRunRetry */
+        WorkspaceRunRetry: {
+            /**
+             * Submission Key
+             * Format: uuid
+             */
+            submission_key: string;
+        };
         /** WorkspaceRunView */
         WorkspaceRunView: {
             answer: components["schemas"]["WorkspaceAnswerDraft"] | null;
             evidence: components["schemas"]["WorkspaceRunEvidence"] | null;
+            execution: components["schemas"]["WorkspaceRunExecutionView"];
             /** Failure */
-            failure: ("access_changed" | "evidence_unavailable" | "model_unavailable" | "answer_unverified" | "dispatch_unknown") | null;
+            failure: ("access_changed" | "evidence_unavailable" | "model_unavailable" | "answer_unverified" | "dispatch_unknown" | "recovery_exhausted") | null;
             /** Model Revision At Dispatch */
             model_revision_at_dispatch: string | null;
+            /** Retry Of Run Id */
+            retry_of_run_id: string | null;
             /** Revision */
             revision: number;
             /**
@@ -3117,7 +3186,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "completed" | "failed" | "uncertain";
+            status: "queued" | "preparing" | "running" | "completed" | "stopped" | "failed" | "uncertain";
         };
         /** WorkspaceSearchCue */
         WorkspaceSearchCue: {
@@ -5591,6 +5660,226 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_workspace_run_v1_workspace_notebooks__notebook_id__chats__chat_id__runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+                notebook_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTurnView"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    retry_workspace_run_v1_workspace_notebooks__notebook_id__chats__chat_id__runs__run_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+                notebook_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceRunRetry"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTurnView"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stop_workspace_run_v1_workspace_notebooks__notebook_id__chats__chat_id__runs__run_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+                notebook_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTurnView"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
