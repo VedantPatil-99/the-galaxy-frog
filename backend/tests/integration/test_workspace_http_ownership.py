@@ -26,6 +26,7 @@ from galaxy_frog.api.routes import workspace
 from galaxy_frog.api.workspace_auth import get_workspace_identity_verifier
 from galaxy_frog.config import Settings
 from galaxy_frog.db import workspace_page_ocr
+from galaxy_frog.db.engine import create_database_engine
 from galaxy_frog.db.workspace import WorkspaceAccountRow, WorkspaceNotebookRow
 from galaxy_frog.db.workspace_documents import WorkspaceDocumentRepository, WorkspaceDocumentRow
 from galaxy_frog.db.workspace_page_ocr import WorkspacePageOCRRow
@@ -64,10 +65,14 @@ async def workspace_http(
 
     def authenticated_user(request: httpx.Request) -> httpx.Response:
         token = request.headers["authorization"].removeprefix("Bearer ")
-        account = owners.get(token)
+        account = owners.get("owner-token" if token == "former-owner-token" else token)
         if account is None:
             return httpx.Response(401, json={"message": "Invalid session"})
-        email = "owner@example.com" if token == "owner-token" else "other@example.com"
+        email = {
+            "owner-token": "owner@example.com",
+            "other-token": "other@example.com",
+            "former-owner-token": "former@example.com",
+        }[token]
         return httpx.Response(
             200,
             json={
@@ -262,6 +267,31 @@ async def test_pinned_pasted_passage_survives_a_new_copy_and_rejects_an_invalid_
     denied = await client.get(pin, headers={"authorization": "Bearer invalidated-token"})
     assert denied.status_code == 401
     assert "Ice flows." not in denied.text
+    outside_allowlist = await client.get(
+        pin, headers={"authorization": "Bearer former-owner-token"}
+    )
+    assert outside_allowlist.status_code == 403
+    assert outside_allowlist.json()["error"]["code"] == "WORKSPACE_INVITATION_REQUIRED"
+    assert "Ice flows." not in outside_allowlist.text
+
+    # Simulate loss of this test's exact pin. The workspace has no source-erasure route.
+    engine = create_database_engine(Settings())
+    try:
+        async with async_sessionmaker(engine).begin() as session:
+            await session.execute(
+                delete(WorkspaceTextSourceRow).where(
+                    WorkspaceTextSourceRow.id == UUID(source["source_id"]),
+                    WorkspaceTextSourceRow.version_id == UUID(source["version_id"]),
+                    WorkspaceTextSourceRow.notebook_id == UUID(notebook.json()["notebook_id"]),
+                )
+            )
+    finally:
+        await engine.dispose()
+    missing = await client.get(pin, headers=owner)
+    assert missing.status_code == 404
+    assert "Ice flows." not in missing.text
+    new_path = f"{path}/{new_source['source_id']}/versions/{new_source['version_id']}"
+    assert (await client.get(new_path, headers=owner)).json()["blocks"][1]["text"] == "Ice melts."
 
 
 @pytest.mark.asyncio

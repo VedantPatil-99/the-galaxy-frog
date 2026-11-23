@@ -648,6 +648,7 @@ async def test_interrupted_cloud_embedding_dispatch_leaves_the_receipt_claimed(
         workspace_gemini_embedding_enabled=True,
         gemini_embedding_api_key="fixture-key",
         gemini_embedding_project_id=project,
+        gemini_requests_per_day=1,
     )
     monkeypatch.setattr(workspace_semantic_cloud, "workspace_settings", Mock(return_value=settings))
     embed = AsyncMock(side_effect=asyncio.CancelledError)
@@ -667,6 +668,22 @@ async def test_interrupted_cloud_embedding_dispatch_leaves_the_receipt_claimed(
         replay = await client.post(path, headers=OWN, json=confirmed)
         assert replay.status_code == 409
         assert replay.json()["error"]["code"] == "WORKSPACE_CLOUD_EMBEDDING_BUSY"
+
+        # Advance past the pending-claim window while the original preview would still be valid.
+        clock = Mock(wraps=datetime)
+        clock.now.return_value = datetime.now(UTC) + timedelta(minutes=3)
+        monkeypatch.setattr(workspace_semantic_cloud, "datetime", clock)
+        spent = await client.post(path, headers=OWN, json=confirmed)
+        assert spent.status_code == 409
+        assert spent.json()["error"]["code"] == "WORKSPACE_CLOUD_PREVIEW_CHANGED"
+
+        fresh = await client.post(f"{base}/semantic-cloud-preview", headers=OWN, json=action)
+        assert fresh.status_code == 200
+        limited = await client.post(
+            path, headers=OWN, json={**confirmed, "preview_id": fresh.json()["preview_id"]}
+        )
+        assert limited.status_code == 429
+        assert limited.json()["error"]["code"] == ProviderCode.QUOTA_EXHAUSTED.value
         embed.assert_awaited_once()
     finally:
         group = gemini_quota(settings, project)["quota_group"]
