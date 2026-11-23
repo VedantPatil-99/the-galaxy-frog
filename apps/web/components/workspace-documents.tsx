@@ -7,10 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { WorkspacePageOCRPanel } from "@/components/workspace-page-ocr"
 import { ApiClientError } from "@/lib/api/client"
-import {
-  documentPageImageUrl, getDocumentSection, importDocument, listDocuments,
-  type WorkspaceDocument, type WorkspaceDocumentSection,
-} from "@/lib/api/workspace"
+import type { WorkspaceDocument, WorkspaceDocumentSection } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 
 const MAX_BYTES = 8 * 1024 * 1024
 const formatLabel = { pdf: "PDF", docx: "DOCX", plain: "Plain text", markdown: "Markdown" }
@@ -26,6 +24,7 @@ export function WorkspaceDocuments({ notebookId, selectedId, onSelect, onExpired
   onSelect: (document: WorkspaceDocument) => void
   onExpired: () => void
 }) {
+  const { importDocument, listDocuments } = useWorkspaceSession().api
   const id = useId()
   const upload = useRef<AbortController | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -53,7 +52,7 @@ export function WorkspaceDocuments({ notebookId, selectedId, onSelect, onExpired
       if (!request.signal.aborted) setLoading(false)
     })
     return () => request.abort()
-  }, [notebookId, after, attempt, onExpired])
+  }, [notebookId, after, attempt, listDocuments, onExpired])
 
   async function addFile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -137,11 +136,15 @@ export function WorkspaceDocumentPreview({ notebookId, source, match, onExpired 
   match?: { section_number: number; block: { text: string }; kind: "document" | "page_ocr" }
   onExpired: () => void
 }) {
+  const session = useWorkspaceSession()
+  const { getDocumentSection, getDocumentPageImage } = session.api
   const heading = useRef<HTMLHeadingElement>(null)
   const [page, setPage] = useState(match?.section_number ?? 1)
   const [section, setSection] = useState<WorkspaceDocumentSection | null>(null)
   const [loadError, setLoadError] = useState("")
   const [imageError, setImageError] = useState(false)
+  const [image, setImage] = useState<{ page: number; url: string } | null>(null)
+  const [imageAttempt, setImageAttempt] = useState(0)
   const [attempt, setAttempt] = useState(0)
   const pdf = source.format === "pdf"
   const current = section?.section_number === page ? section : null
@@ -156,11 +159,34 @@ export function WorkspaceDocumentPreview({ notebookId, source, match, onExpired 
       if (!request.signal.aborted) handleError(error, onExpired, setLoadError)
     })
     return () => request.abort()
-  }, [notebookId, source, page, onExpired, attempt])
+  }, [notebookId, source, page, onExpired, attempt, getDocumentSection])
+
+  useEffect(() => {
+    if (!pdf) return
+    const request = new AbortController()
+    let url: string | undefined
+    function release() {
+      request.abort()
+      if (url) URL.revokeObjectURL(url)
+    }
+    session.signal.addEventListener("abort", release, { once: true })
+    void getDocumentPageImage(notebookId, source, page, request.signal).then(blob => {
+      if (request.signal.aborted || !session.isCurrent()) return
+      url = URL.createObjectURL(blob)
+      setImage({ page, url })
+    }).catch(error => {
+      if (!request.signal.aborted) handleError(error, onExpired, () => setImageError(true))
+    })
+    return () => {
+      session.signal.removeEventListener("abort", release)
+      release()
+    }
+  }, [getDocumentPageImage, imageAttempt, notebookId, onExpired, page, pdf, session, source])
 
   function goToPage(next: number) {
     setLoadError("")
     setImageError(false)
+    setImage(null)
     setPage(next)
   }
 
@@ -194,12 +220,12 @@ export function WorkspaceDocumentPreview({ notebookId, source, match, onExpired 
           {imageError ? (
             <div className="space-y-2">
               <p role="status" className="text-sm text-muted-foreground">The page image is unavailable. Open Extracted text or retry the preview.</p>
-              <Button variant="outline" className="min-h-11" onClick={() => setImageError(false)}>Retry preview</Button>
+              <Button variant="outline" className="min-h-11" onClick={() => { setImage(null); setImageError(false); setImageAttempt(value => value + 1) }}>Retry preview</Button>
             </div>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element -- The same-origin private image needs the browser's session.
-            <img key={page} src={documentPageImageUrl(notebookId, source, page)} alt={`Page ${page} of ${source.filename}`} className="mx-auto max-h-[70dvh] w-full rounded-md border object-contain" onError={() => setImageError(true)} />
-          )}
+          ) : image?.page === page ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Preview bytes are fetched in the verified workspace session.
+            <img key={image.url} src={image.url} alt={`Page ${page} of ${source.filename}`} className="mx-auto max-h-[70dvh] w-full rounded-md border object-contain" onError={() => setImageError(true)} />
+          ) : <p role="status" className="text-sm text-muted-foreground">Loading page image…</p>}
           {current && !current.text ? (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">This page has no extractable text.</p>

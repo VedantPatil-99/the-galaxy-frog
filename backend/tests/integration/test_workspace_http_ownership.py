@@ -155,6 +155,28 @@ async def test_verified_http_users_cannot_access_or_overwrite_another_owners_not
 
 
 @pytest.mark.asyncio
+async def test_workspace_account_binding_rejects_a_switched_session_before_writing(
+    workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
+) -> None:
+    client, owners = workspace_http
+    path = "/v1/workspace/notebooks"
+    old_tab = {
+        "authorization": "Bearer other-token",
+        "x-workspace-account": str(owners["owner-token"]),
+    }
+    assert (await client.get(path, headers=old_tab)).status_code == 409
+    rejected = await client.post(path, headers=old_tab, json={"title": "Stale optimistic notebook"})
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "WORKSPACE_SESSION_CHANGED"
+    assert rejected.headers["cache-control"] == "no-store"
+    new_tab = {**old_tab, "x-workspace-account": str(owners["other-token"])}
+    assert (await client.get(path, headers=new_tab)).json() == {"notebooks": []}
+    created = await client.post(path, headers=new_tab, json={"title": "Current notebook"})
+    assert created.status_code == 201
+    assert created.json()["owner_id"] == str(owners["other-token"])
+
+
+@pytest.mark.asyncio
 async def test_pasted_text_is_idempotent_versioned_and_owner_scoped(
     workspace_http: tuple[httpx.AsyncClient, dict[str, UUID]],
 ) -> None:

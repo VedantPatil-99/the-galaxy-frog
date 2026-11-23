@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { ElapsedBadge, EvidenceMatchButton, evidenceId } from "@/components/workspace-evidence-display"
 import { ApiClientError } from "@/lib/api/client"
-import {
-  buildWorkspaceSemanticIndex, confirmWorkspaceCloudEmbedding, getWorkspaceSemanticIndex, previewWorkspaceCloudEmbedding,
-  searchWorkspaceMeaning, type CloudEmbeddingAction, type CloudEmbeddingPreview, type WorkspaceSearchHit, type WorkspaceSemanticStatus,
-} from "@/lib/api/workspace"
+import type { CloudEmbeddingAction, CloudEmbeddingPreview, WorkspaceSearchHit, WorkspaceSemanticStatus } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 
 type Props = { notebookId: string; onOpen: (hit: WorkspaceSearchHit) => void; onExpired: () => void }
 type Operation = "status" | "index" | "search" | "preview"
@@ -20,6 +18,7 @@ export function WorkspaceSemanticSearch(props: Props) {
 }
 
 function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
+  const { buildWorkspaceSemanticIndex, confirmWorkspaceCloudEmbedding, getWorkspaceSemanticIndex, previewWorkspaceCloudEmbedding, searchWorkspaceMeaning } = useWorkspaceSession().api
   const field = useId()
   const request = useRef<AbortController | null>(null)
   const [status, setStatus] = useState<WorkspaceSemanticStatus | null>(null)
@@ -59,7 +58,7 @@ function SemanticPanel({ notebookId, onOpen, onExpired }: Props) {
       }
     })
     return () => request.current?.abort()
-  }, [notebookId, onExpired])
+  }, [getWorkspaceSemanticIndex, notebookId, onExpired])
 
   async function run(action: Operation, execute: (signal: AbortSignal) => Promise<void>) {
     if (request.current) return

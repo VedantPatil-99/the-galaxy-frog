@@ -13,10 +13,11 @@ import { WorkspaceSourceSearch } from "@/components/workspace-source-search"
 import { WorkspaceSemanticSearch } from "@/components/workspace-semantic-search"
 import { WorkspaceTextPreview, WorkspaceTextSources } from "@/components/workspace-text-sources"
 import { ApiClientError } from "@/lib/api/client"
-import { createNotebook, getNotebooks, getOwnedTranscript, listSources, type Notebook, type WorkspaceDocument, type WorkspaceSearchHit, type WorkspaceSource, type WorkspaceTextSource, type WorkspaceTranscript } from "@/lib/api/workspace"
+import type { Notebook, WorkspaceDocument, WorkspaceSearchHit, WorkspaceSource, WorkspaceTextSource, WorkspaceTranscript } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 import { timestamp } from "@/lib/timestamp"
 import type { DraftFlushRef } from "@/lib/use-workspace-draft"
-import { readComposerLocation } from "@/lib/workspace-draft-recovery"
+import { clearWorkspaceLocation, readComposerLocation, setWorkspaceLocation } from "@/lib/workspace-draft-recovery"
 import { YOUTUBE_PLAYER_ORIGIN } from "@/lib/youtube-player"
 
 function youtubePreview(source: WorkspaceSource, milliseconds: number) {
@@ -43,6 +44,7 @@ function SourcePreview({ notebookId, source, match, onExpired }: {
   match: Extract<WorkspaceSearchHit, { kind: "video" }> | null
   onExpired: () => void
 }) {
+  const { getOwnedTranscript } = useWorkspaceSession().api
   const heading = useRef<HTMLHeadingElement>(null)
   const [transcript, setTranscript] = useState<WorkspaceTranscript | null>(null)
   const [seek, setSeek] = useState(match?.start_ms ?? 0)
@@ -64,7 +66,7 @@ function SourcePreview({ notebookId, source, match, onExpired }: {
       else setError(errorText(caught))
     })
     return () => request.abort()
-  }, [attempt, notebookId, onExpired, source.video_id])
+  }, [attempt, getOwnedTranscript, notebookId, onExpired, source.video_id])
 
   return (
     <div className="space-y-4">
@@ -112,6 +114,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
   accountId: string
   draftFlushRef: DraftFlushRef
 }) {
+  const { listSources } = useWorkspaceSession().api
   const [sources, setSources] = useState<WorkspaceSource[]>([])
   const [after, setAfter] = useState<string | null>(null)
   const [nextAfter, setNextAfter] = useState<string | null>(null)
@@ -136,7 +139,7 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
       if (!request.signal.aborted) setLoading(false)
     })
     return () => request.abort()
-  }, [after, attempt, notebook.notebook_id, onExpired])
+  }, [after, attempt, listSources, notebook.notebook_id, onExpired])
 
   const selectedVideo = selected && "video_id" in selected ? selected : null
   const selectedText = selected && "title" in selected && "source_id" in selected ? selected : null
@@ -205,6 +208,8 @@ function NotebookSources({ notebook, pane, setPane, onExpired, galaxy, accountId
 }
 
 export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; onExpired: () => void }) {
+  const session = useWorkspaceSession()
+  const { createNotebook, getNotebooks } = session.api
   const draftFlushRef = useRef<(() => Promise<void>) | null>(null)
   const [notebooks, setNotebooks] = useState<Notebook[] | null>(null)
   const [selected, setSelected] = useState<string | null>(() => typeof window === "undefined"
@@ -219,14 +224,17 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
   useEffect(() => {
     const request = new AbortController()
     void getNotebooks(request.signal).then(data => {
-      if (!request.signal.aborted) setNotebooks(data)
+      if (request.signal.aborted || !session.isCurrent()) return
+      const requested = new URLSearchParams(window.location.search).get("notebook")
+      if (requested && !data.some(notebook => notebook.notebook_id === requested)) clearWorkspaceLocation()
+      setNotebooks(data)
     }).catch((caught: unknown) => {
       if (request.signal.aborted) return
       if (caught instanceof ApiClientError && caught.status === 401) onExpired()
       else setError(errorText(caught))
     })
     return () => request.abort()
-  }, [attempt, onExpired])
+  }, [attempt, getNotebooks, onExpired, session])
 
   useEffect(() => {
     function restoreNotebook() {
@@ -238,11 +246,12 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
   }, [])
 
   function chooseNotebook(id: string) {
+    if (!session.isCurrent()) return
     const url = new URL(window.location.href)
     if (notebook?.notebook_id !== id) {
       url.searchParams.delete("chat")
       url.searchParams.set("notebook", id)
-      window.history.pushState(window.history.state, "", url)
+      setWorkspaceLocation(accountId, url, "pushState")
     }
     setSelected(id)
     setPane("work")
@@ -255,6 +264,7 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
     setError("")
     try {
       const created = await createNotebook(title.trim())
+      if (!session.isCurrent()) return
       setNotebooks(current => [created, ...(current ?? [])])
       setTitle("")
       chooseNotebook(created.notebook_id)
@@ -277,10 +287,12 @@ export function PrivateWorkspace({ accountId, onExpired }: { accountId: string; 
         const deadline = new Promise<void>(resolve => { timer = window.setTimeout(resolve, 750) })
         await Promise.race([save, deadline]).finally(() => window.clearTimeout(timer))
       }
-      await workspaceAuthAction("sign-out")
+      if (!session.isCurrent()) return
+      await workspaceAuthAction("sign-out", { session: session.marker })
       onExpired()
     } catch (caught) {
-      setError(errorText(caught))
+      if (caught instanceof ApiClientError && caught.status === 409) onExpired()
+      else if (session.isCurrent()) setError(errorText(caught))
     } finally {
       setBusy(false)
     }

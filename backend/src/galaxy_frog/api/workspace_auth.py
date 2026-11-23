@@ -112,4 +112,13 @@ async def get_verified_workspace_creator(
             retryable=False,
             suggested_action="Ask the workspace operator for an invitation.",
         )
+    expected = request.headers.get("x-workspace-account")
+    if expected is not None and expected != str(identity.account_id):
+        raise ApiError(
+            status_code=409,
+            code="WORKSPACE_SESSION_CHANGED",
+            message="The workspace sign-in changed.",
+            retryable=False,
+            suggested_action="Reopen the workspace under the current account.",
+        )
     return identity

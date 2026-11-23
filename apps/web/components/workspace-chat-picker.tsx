@@ -8,22 +8,23 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { ApiClientError } from "@/lib/api/client"
+import type { WorkspaceChat, WorkspaceChatSummary } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 import {
-  createWorkspaceChat, getWorkspaceChat, listWorkspaceChats, renameWorkspaceChat,
-  type WorkspaceChat, type WorkspaceChatSummary,
-} from "@/lib/api/workspace"
-import {
-  readComposerLocation, readDraftRecovery, rememberComposerLocation, workspaceDraftKey,
+  readComposerLocation, readDraftRecovery, rememberComposerLocation, setWorkspaceLocation, workspaceDraftKey,
 } from "@/lib/workspace-draft-recovery"
 
 const quickQuestion = "question"
 
-function updateComposerUrl(notebookId: string, chatId: string, method: "pushState" | "replaceState") {
+function updateComposerUrl(accountId: string, notebookId: string, chatId: string, method: "pushState" | "replaceState") {
   const url = new URL(window.location.href)
-  if (url.searchParams.get("notebook") === notebookId && url.searchParams.get("chat") === chatId) return
+  if (url.searchParams.get("notebook") === notebookId && url.searchParams.get("chat") === chatId) {
+    if (window.history.state?.galaxyFrogAccount !== accountId) setWorkspaceLocation(accountId, url, "replaceState")
+    return
+  }
   url.searchParams.set("notebook", notebookId)
   url.searchParams.set("chat", chatId)
-  window.history[method](window.history.state, "", url)
+  setWorkspaceLocation(accountId, url, method)
 }
 
 function withRecovery(chat: WorkspaceChatSummary, accountId: string, notebookId: string) {
@@ -48,6 +49,8 @@ export function WorkspaceChatPicker({ accountId, notebookId, draftPresence, onSe
   onSelect: (chat: WorkspaceChat | null) => void
   onExpired: () => void
 }) {
+  const session = useWorkspaceSession()
+  const { createWorkspaceChat, getWorkspaceChat, listWorkspaceChats, renameWorkspaceChat } = session.api
   const field = useId()
   const portalParent = useRef<HTMLElement | null>(null)
   const request = useRef<AbortController | null>(null)
@@ -67,7 +70,7 @@ export function WorkspaceChatPicker({ accountId, notebookId, draftPresence, onSe
     async function load() {
       try {
         const data = await listWorkspaceChats(notebookId, null, controller.signal)
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted || !session.isCurrent()) return
         const route = new URLSearchParams(window.location.search)
         const remembered = readComposerLocation(accountId)
         const requested = (route.get("notebook") === notebookId ? route.get("chat") : null)
@@ -84,7 +87,7 @@ export function WorkspaceChatPicker({ accountId, notebookId, draftPresence, onSe
         if (!chat && first && requested !== quickQuestion) {
           chat = await getWorkspaceChat(notebookId, first, controller.signal)
         }
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted || !session.isCurrent()) return
         const all = chat && !data.chats.some(item => item.chat_id === chat.chat_id)
           ? [chat, ...data.chats] : data.chats
         setItems(all.map(item => withRecovery(item, accountId, notebookId)))
@@ -93,7 +96,7 @@ export function WorkspaceChatPicker({ accountId, notebookId, draftPresence, onSe
         setAfter(data.next_after)
         setActive(chat?.chat_id ?? "")
         setName(null)
-        updateComposerUrl(notebookId, chat?.chat_id ?? quickQuestion, "replaceState")
+        updateComposerUrl(accountId, notebookId, chat?.chat_id ?? quickQuestion, "replaceState")
         rememberComposerLocation(accountId, notebookId, chat?.chat_id ?? quickQuestion)
         onSelect(chat)
       } catch (caught) {
@@ -112,7 +115,7 @@ export function WorkspaceChatPicker({ accountId, notebookId, draftPresence, onSe
     }
     void load()
     return () => request.current?.abort()
-  }, [accountId, attempt, notebookId, onExpired, onSelect])
+  }, [accountId, attempt, getWorkspaceChat, listWorkspaceChats, notebookId, onExpired, onSelect, session])
 
   useEffect(() => {
     function restoreChat() {
@@ -147,7 +150,8 @@ export function WorkspaceChatPicker({ accountId, notebookId, draftPresence, onSe
   }
 
   function select(chat: WorkspaceChat | null) {
-    updateComposerUrl(notebookId, chat?.chat_id ?? quickQuestion, "pushState")
+    if (!session.isCurrent()) return
+    updateComposerUrl(accountId, notebookId, chat?.chat_id ?? quickQuestion, "pushState")
     rememberComposerLocation(accountId, notebookId, chat?.chat_id ?? quickQuestion)
     setActive(chat?.chat_id ?? "")
     setName(null)

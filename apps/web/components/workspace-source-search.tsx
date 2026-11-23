@@ -8,7 +8,8 @@ import { Disclosure } from "@/components/ui/disclosure"
 import { WorkspaceChatPicker } from "@/components/workspace-chat-picker"
 import { ElapsedBadge, EvidenceMatchButton, evidenceId, location, sourceTitle } from "@/components/workspace-evidence-display"
 import { ApiClientError } from "@/lib/api/client"
-import { answerWorkspaceQuestion, searchWorkspaceSources, type WorkspaceAnswer, type WorkspaceChat, type WorkspaceSearchHit } from "@/lib/api/workspace"
+import type { WorkspaceAnswer, WorkspaceChat, WorkspaceSearchHit } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 import { useWorkspaceDraft, type DraftFlushRef } from "@/lib/use-workspace-draft"
 
 const maxPassages = 6
@@ -24,6 +25,7 @@ function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, 
   onOpen: (hit: WorkspaceSearchHit) => void
   onExpired: () => void
 }) {
+  const { answerWorkspaceQuestion } = useWorkspaceSession().api
   const field = useId()
   const request = useRef<AbortController | null>(null)
   const draft = useWorkspaceDraft({
@@ -156,6 +158,7 @@ export function WorkspaceSourceSearch({ accountId, notebookId, draftFlushRef, on
   onOpen: (hit: WorkspaceSearchHit) => void
   onExpired: () => void
 }) {
+  const { searchWorkspaceSources } = useWorkspaceSession().api
   const field = useId()
   const request = useRef<AbortController | null>(null)
   const [query, setQuery] = useState("")

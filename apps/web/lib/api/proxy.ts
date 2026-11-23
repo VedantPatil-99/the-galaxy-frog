@@ -1,4 +1,5 @@
 import type { ApiErrorResponse } from "@/lib/api/contracts"
+import { workspaceAccountHeader } from "@/lib/workspace-session-marker"
 
 const DEFAULT_FASTAPI_BASE_URL = "http://127.0.0.1:8000"
 const CORRELATION_ID_HEADER = "X-Correlation-ID"
@@ -194,6 +195,9 @@ export async function proxyRequest(
     isVideoPost && path[2] === "import" ? 120_000 : isWorkspaceAnswer ? 100_000 : isPageOcr ? 95_000 : isWorkspaceSemantic ? 75_000 :
     isDocumentProcessing ? 60_000 : 10_000
   const headers = forwardedRequestHeaders(request)
+  const privateWorkspace = path[0] === "v1" && path[1] === "workspace" && path[2] !== "status"
+  const expectedAccount = privateWorkspace ? request.headers.get(workspaceAccountHeader) : null
+  if (expectedAccount !== null) headers.set(workspaceAccountHeader, expectedAccount)
   if (workspaceToken) headers.set("Authorization", `Bearer ${workspaceToken}`)
 
   const init: StreamingRequestInit = {
@@ -201,7 +205,9 @@ export async function proxyRequest(
     headers,
     cache: "no-store",
     redirect: "manual",
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: privateWorkspace
+      ? AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs),
   }
 
   if (!METHODS_WITHOUT_BODY.has(request.method) && request.body !== null) {

@@ -6,10 +6,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { ApiClientError } from "@/lib/api/client"
-import {
-  getTextVersion, listTextSources, pasteTextSource,
-  type WorkspaceTextDraft, type WorkspaceTextSource, type WorkspaceTextVersion,
-} from "@/lib/api/workspace"
+import type { WorkspaceTextDraft, WorkspaceTextSource, WorkspaceTextVersion } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 
 const inputStyle = "min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-ring"
 const draftDefault: WorkspaceTextDraft = { title: "", format: "plain", text: "" }
@@ -25,6 +23,7 @@ export function WorkspaceTextSources({ notebookId, selectedId, onSelect, onExpir
   onSelect: (source: WorkspaceTextSource) => void
   onExpired: () => void
 }) {
+  const { listTextSources, pasteTextSource } = useWorkspaceSession().api
   const fieldId = useId()
   const pendingSave = useRef<AbortController | null>(null)
   const [sources, setSources] = useState<WorkspaceTextSource[]>([])
@@ -51,7 +50,7 @@ export function WorkspaceTextSources({ notebookId, selectedId, onSelect, onExpir
       if (!request.signal.aborted) setLoading(false)
     })
     return () => request.abort()
-  }, [notebookId, after, attempt, onExpired])
+  }, [listTextSources, notebookId, after, attempt, onExpired])
 
   async function addText(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -131,6 +130,7 @@ export function WorkspaceTextPreview({ notebookId, source, matchBlockId, onExpir
   matchBlockId?: string
   onExpired: () => void
 }) {
+  const { getTextVersion } = useWorkspaceSession().api
   const heading = useRef<HTMLHeadingElement>(null)
   const [version, setVersion] = useState<WorkspaceTextVersion | null>(null)
   const [error, setError] = useState("")
@@ -150,7 +150,7 @@ export function WorkspaceTextPreview({ notebookId, source, matchBlockId, onExpir
       if (!request.signal.aborted) reportError(caught, onExpired, setError)
     })
     return () => request.abort()
-  }, [notebookId, source, onExpired, attempt])
+  }, [getTextVersion, notebookId, source, onExpired, attempt])
 
   return (
     <div className="space-y-3">

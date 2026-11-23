@@ -3,18 +3,23 @@
 import { useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
+import { ApiClientError } from "@/lib/api/client"
+import { notifyWorkspaceSession } from "@/lib/workspace-session-marker"
 
-export async function workspaceAuthAction(action: "email-link" | "sign-out", email?: string) {
+export async function workspaceAuthAction(action: "email-link" | "sign-out", fields: { email?: string; session?: string }) {
   const response = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, email }),
+    body: JSON.stringify({ action, ...fields }),
   })
-  if (response.status === 204) return ""
+  if (response.status === 204) {
+    if (action === "sign-out") notifyWorkspaceSession()
+    return ""
+  }
   const body: unknown = await response.json().catch(() => null)
   const message = body && typeof body === "object" && "message" in body && typeof body.message === "string"
     ? body.message : "Sign-in could not be completed. Try again."
-  if (!response.ok) throw new Error(message)
+  if (!response.ok) throw new ApiClientError(message, response.status, null)
   return message
 }
 
@@ -31,7 +36,7 @@ export function WorkspaceSignIn({ ready }: { ready: boolean }) {
     setError("")
     setMessage("")
     try {
-      setMessage(await workspaceAuthAction("email-link", email))
+      setMessage(await workspaceAuthAction("email-link", { email }))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not send the sign-in link.")
     } finally {

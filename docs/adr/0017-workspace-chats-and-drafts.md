@@ -31,3 +31,10 @@ copies. The URL stores only the chat and notebook IDs or the quick-question sele
 
 The existing selected-passage answer operation continues to validate citations before display.
 W4.2 introduces durable answer history and generation runs using the chat identity.
+
+Each verified browser session owns its mounted workspace, pending API requests and
+draft acknowledgements. An account change aborts old requests, discards their responses,
+and unmounts the previous workspace. The browser validates account ownership before
+restoring chat or notebook navigation. Local recovery copies still use the verified
+account, notebook and chat so the same owner can recover unsynced text after signing
+back in. See [ADR 0010](0010-private-workspace-auth.md#w41-browser-account-changes).
