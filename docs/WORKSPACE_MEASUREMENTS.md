@@ -209,6 +209,24 @@ RUN_DATABASE_INTEGRATION=1 uv run --directory backend python -m pytest -s --no-c
   recovered the edit after sign-in. This measures the wait before sign-out, excluding
   the sign-out request itself.
 
+### W4.1 follow-up · Account isolation across tabs
+
+- **Browser regression** — Headless Chrome ran two tabs against the production Next.js
+  build with two synthetic accounts, a saved chat, a one-page document preview, and
+  an unsynced 25-byte question. The fixture held a notebook response and an Auth refresh
+  across sign-in as the second account. Both tabs discarded the previous account's
+  view, Back cleared both account-tagged and pre-update history entries, and the old
+  preview URL could no longer be loaded. Sign-out reached both tabs and preserved the
+  pending sign-in link. The first owner's draft returned only after that owner signed
+  back in. The draft then survived refresh.
+- **Server regression** — FastAPI rejected reads and writes from a tab whose expected
+  account differed from its verified bearer. No notebook was created under the
+  replacement account. The same operation succeeded for the verified owner.
+
+Reproduce the browser check from the repository root after `bun run build` with
+`bun scripts/workspace-account-isolation.ts`. The fixture uses local transports
+and synthetic Auth responses, without live sign-in or provider requests.
+
 ## W4.2 evidence and provider feasibility
 
 Verification for [#28](https://github.com/VedantPatil-99/the-galaxy-frog/issues/28) on

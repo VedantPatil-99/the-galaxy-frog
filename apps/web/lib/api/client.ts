@@ -60,6 +60,12 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+export async function apiResponseError(response: Response, body?: unknown): Promise<ApiClientError> {
+  const value = body === undefined ? await readJson(response) : body
+  const error = isApiErrorResponse(value) ? value : null
+  return new ApiClientError(error?.error.message ?? "The API request failed.", response.status, error)
+}
+
 export async function requestApi<T>(
   path: string,
   guard: ResponseGuard<T>,
@@ -89,12 +95,7 @@ export async function requestApi<T>(
   const body = await readJson(response)
 
   if (!response.ok) {
-    const errorResponse = isApiErrorResponse(body) ? body : null
-    throw new ApiClientError(
-      errorResponse?.error.message ?? "The API request failed.",
-      response.status,
-      errorResponse,
-    )
+    throw await apiResponseError(response, body)
   }
 
   if (!guard(body)) {

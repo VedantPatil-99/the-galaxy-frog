@@ -141,3 +141,6 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Verify two-tab account isolation
+        run: bun scripts/workspace-account-isolation.ts

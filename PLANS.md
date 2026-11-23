@@ -887,6 +887,14 @@ Do not access Notion for this program.
   pencil marker for both pending and server-saved drafts.
 - Saved answer history and recoverable runs are part of W4.2. [Measurements](docs/WORKSPACE_MEASUREMENTS.md)
 
+### W4.1 account-isolation follow-up — 2026-11-23
+
+- A verified browser session now scopes workspace state and pending requests. FastAPI
+  checks the expected account against the verified bearer before workspace access.
+- Two synthetic accounts in separate tabs verified sign-in and sign-out, stale responses,
+  browser history, preview cleanup, and owner-only draft recovery.
+  [Measurements](docs/WORKSPACE_MEASUREMENTS.md#w41-follow-up--account-isolation-across-tabs)
+
 ### W3.8 local verification — 2026-11-22
 
 - Cohere Embed v4 is an optional text-only semantic profile. Owners review the passage

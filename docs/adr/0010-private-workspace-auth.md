@@ -71,3 +71,21 @@ References: [Supabase Auth user endpoint](https://github.com/supabase/auth#readm
 ## W2 browser session transport
 
 Next.js requests a PKCE email link for an existing account and exchanges the callback code on the server. The configured web origin determines the callback and subsequent redirect. The Supabase SSR client stores session data in HttpOnly cookies with SameSite Lax and sets Secure for HTTPS. Next.js forwards the access token only on notebook-scoped workspace API requests. It checks Origin for cookie-authenticated mutations, and FastAPI still verifies the token, creator allowlist, and resource ownership. Public workspace status remains unauthenticated, and existing direct Bearer callers keep their API contract.
+
+## W4.1 browser account changes
+
+A successful PKCE callback selects a new opaque cookie scope. The active scope and
+Supabase credentials stay HttpOnly. An opaque, readable marker lets tabs notice login
+and logout. Legacy cookie sessions continue until the next login or logout. Delayed
+refresh and logout responses can change only the credentials and logout markers for
+their original cookie scope. Each successful callback selects its new scope and prunes
+retired cookie data. Email-link and callback actions manage the PKCE verifier separately.
+
+Cookie-authenticated workspace requests carry the expected browser scope and, after
+session verification, the expected account. The Next.js proxy rejects stale scopes.
+FastAPI compares the account expectation against the verified bearer before accessing
+workspace resources. Neither value grants access on its own. Document previews use the
+same scoped requests and release their object URLs when the scope ends.
+
+Deploy the web and API changes together. A browser tab still running the previous
+workspace client needs a reload. The patch adds no database migration.

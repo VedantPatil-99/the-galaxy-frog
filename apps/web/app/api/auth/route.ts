@@ -14,10 +14,15 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null)
   if (body === null || typeof body !== "object" || !("action" in body)) return message("Choose a sign-in action.", 400)
 
-  const supabase = await workspaceAuthClient(config)
   if (body.action === "sign-out") {
+    const supabase = await workspaceAuthClient(config)
+    if (!("session" in body) || body.session !== supabase.marker) {
+      return message("The workspace sign-in changed. Reopen the workspace and try again.", 409)
+    }
     const { error } = await supabase.auth.signOut({ scope: "local" })
-    return error ? message("Sign-out could not finish. Try again.", 503) : new Response(null, { status: 204, headers })
+    if (error) return message("Sign-out could not finish. Try again.", 503)
+    supabase.end()
+    return new Response(null, { status: 204, headers })
   }
 
   if (body.action !== "email-link" || !("email" in body) || typeof body.email !== "string" || body.email.length > 320) {
@@ -26,6 +31,7 @@ export async function POST(request: Request) {
   const email = body.email.trim()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return message("Enter a valid email address.", 400)
 
+  const supabase = await workspaceAuthClient(config, { kind: "email-link" })
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {

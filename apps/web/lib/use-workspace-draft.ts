@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 
 import { ApiClientError } from "@/lib/api/client"
-import { getWorkspaceChat, saveWorkspaceDraft, type WorkspacePromptDraft } from "@/lib/api/workspace"
+import type { WorkspacePromptDraft } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 import { readDraftRecovery, workspaceDraftKey, writeDraftRecovery } from "@/lib/workspace-draft-recovery"
 
 type SaveState = "saved" | "saving" | "browser" | "offline" | "conflict" | "error"
@@ -17,6 +18,8 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
   draftFlushRef: DraftFlushRef
   onExpired: () => void
 }) {
+  const session = useWorkspaceSession()
+  const { getWorkspaceChat, saveWorkspaceDraft } = session.api
   const key = workspaceDraftKey(accountId, notebookId, chatId)
   const [recovery] = useState(() => readDraftRecovery(key))
   const unsaved = recovery && recovery.text !== initial?.text ? recovery : null
@@ -43,6 +46,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
   const flush = useCallback((): Promise<void> => {
     const draft = state.current
     window.clearTimeout(draft.timer)
+    if (!session.isCurrent()) return Promise.resolve()
     if (draft.pending) return draft.pending
     if (!chatId || !draft.saved || !draft.edit || draft.conflict) return Promise.resolve()
 
@@ -54,6 +58,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
           const saved = await saveWorkspaceDraft(notebookId, id, {
             text: submitted.text, revision: draft.saved.revision,
           })
+          if (!session.isCurrent()) return
           draft.saved = saved
           if (draft.edit === submitted) {
             writeDraftRecovery(key, null, { previous: submitted })
@@ -66,7 +71,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
             if (draft.mounted) setKeptOnDevice(cached)
           }
         }
-        if (draft.mounted) {
+        if (draft.mounted && session.isCurrent()) {
           setStatus("saved")
           setKeptOnDevice(false)
           setDeviceWriteFailed(false)
@@ -84,7 +89,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
     }
     draft.pending = sync(chatId)
     return draft.pending
-  }, [chatId, key, notebookId, onExpired])
+  }, [chatId, key, notebookId, onExpired, saveWorkspaceDraft, session])
 
   useEffect(() => {
     const draft = state.current
@@ -108,6 +113,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
   }, [draftFlushRef, flush, initial, key, recovery])
 
   function edit(next: string) {
+    if (!session.isCurrent()) return
     const draft = state.current
     draft.text = next
     setText(next)
@@ -149,7 +155,7 @@ export function useWorkspaceDraft({ accountId, notebookId, chatId, initial, draf
   }
 
   function resolve(useSaved: boolean) {
-    if (!remote) return
+    if (!remote || !session.isCurrent()) return
     const draft = state.current
     draft.saved = remote
     draft.conflict = false

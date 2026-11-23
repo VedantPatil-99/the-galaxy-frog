@@ -1,6 +1,21 @@
 export type DraftRecovery = { text: string; revision: number | null }
 type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">
 
+export function setWorkspaceLocation(accountId: string, url: URL, method: "pushState" | "replaceState") {
+  window.history[method]({ ...window.history.state, galaxyFrogAccount: accountId }, "", url)
+}
+
+export function clearWorkspaceLocation() {
+  const url = new URL(window.location.href)
+  const state = window.history.state
+  if (!url.searchParams.has("notebook") && !url.searchParams.has("chat") && !state?.galaxyFrogAccount) return
+  url.searchParams.delete("notebook")
+  url.searchParams.delete("chat")
+  const nextState = { ...state }
+  delete nextState.galaxyFrogAccount
+  window.history.replaceState(nextState, "", url)
+}
+
 export function workspaceDraftKey(accountId: string, notebookId: string, chatId?: string) {
   const scope = [accountId, notebookId, chatId ?? "question"].map(encodeURIComponent).join(":")
   return `galaxy-frog:prompt-draft:${scope}`

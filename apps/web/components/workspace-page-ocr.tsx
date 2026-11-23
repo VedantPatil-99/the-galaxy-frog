@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { ApiClientError } from "@/lib/api/client"
-import { getPageOCR, startPageOCR, type WorkspaceDocument, type WorkspacePageOCR } from "@/lib/api/workspace"
+import type { WorkspaceDocument, WorkspacePageOCR } from "@/lib/api/workspace"
+import { useWorkspaceSession } from "@/lib/workspace-session-context"
 
 const notices = {
   unavailable: "Page OCR is off for this workspace.",
@@ -21,6 +22,7 @@ export function WorkspacePageOCRPanel({ notebookId, source, page, onExpired }: {
   page: number
   onExpired: () => void
 }) {
+  const { getPageOCR, startPageOCR } = useWorkspaceSession().api
   const consentId = useId()
   const submission = useRef<AbortController | null>(null)
   const [receipt, setReceipt] = useState<WorkspacePageOCR | null>(null)
@@ -52,7 +54,7 @@ export function WorkspacePageOCRPanel({ notebookId, source, page, onExpired }: {
       request.abort()
       window.clearTimeout(timer)
     }
-  }, [notebookId, source, page, onExpired, receipt, refresh])
+  }, [getPageOCR, notebookId, source, page, onExpired, receipt, refresh])
 
   async function approve(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
