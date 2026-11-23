@@ -38,3 +38,27 @@ and unmounts the previous workspace. The browser validates account ownership bef
 restoring chat or notebook navigation. Local recovery copies still use the verified
 account, notebook and chat so the same owner can recover unsynced text after signing
 back in. See [ADR 0010](0010-private-workspace-auth.md#w41-browser-account-changes).
+
+## W4.2 first saved answer
+
+A named chat can submit a saved draft with exactly one pasted-text source, version and
+block. PostgreSQL serializes admissions per chat and enforces one active run. It stores
+the ordered turn and queued run together with the model policy and a digest of the
+validated passage, then clears only the accepted draft revision. An exact replay returns
+the original turn and run. It never clears a later draft. A browser tab keeps an
+unconfirmed submission briefly, scoped to the verified owner, notebook and chat.
+
+The workspace worker freezes the exact excerpt and commits a possible-dispatch marker
+before sending the question and excerpt to loopback Ollama. The worker uses an
+admission grant capped at ten minutes and the verified access token's expiry. It checks
+current worker Auth configuration, the creator allowlist, notebook ownership and evidence
+before dispatch and publication. No bearer is persisted. The grant can outlive browser
+sign-out until its expiry. Operators apply invitation changes to both API and worker.
+[Supabase session semantics](https://supabase.com/docs/guides/auth/sessions)
+
+The result stores only validated blocks and exact citation quotes. History withholds the
+answer if the original version or passage is unavailable. Missing input, invalid output,
+and uncertain dispatch are visible. An uncertain dispatch never runs again automatically.
+The digest is observed at dispatch and checked again before publication. Existing quick
+questions still use their established selected-passage path. Stop, the full withdrawal
+lifecycle, durable video, and interactive Gemini have separate tickets.

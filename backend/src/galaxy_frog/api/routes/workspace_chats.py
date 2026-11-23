@@ -4,14 +4,21 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
 from galaxy_frog.api.errors import ApiError
 from galaxy_frog.api.routes.workspace import Creator, Repository, notebook_not_found
 from galaxy_frog.api.schemas import ErrorResponse
-from galaxy_frog.api.workspace_auth import prevent_workspace_caching
+from galaxy_frog.api.workspace_auth import prevent_workspace_caching, workspace_settings
 from galaxy_frog.db.workspace_chats import WorkspaceChatRepository
+from galaxy_frog.db.workspace_runs import (
+    WorkspaceActiveRun,
+    WorkspaceRunAuthorizationExpired,
+    WorkspaceRunRepository,
+    WorkspaceSubmissionConflict,
+    WorkspaceTemporalQuestion,
+)
 from galaxy_frog.domain.workspace import NotebookNotFound
 from galaxy_frog.domain.workspace_chat import (
     WorkspaceChat,
@@ -22,6 +29,13 @@ from galaxy_frog.domain.workspace_chat import (
     WorkspaceDraftConflict,
     WorkspacePromptDraft,
 )
+from galaxy_frog.domain.workspace_run import (
+    WorkspaceLocalRunSettings,
+    WorkspaceTurnsPage,
+    WorkspaceTurnSubmit,
+    WorkspaceTurnView,
+)
+from galaxy_frog.domain.workspace_text import WorkspaceTextNotFound
 
 router = APIRouter(
     prefix="/v1/workspace/notebooks/{notebook_id}/chats",
@@ -99,3 +113,75 @@ async def save_draft(
         ) from None
     await chats.session.commit()
     return saved
+
+
+@router.post("/{chat_id}/turns", status_code=202, responses={409: {"model": ErrorResponse}})
+async def submit_workspace_turn(
+    chat_id: UUID,
+    body: WorkspaceTurnSubmit,
+    chats: Chats,
+    identity: Creator,
+    request: Request,
+) -> WorkspaceTurnView:
+    settings = workspace_settings(request)
+    runs = WorkspaceRunRepository(chats.session, chats.notebook_id, identity)
+    try:
+        turn = await runs.submit(
+            chat_id,
+            body,
+            WorkspaceLocalRunSettings(
+                model=settings.generation_model,
+                required_revision=settings.generation_model_revision,
+            ),
+        )
+    except WorkspaceSubmissionConflict:
+        raise _turn_conflict(
+            "WORKSPACE_SUBMISSION_CONFLICT",
+            "This submission key already belongs to a different question, passage, or draft.",
+        ) from None
+    except WorkspaceDraftConflict:
+        raise _turn_conflict(
+            "WORKSPACE_DRAFT_CONFLICT", "The saved draft changed. Review it before sending."
+        ) from None
+    except WorkspaceTemporalQuestion:
+        raise ApiError(
+            status_code=422,
+            code="WORKSPACE_TEMPORAL_SCOPE_REQUIRED",
+            message="Choose a time-specific video workflow for this question.",
+            retryable=False,
+        ) from None
+    except WorkspaceRunAuthorizationExpired:
+        raise ApiError(
+            status_code=401,
+            code="WORKSPACE_AUTH_REQUIRED",
+            message="Sign in again before starting a saved answer.",
+            retryable=False,
+        ) from None
+    except WorkspaceActiveRun:
+        raise _turn_conflict(
+            "WORKSPACE_RUN_ACTIVE", "An answer is already in progress in this chat."
+        ) from None
+    except WorkspaceTextNotFound:
+        raise _turn_conflict(
+            "WORKSPACE_EVIDENCE_SELECTION_STALE",
+            "This pasted-text passage is unavailable. Select an available passage.",
+        ) from None
+    await chats.session.commit()
+    return turn
+
+
+def _turn_conflict(code: str, message: str) -> ApiError:
+    return ApiError(status_code=409, code=code, message=message, retryable=False)
+
+
+@router.get("/{chat_id}/turns")
+async def list_workspace_turns(
+    chat_id: UUID,
+    chats: Chats,
+    identity: Creator,
+    before: Annotated[int | None, Query(gt=0, le=9_007_199_254_740_991)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> WorkspaceTurnsPage:
+    return await WorkspaceRunRepository(chats.session, chats.notebook_id, identity).list(
+        chat_id, before, limit
+    )

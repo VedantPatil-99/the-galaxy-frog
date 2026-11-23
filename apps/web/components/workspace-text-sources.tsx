@@ -124,10 +124,10 @@ export function WorkspaceTextSources({ notebookId, selectedId, onSelect, onExpir
   )
 }
 
-export function WorkspaceTextPreview({ notebookId, source, matchBlockId, onExpired }: {
+export function WorkspaceTextPreview({ notebookId, source, matchBlock, onExpired }: {
   notebookId: string
   source: WorkspaceTextSource
-  matchBlockId?: string
+  matchBlock?: WorkspaceTextVersion["blocks"][number]
   onExpired: () => void
 }) {
   const { getTextVersion } = useWorkspaceSession().api
@@ -135,7 +135,8 @@ export function WorkspaceTextPreview({ notebookId, source, matchBlockId, onExpir
   const [version, setVersion] = useState<WorkspaceTextVersion | null>(null)
   const [error, setError] = useState("")
   const [attempt, setAttempt] = useState(0)
-  const match = version?.blocks.find(block => block.block_id === matchBlockId)
+  const match = version?.blocks.find(block => block.block_id === matchBlock?.block_id)
+  const matchEnd = match && Math.min(match.end_char, matchBlock?.end_char ?? match.end_char)
   const characters = version && match ? Array.from(version.text) : null
 
   useEffect(() => {
@@ -163,7 +164,7 @@ export function WorkspaceTextPreview({ notebookId, source, matchBlockId, onExpir
         </>
       ) : version ? (
         <p className="border-t pt-3 text-sm leading-6 whitespace-pre-wrap wrap-anywhere">{
-          match && characters ? <>{characters.slice(0, match.start_char).join("")}<mark className="rounded bg-accent text-accent-foreground">{match.text}</mark>{characters.slice(match.end_char).join("")}</> : version.text
+          match && matchEnd !== undefined && characters ? <>{characters.slice(0, match.start_char).join("")}<mark className="rounded bg-accent text-accent-foreground">{characters.slice(match.start_char, matchEnd).join("")}</mark>{characters.slice(matchEnd).join("")}</> : version.text
         }</p>
       ) : <p role="status" className="text-sm text-muted-foreground">Loading preview…</p>}
     </div>

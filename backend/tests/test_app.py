@@ -121,6 +121,7 @@ async def test_docs_and_openapi_are_available() -> None:
         "/v1/workspace/notebooks/{notebook_id}/chats",
         "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}",
         "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/draft",
+        "/v1/workspace/notebooks/{notebook_id}/chats/{chat_id}/turns",
         "/v1/workspace/notebooks/{notebook_id}/search",
         "/v1/workspace/notebooks/{notebook_id}/answers",
         "/v1/workspace/notebooks/{notebook_id}/semantic-index",

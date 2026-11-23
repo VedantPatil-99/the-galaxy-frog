@@ -45,9 +45,10 @@ class NotebookNotFound(Exception):
 
 
 class VerifiedWorkspaceIdentity(BaseModel):
-    """Identity returned by the configured Auth server, never decoded from an unverified JWT."""
+    """Auth-server identity and the expiry of its verified bearer, when available."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: UUID
     email: str
+    token_expires_at: datetime | None = None

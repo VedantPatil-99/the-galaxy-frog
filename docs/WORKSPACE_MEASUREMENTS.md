@@ -356,3 +356,29 @@ RUN_DATABASE_INTEGRATION=1 uv run --no-sync --directory backend python -m pytest
   tests/integration/test_study_provider_fencing.py \
   tests/test_workspace_answer_provider.py tests/test_gemini_generation.py
 ```
+
+## W4.2 first saved Ollama answer
+
+Verification for [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29)
+uses disposable local PostgreSQL 17, migration `20261123_0028`, and synthetic Auth and
+Ollama responses. The API tests exercise duplicate admission, draft revision conflicts,
+cross-account access, provider failure and validation of the saved excerpt. The provider
+receives one question and at most 1,200 Unicode characters from the pinned block.
+
+The browser regression passed with draft recovery, a lost 202 response after admission,
+same-key replay after refresh, saved-answer reload, exact citation navigation, and the
+existing quick-question path. It used a 1440 × 960 headless Chrome window against a
+production Next.js build and the actual FastAPI and worker code. One notebook, one
+pasted-text source and one named chat produced one durable dispatch and one separate
+quick-question dispatch. The controlled provider stayed pending until the browser
+reopened the run. These checks used synthetic Auth and generation. W4.2 latency budgets
+and live-provider acceptance have their own gates.
+
+From the repository root, point `DATABASE_URL` at a disposable loopback PostgreSQL
+database, then run:
+
+```bash
+bun run db:migrate
+bun run build
+bun scripts/workspace-durable-ollama.ts
+```

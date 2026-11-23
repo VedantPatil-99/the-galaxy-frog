@@ -1,3 +1,5 @@
+import type { WorkspaceTurnIntent } from "@/lib/api/workspace"
+
 export type DraftRecovery = { text: string; revision: number | null }
 type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">
 
@@ -19,6 +21,41 @@ export function clearWorkspaceLocation() {
 export function workspaceDraftKey(accountId: string, notebookId: string, chatId?: string) {
   const scope = [accountId, notebookId, chatId ?? "question"].map(encodeURIComponent).join(":")
   return `galaxy-frog:prompt-draft:${scope}`
+}
+
+function pendingTurnKey(accountId: string, notebookId: string, chatId: string) {
+  return `galaxy-frog:pending-turn:${[accountId, notebookId, chatId].map(encodeURIComponent).join(":")}`
+}
+
+export function readPendingTurn(accountId: string, notebookId: string, chatId: string, storage?: DraftStorage): WorkspaceTurnIntent | null {
+  try {
+    const key = pendingTurnKey(accountId, notebookId, chatId)
+    const raw = (storage ?? window.sessionStorage).getItem(key)
+    const record = raw && JSON.parse(raw)
+    const body = record?.body
+    const uuid = (value: unknown) => typeof value === "string" && /^[a-f0-9-]{36}$/i.test(value)
+    if (!body || !Number.isFinite(record.expiresAt) || record.expiresAt <= Date.now()
+      || !uuid(body.submission_key) || typeof body.question !== "string" || !body.question.trim()
+      || body.question.length > 1_000 || !Number.isSafeInteger(body.draft_revision) || body.draft_revision < 0
+      || !uuid(body.passage?.source_id) || !uuid(body.passage?.version_id) || !uuid(body.passage?.block_id)) return null
+    return {
+      submission_key: body.submission_key, question: body.question, draft_revision: body.draft_revision,
+      passage: { source_id: body.passage.source_id, version_id: body.passage.version_id, block_id: body.passage.block_id },
+    }
+  } catch {
+    return null
+  }
+}
+
+export function writePendingTurn(accountId: string, notebookId: string, chatId: string, body: WorkspaceTurnIntent | null, storage?: DraftStorage) {
+  try {
+    const target = storage ?? window.sessionStorage
+    const key = pendingTurnKey(accountId, notebookId, chatId)
+    if (body) target.setItem(key, JSON.stringify({ body, expiresAt: Date.now() + 10 * 60 * 1_000 }))
+    else target.removeItem(key)
+  } catch {
+    // The in-memory submission still supports checking a lost response.
+  }
 }
 
 function locationKey(accountId: string) {

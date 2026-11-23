@@ -7,25 +7,28 @@ import { Button } from "@/components/ui/button"
 import { Disclosure } from "@/components/ui/disclosure"
 import { WorkspaceChatPicker } from "@/components/workspace-chat-picker"
 import { ElapsedBadge, EvidenceMatchButton, evidenceId, location, sourceTitle } from "@/components/workspace-evidence-display"
+import { WorkspaceSavedTurns, useWorkspaceTurns } from "@/components/workspace-saved-turns"
 import { ApiClientError } from "@/lib/api/client"
-import type { WorkspaceAnswer, WorkspaceChat, WorkspaceSearchHit } from "@/lib/api/workspace"
+import type { WorkspaceAnswer, WorkspaceChat, WorkspaceSearchHit, WorkspaceTurnIntent } from "@/lib/api/workspace"
 import { useWorkspaceSession } from "@/lib/workspace-session-context"
 import { useWorkspaceDraft, type DraftFlushRef } from "@/lib/use-workspace-draft"
+import { readPendingTurn, writePendingTurn } from "@/lib/workspace-draft-recovery"
 
 const maxPassages = 6
 
-function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, draftFlushRef, onDraftPresence, onOpen, onExpired }: {
+function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, draftFlushRef, onDraftPresence, onConsumed, onOpen, onExpired }: {
   accountId: string
   notebookId: string
   chat: WorkspaceChat | null
   query: string
-  selected: string[]
+  selected: WorkspaceSearchHit[]
   draftFlushRef: DraftFlushRef
   onDraftPresence: (chatId: string, present: boolean) => void
+  onConsumed: (blockId: string) => void
   onOpen: (hit: WorkspaceSearchHit) => void
   onExpired: () => void
 }) {
-  const { answerWorkspaceQuestion } = useWorkspaceSession().api
+  const { answerWorkspaceQuestion, submitWorkspaceTurn } = useWorkspaceSession().api
   const field = useId()
   const request = useRef<AbortController | null>(null)
   const draft = useWorkspaceDraft({
@@ -35,15 +38,59 @@ function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, 
   const [error, setError] = useState("")
   const [result, setResult] = useState<{ question: string; answer: WorkspaceAnswer; elapsed: number } | null>(null)
   const chatId = chat?.chat_id ?? ""
+  const [replay, setReplay] = useState(() => chatId ? readPendingTurn(accountId, notebookId, chatId) : null)
+  const history = useWorkspaceTurns(notebookId, chat?.chat_id)
   const hasDraft = Boolean(draft.text.trim())
+  const passage = chat && selected.length === 1 && selected[0].kind === "text" ? selected[0] : null
 
   useEffect(() => () => request.current?.abort(), [])
   useEffect(() => onDraftPresence(chatId, hasDraft), [chatId, hasDraft, onDraftPresence])
 
+  async function saveTurn(signal: AbortSignal) {
+    const clickedText = draft.text
+    const submission = await draft.prepareSubmission(replay ? { text: replay.question, revision: replay.draft_revision } : undefined)
+    if (!submission) throw new Error("Save or reconcile the draft before sending.")
+    if (!replay && submission.text !== clickedText) {
+      draft.finishSubmission(submission, false)
+      throw new Error("Your question changed while the draft saved. Review the draft and Send again.")
+    }
+    const intent: WorkspaceTurnIntent | null = replay ?? (passage && {
+      submission_key: crypto.randomUUID(), question: submission.text, draft_revision: submission.revision,
+      passage: { source_id: passage.source.source_id, version_id: passage.source.version_id, block_id: passage.block.block_id },
+    })
+    if (!intent) {
+      draft.finishSubmission(submission, false)
+      return
+    }
+    writePendingTurn(accountId, notebookId, chatId, intent)
+    try {
+      const saved = await submitWorkspaceTurn(notebookId, chatId, intent, signal)
+      draft.finishSubmission(submission, true)
+      writePendingTurn(accountId, notebookId, chatId, null)
+      setReplay(null)
+      history.accepted(saved)
+      onConsumed(intent.passage.block_id)
+    } catch (caught) {
+      const uncertain = caught instanceof ApiClientError && (caught.status === 0 || caught.status >= 500
+        || (caught.status >= 200 && caught.status < 300))
+      const conflict = caught instanceof ApiClientError && caught.response?.error.code === "WORKSPACE_DRAFT_CONFLICT"
+      draft.finishSubmission(submission, false, conflict)
+      if (!signal.aborted) {
+        if (!uncertain) writePendingTurn(accountId, notebookId, chatId, null)
+        setReplay(uncertain ? intent : null)
+        if (uncertain) {
+          history.retry()
+          throw new Error("The connection ended before Send was confirmed. Check the same submission.")
+        }
+      }
+      throw caught
+    }
+  }
+
   async function answer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const submitted = draft.text.trim()
-    if (!submitted || !selected.length || request.current) return
+    if (!canSend || request.current) return
     const controller = new AbortController()
     request.current = controller
     setPending(true)
@@ -51,7 +98,11 @@ function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, 
     setResult(null)
     const started = performance.now()
     try {
-      const response = await answerWorkspaceQuestion(notebookId, query, submitted, selected, controller.signal)
+      if (passage || replay) {
+        await saveTurn(controller.signal)
+        return
+      }
+      const response = await answerWorkspaceQuestion(notebookId, query, submitted, selected.map(evidenceId), controller.signal)
       if (!controller.signal.aborted) {
         setResult({ question: submitted, answer: response, elapsed: performance.now() - started })
       }
@@ -65,7 +116,8 @@ function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, 
     }
   }
 
-  const canSend = !pending && selected.length > 0 && Boolean(draft.text.trim())
+  const canSend = !pending && (Boolean(replay) || (selected.length > 0 && hasDraft && !(passage && history.active)))
+  const durable = Boolean(chat && (passage || replay || !selected.length))
   const statusText = {
     saved: draft.text ? "Draft saved" : "",
     saving: "Saving draft…",
@@ -81,7 +133,7 @@ function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, 
           <label htmlFor={field} className="text-sm font-medium">Question</label>
           <span role="status" className="text-xs text-muted-foreground">{statusText}</span>
         </div>
-        <textarea id={field} rows={3} required maxLength={1_000} value={draft.text} onChange={event => draft.edit(event.target.value)}
+        <textarea id={field} rows={3} required={!replay} maxLength={1_000} value={draft.text} onChange={event => draft.edit(event.target.value)}
           onBlur={() => { void draft.flush() }} onKeyDown={event => {
             if (canSend && event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
               && !event.nativeEvent.isComposing && window.matchMedia("(pointer: fine)").matches) {
@@ -112,12 +164,14 @@ function WorkspacePassageAnswer({ accountId, notebookId, chat, query, selected, 
           </>}
         </div> : null}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Button type="submit" className="min-h-11" disabled={!canSend}>Ask with Ollama</Button>
-          {pending ? <p role="status" className="text-sm text-muted-foreground">Reading the selected passages…</p> : null}
+          <Button type="submit" className="min-h-11" disabled={!canSend}>{replay ? "Check submission" : durable ? "Send" : "Ask with Ollama"}</Button>
+          {pending ? <p role="status" className="text-sm text-muted-foreground">{durable ? "Saving question…" : "Reading the selected passages…"}</p> : null}
           {!selected.length ? <p className="text-sm text-muted-foreground">Search for passages and select evidence to ask.</p> : null}
+          {chat && selected.length > 0 && !durable ? <p className="text-sm text-muted-foreground">Select one pasted-text passage to save the answer in this chat.</p> : null}
         </div>
         {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       </form>
+      {chat ? <WorkspaceSavedTurns history={history} onOpen={onOpen} /> : null}
       {result ? (
         <div className="space-y-3 px-2 pt-4">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -165,11 +219,17 @@ export function WorkspaceSourceSearch({ accountId, notebookId, draftFlushRef, on
   const [result, setResult] = useState<{ query: string; hits: WorkspaceSearchHit[]; elapsed: number } | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [chat, setChat] = useState<WorkspaceChat | null | undefined>(undefined)
+  const chatSelection = useRef<string | null | undefined>(undefined)
   const [draftPresence, setDraftPresence] = useState<Record<string, boolean>>({})
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => () => request.current?.abort(), [])
+  const selectChat = useCallback((next: WorkspaceChat | null) => {
+    if (chatSelection.current !== (next?.chat_id ?? null)) setSelected([])
+    chatSelection.current = next?.chat_id ?? null
+    setChat(next)
+  }, [])
   const markDraft = useCallback((chatId: string, present: boolean) => {
     setDraftPresence(current => current[chatId] === present ? current : { ...current, [chatId]: present })
   }, [])
@@ -202,7 +262,7 @@ export function WorkspaceSourceSearch({ accountId, notebookId, draftFlushRef, on
 
   return (
     <section className="space-y-2.5" aria-labelledby={`${field}-label`}>
-      <WorkspaceChatPicker accountId={accountId} notebookId={notebookId} draftPresence={draftPresence} onSelect={setChat} onExpired={onExpired} />
+      <WorkspaceChatPicker accountId={accountId} notebookId={notebookId} draftPresence={draftPresence} onSelect={selectChat} onExpired={onExpired} />
       <label htmlFor={field} id={`${field}-label`} className="block text-base font-semibold">Find words in sources</label>
       <form onSubmit={search} className="flex flex-wrap items-center gap-2">
         <input id={field} type="search" maxLength={160} required value={query} onChange={event => setQuery(event.target.value)} className="min-h-11 min-w-32 flex-1 rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring" />
@@ -217,7 +277,7 @@ export function WorkspaceSourceSearch({ accountId, notebookId, draftFlushRef, on
         </div>
       ) : null}
       {chat !== undefined ? (
-        <WorkspacePassageAnswer key={chat?.chat_id ?? "one-shot"} accountId={accountId} notebookId={notebookId} chat={chat} query={result?.query ?? ""} selected={selected} draftFlushRef={draftFlushRef} onDraftPresence={markDraft} onOpen={onOpen} onExpired={onExpired} />
+        <WorkspacePassageAnswer key={chat?.chat_id ?? "one-shot"} accountId={accountId} notebookId={notebookId} chat={chat} query={result?.query ?? ""} selected={result?.hits.filter(hit => selected.includes(evidenceId(hit))) ?? []} draftFlushRef={draftFlushRef} onDraftPresence={markDraft} onConsumed={blockId => setSelected(current => current.filter(id => id !== blockId))} onOpen={onOpen} onExpired={onExpired} />
       ) : null}
       {result?.hits.length ? (
         <ul className="divide-y border-y">

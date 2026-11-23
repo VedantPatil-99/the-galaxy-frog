@@ -112,9 +112,15 @@ class WorkspaceTextRepository:
         )
 
     async def get_version(
-        self, owner_id: UUID, notebook_id: UUID, source_id: UUID, version_id: UUID
+        self,
+        owner_id: UUID,
+        notebook_id: UUID,
+        source_id: UUID,
+        version_id: UUID,
+        *,
+        lock: bool = False,
     ) -> WorkspaceTextVersion:
-        row = await self.session.scalar(
+        query = (
             select(WorkspaceTextSourceRow)
             .join(
                 WorkspaceNotebookRow, WorkspaceNotebookRow.id == WorkspaceTextSourceRow.notebook_id
@@ -126,6 +132,7 @@ class WorkspaceTextRepository:
                 WorkspaceTextSourceRow.version_id == version_id,
             )
         )
+        row = await self.session.scalar(query.with_for_update(read=True) if lock else query)
         if row is None:
             raise WorkspaceTextNotFound
         return _version(row)

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 
 import {
-  readComposerLocation, readDraftRecovery, rememberComposerLocation, workspaceDraftKey, writeDraftRecovery,
+  readComposerLocation, readDraftRecovery, readPendingTurn, rememberComposerLocation, workspaceDraftKey, writeDraftRecovery, writePendingTurn,
 } from "@/lib/workspace-draft-recovery"
 
 function storageFixture() {
@@ -25,6 +25,19 @@ test("recovers exact text with separate keys for accounts, notebooks, and chats"
   expect(readDraftRecovery(workspaceDraftKey("other", "first", "chat"), storage)).toBeNull()
   expect(readDraftRecovery(workspaceDraftKey("owner", "second", "chat"), storage)).toBeNull()
   expect(readDraftRecovery(workspaceDraftKey("owner", "first", "other"), storage)).toBeNull()
+})
+
+test("an unconfirmed Send can be checked after refresh only from its owning composer", () => {
+  const storage = storageFixture()
+  const id = "79e450bd-b542-4218-9f3b-82574abf9fe7"
+  const intent = { submission_key: id, question: "What moves?", draft_revision: 3,
+    passage: { source_id: id, version_id: id, block_id: id } }
+  writePendingTurn("owner", "notebook", "chat", intent, storage)
+  expect(readPendingTurn("owner", "notebook", "chat", storage)).toEqual(intent)
+  expect(readPendingTurn("other", "notebook", "chat", storage)).toBeNull()
+  expect(readPendingTurn("owner", "notebook", "different", storage)).toBeNull()
+  writePendingTurn("owner", "notebook", "chat", null, storage)
+  expect(readPendingTurn("owner", "notebook", "chat", storage)).toBeNull()
 })
 
 test("an acknowledgement cannot remove a newer local edit, including a cleared question", () => {

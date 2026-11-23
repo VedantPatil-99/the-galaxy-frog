@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 
 import { createWorkspaceSession } from "@/lib/api/workspace-session"
+import type { WorkspaceTurn } from "@/lib/api/workspace"
 
 const first = "41abef09-2585-4d88-8001-68a1574a1a3e"
 const second = "79e450bd-b542-4218-9f3b-82574abf9fe7"
@@ -58,4 +59,24 @@ test("a mismatched verified identity invalidates the session before further writ
   await expect(session.api.createNotebook("Retry")).rejects.toHaveProperty("name", "AbortError")
   expect(requests).toBe(1)
   expect(invalidations).toBe(1)
+})
+
+test("a durable send posts only the pinned intent and reads it back through the same account", async () => {
+  const passage = { source_id: "source", version_id: "version", block_id: "block" }
+  const intent = { question: "What moves?", submission_key: "attempt", draft_revision: 1, passage }
+  const turn: WorkspaceTurn = { turn_id: "turn", sequence: 1, question: intent.question, created_at: "2026-11-23T00:00:00Z", passage,
+    run: { run_id: "run", status: "queued", revision: 0, failure: null, evidence: null, answer: null,
+      settings: { model: "qwen3:4b", provider: "ollama", policy: "local-pasted-text-v1", required_revision: null },
+      model_revision_at_dispatch: null } }
+  const session = createWorkspaceSession(first, "legacy", () => {}, () => "legacy", async (path, init) => {
+    expect(path).toBe("/api/proxy/v1/workspace/notebooks/notebook/chats/chat/turns")
+    expect(new Headers(init?.headers).get("x-workspace-account")).toBe(first)
+    if (init?.method === "POST") {
+      expect(JSON.parse(String(init.body))).toEqual(intent)
+      return Response.json(turn, { status: 202 })
+    }
+    return Response.json({ turns: [turn], next_before: null })
+  })
+  await expect(session.api.submitWorkspaceTurn("notebook", "chat", intent, session.signal)).resolves.toEqual(turn)
+  await expect(session.api.listWorkspaceTurns("notebook", "chat", null, session.signal)).resolves.toEqual({ turns: [turn], next_before: null })
 })

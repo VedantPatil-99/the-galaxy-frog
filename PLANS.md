@@ -859,6 +859,9 @@ See [the workspace plan](docs/WORKSPACE_REDESIGN_PLAN.md),
       slice with one pinned pasted-text passage. See the
       [feasibility record](docs/WORKSPACE_MEASUREMENTS.md#w42-evidence-and-provider-feasibility)
       for the evidence-withdrawal, dispatch, and cloud eligibility gates.
+    - [#29](https://github.com/VedantPatil-99/the-galaxy-frog/issues/29) adds the first local
+      saved-answer path for one pinned pasted-text passage. See the
+      [local verification](docs/WORKSPACE_MEASUREMENTS.md#w42-first-saved-ollama-answer).
   - [ ] W4.3 — Chat groups and organization, branching, and answer revisions.
   - [ ] W4.4 — Bounded context summaries and chat workflow acceptance.
 - [ ] W5 — Frog Memory with provenance, retention, and deletion.
